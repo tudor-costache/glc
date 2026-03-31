@@ -1,0 +1,11 @@
+# tracker_to_csv.py — Google Sheets configuration
+# Place this file alongside tracker_to_csv.py and credentials.json
+# Add credentials.json to .gitignore — never commit it.
+
+# Google Sheets
+spreadsheet_id   = "1gGz4Ia9fyf80PKO2R6MCDgsl2HA1wxKR8c9tsydFmlQ"
+credentials_file = "credentials.json"
+
+# Optional overrides (defaults shown)
+# sheet_name = "Daily Log"
+# output     = "cleanups/cleanups.csv"
