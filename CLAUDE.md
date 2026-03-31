@@ -72,6 +72,8 @@ Speed/Eramosa Rivers → Grand River → Lake Erie → Great Lakes system
 - Paddle cleanups on water
 - Family outings — volunteers tracked per outing
 - Scrap metal and deposit-return items collected for revenue to fund operations
+- Photos uploaded directly to WordPress posts (Instagram embed killed by Meta in 2020)
+- Instagram used as real-time field log; post URL stored in tracker and linked from cleanup post
 
 ## Phase Roadmap
 
@@ -87,6 +89,8 @@ Speed/Eramosa Rivers → Grand River → Lake Erie → Great Lakes system
 - **GRCA** — Site access permits for conservation areas, Grand River Conservation Foundation (grants)
 - **OPIRG Guelph** — Speed River Project, existing volunteer network (collaborate not compete)
 - **Wellington Water Watchers** — 2Rivers Festival partnership history with OPIRG
+- **Swim Drink Fish / Lake Ontario Waterkeeper** — aligned mission, broader network
+- **CleanSwell / Litterati** — crowdsourced cleanup data platforms worth registering with for grant credibility
 
 ## Revenue Streams (informal phase)
 
@@ -97,7 +101,7 @@ Speed/Eramosa Rivers → Grand River → Lake Erie → Great Lakes system
 ## Fundraising Note
 
 Indiegogo and crowdfunding not appropriate for Phase 1. Better options:
-- Simple donate/e-transfer page on own site for Phase 1
+- Simple donate/e-transfer page on own site for now
 - Grants become viable after ONCA incorporation (Phase 3)
 
 ## Legal / Incorporation Notes
@@ -112,8 +116,8 @@ Indiegogo and crowdfunding not appropriate for Phase 1. Better options:
 ## Technical Infrastructure
 
 ### Hosting
-- **Local dev:** WPLocal (Windows) — WordPress 6.9.4
-- **Production VPS:** OVHcloud Canada or WebSavers (Canadian data residency, green power) — not yet provisioned
+- **Local dev:** WPLocal (Windows, WordPress 6.9.4) — actively in use
+- **Production VPS:** OVHcloud Canada or WebSavers (not yet provisioned)
 - **Stack:** Ubuntu 24, Apache, MySQL, PHP 8.2, Python 3
 - **WordPress** for public site and cleanup event management
 
@@ -127,44 +131,58 @@ Indiegogo and crowdfunding not appropriate for Phase 1. Better options:
 ## WordPress Plugin: `great-lake-cleaners`
 
 **File:** `great-lake-cleaners-plugin.zip`  
-**Install:** Plugins → Upload → Activate. No other plugins required (ACF dependency removed).
+**Install:** Plugins → Upload → Activate. No other plugins required (ACF dependency removed).  
+**Prefix:** functions/constants `glc_` / `GLC_`, CSS classes `.glc-`
+
+### Plugin File Structure
+
+```
+great-lake-cleaners/
+  great-lake-cleaners.php   — main loader
+  includes/
+    post-type.php           — cleanup_event CPT registration
+    acf-fields.php          — native WordPress meta box (replaces ACF)
+    admin.php               — list table columns, sortable date, admin styles
+    shortcodes.php          — [glc_stats], [glc_map], [glc_archive]
+    import.php              — Tools → Import Cleanups CSV
+    submission.php          — glc_submission CPT + [glc_submit_form] shortcode
+```
 
 ### Custom Post Type: `cleanup_event`
 
-Fields managed via native WordPress meta box ("Cleanup Details"), visible below the block editor when editing any Cleanup Event post. No ACF needed.
+Fields via native "Cleanup Details" meta box below the block editor.
 
-**Meta fields:**
-| Field | Meta key | Type |
+| Field | Meta key | Notes |
 |---|---|---|
-| Cleanup Date | `cleanup_date` | date (YYYY-MM-DD) |
-| Site Name | `site_name` | text |
-| GPS Latitude | `gps_lat` | number |
-| GPS Longitude | `gps_lon` | number |
-| Volunteers | `volunteers` | number |
-| Volunteer Hours | `hours` | number (person-hours = duration × people) |
-| Bags | `bags` | number |
-| Weight (kg) | `weight_kg` | number |
-| Items Recycled | `items_recycled` | number (cans + bottles) |
-| Notable Finds | `notable_finds` | text |
-| Native Species Planted | `species_planted` | number |
-| Metres Bank Cleared | `meters_bank_cleared` | number |
-| Wildlife Observed | `wildlife_obs` | text |
+| Cleanup Date | `cleanup_date` | YYYY-MM-DD |
+| Site Name | `site_name` | display name |
+| GPS Latitude | `gps_lat` | decimal degrees |
+| GPS Longitude | `gps_lon` | negative for Ontario |
+| Volunteers | `volunteers` | headcount |
+| Volunteer Hours | `hours` | person-hours (duration × people) |
+| Bags | `bags` | garbage bags |
+| Weight (kg) | `weight_kg` | |
+| Items Recycled | `items_recycled` | cans + bottles |
+| Notable Finds | `notable_finds` | |
+| Native Species Planted | `species_planted` | |
+| Metres Bank Cleared | `meters_bank_cleared` | |
+| Wildlife Observed | `wildlife_obs` | |
+| Instagram Post URL | `instagram_url` | link to field log |
 
-**To edit a cleanup:** Open post → scroll below editor → edit Cleanup Details meta box → Update.  
-**Titles** are display-only and can be renamed freely (e.g. "Great neighbourhood cleanup") without breaking anything. Data lives in meta fields, not the title.
+**Editing:** Open post → scroll below editor → Cleanup Details → Update.  
+**Titles** are display labels only — rename freely.  
+**GPS:** Google Maps — phone: tap blue dot → coordinates at top. Desktop: right-click location → coordinates at top of context menu.
 
 ### Community Submission Post Type: `glc_submission`
 
-Public-facing form via `[glc_submit_form]` shortcode. Submissions land as `pending`, visible only in WP Admin → Submissions. Admin reviews, publishes (counts in stats) or trashes. Email notification sent to admin on each submission. Photos (up to 5) attached to submission post.
-
-**Volunteer counts from community submissions are NOT added to public stats** — unverifiable. Only hours from your own `cleanup_event` posts count toward volunteer hours.
+Public form via `[glc_submit_form]` shortcode. Submissions land as `pending`. Admin reviews in WP Admin → Submissions, publishes (counts in stats) or trashes. Email notification on each submission. Photos (up to 5) attached to post. Volunteer counts from submissions are NOT added to public stats.
 
 ### Shortcodes
 
 | Shortcode | Output |
 |---|---|
 | `[glc_stats]` | Cumulative totals banner |
-| `[glc_map]` | Leaflet/OpenStreetMap of all cleanup sites |
+| `[glc_map]` | Leaflet/OpenStreetMap of cleanup sites |
 | `[glc_map height="240px"]` | Map at specific height |
 | `[glc_archive]` | Card list of recent cleanups |
 | `[glc_archive limit="5"]` | Limited archive |
@@ -172,18 +190,14 @@ Public-facing form via `[glc_submit_form]` shortcode. Submissions land as `pendi
 
 ### CSV Importer
 
-**Location:** WP Admin → Tools → Import Cleanups CSV  
-**Format:** `cleanups.csv` (generated by `tracker_to_csv.py`)  
-**Behaviour:** Duplicate date + site_name combinations are skipped automatically — safe to re-import full file each time.  
-**ACF pointer keys** are written alongside values so fields display correctly in the editor.
+WP Admin → Tools → Import Cleanups CSV. Accepts `cleanups.csv` from `tracker_to_csv.py`. Duplicate date+site_name pairs are skipped. To regenerate posts cleanly: trash all cleanup events, empty trash, re-import.
 
 ### Stats Strip (front page)
 
-Four stats, all live from the database:
-- **Cleanups** — your `cleanup_event` posts + approved `glc_submission` posts
-- **Debris Removed** — sum of `weight_kg` across all cleanup events
-- **Volunteer Hours** — sum of `hours` across your cleanup events only (not community submissions)
-- **Items Recycled** — sum of `items_recycled`; hidden if zero
+- **Cleanups** — cleanup_event posts + approved glc_submission posts
+- **Debris Removed** — sum of weight_kg
+- **Volunteer Hours** — sum of hours from cleanup_event only
+- **Items Recycled** — sum of items_recycled; hidden if zero
 
 ---
 
@@ -196,147 +210,158 @@ Four stats, all live from the database:
 
 | File | Purpose |
 |---|---|
-| `header.php` | Site header, nav, hero section (front page only), stats strip |
-| `front-page.php` | Static front page content (four sections below stats) |
+| `header.php` | Site header, nav, hero + map + stats (front page only) |
+| `front-page.php` | Static front page — four content sections below stats |
 | `index.php` | Fallback blog/archive template |
 | `footer.php` | Site footer |
 | `functions.php` | Theme setup, nav menus, asset enqueue |
 | `style.css` | All theme styles |
 
-### Front Page Setup
-
-**In WordPress:** Settings → Reading → "A static page" → create a blank page titled "Home", set as Homepage. `front-page.php` takes over automatically.
-
-**Page structure (top to bottom):**
-1. **Header bar** — badge, site name, tagline (from WP Settings → General → Tagline), Instagram link, "Submit a Cleanup" button
-2. **Nav bar** — Home, Cleanups (assign menu at Appearance → Menus)
-3. **Hero** — live Leaflet cleanup map (240px, rounded), headline, body text, two CTA buttons
-4. **Wave divider** — white-to-navy SVG wave
-5. **Stats strip** — navy bar with live stats
-6. **About / Mission** — two-column: text + stylized watershed map illustration
-7. **Get Involved** — two-column (reversed): corridor cards + paddler illustration
-8. **Submit a Cleanup** — two-column: 3-step process + cleanup materials illustration
-9. **Recent Cleanups** — 3 most recent events, live from DB, "See All Cleanups" link
-10. **Footer** — brand, footer nav, Instagram icon
-
-### Hero Text Location
-
-Hero headline and body text are in **`header.php`** (not `front-page.php`), inside the `is_front_page()` block around lines 143–157. Edit the strings inside `esc_html_e( '...' )`. Use `\'` to escape apostrophes inside single-quoted PHP strings (e.g. `doesn\'t`, `Guelph\'s`).
-
-### "Submit a Cleanup" Button
-
-Header button links to WordPress page with slug `submit-cleanup`. Create that page with `[glc_submit_form]` shortcode in the body.
-
-### Illustrations (bundled in theme zip)
+### Bundled Illustrations (assets/images/)
 
 | File | Used in |
 |---|---|
-| `assets/images/glc-badge.png` | Header logo |
-| `assets/images/stylized-map-rivers-lake.png` | About section (and hero fallback) |
-| `assets/images/stylized-paddler.png` | Get Involved section |
-| `assets/images/cleanup_stylized.png` | Submit a Cleanup section |
+| `glc-badge.png` | Header logo |
+| `stylized-map-rivers-lake.png` | About section |
+| `stylized-paddler.png` | Get Involved section |
+| `cleanup_stylized.png` | Submit a Cleanup section |
 
-### Known Issue / Next Session
+### Front Page Setup
 
-**Leaflet map styling** — the interactive Leaflet/OpenStreetMap in the hero is functional but visually distracting against the clean theme design. Next session: explore map tile customisation (muted/watercolour tile providers) or a custom Leaflet style to better match the navy/green palette.
+Settings → Reading → "A static page" → create blank page titled "Home" → set as Homepage.
+
+**Page structure top to bottom:**
+1. Header bar — badge, site name, tagline (Settings → General → Tagline), Instagram link, Submit a Cleanup button
+2. Nav bar — assign at Appearance → Menus
+3. Hero — live Leaflet cleanup map (240px), headline, body text, two CTA buttons
+4. Wave divider — white-to-navy SVG
+5. Stats strip — four live stats
+6. About / Mission — text + stylized watershed map
+7. Get Involved — corridor cards + paddler illustration
+8. Submit a Cleanup — 3-step process + cleanup illustration
+9. Recent Cleanups — 3 most recent events from DB
+10. Footer
+
+### Hero Text
+
+In **`header.php`** inside `is_front_page()` block (~lines 143–157). Edit strings inside `esc_html_e( '...' )`. Apostrophes must be escaped as `\'` in PHP single-quoted strings — e.g. `doesn\'t`, `Guelph\'s`. Failure causes a fatal parse error.
+
+### WordPress Pages Required
+
+| Title | Slug | Content |
+|---|---|---|
+| Home | `home` | Blank — set as static front page |
+| Submit a Cleanup | `submit-cleanup` | `[glc_submit_form]` only |
+
+### Known Issues / Next Session
+
+- **Leaflet map styling** — functional but visually noisy in the hero. Next: explore muted tile providers to match navy/green palette.
+- **`single-cleanup_event.php`** — not yet built. Will display: stats, map pin, photos, wildlife observations, Instagram field log link.
+- **`archive-cleanup_event.php`** — not yet built.
 
 ---
 
-## Outing Tracker: `Great_Lake_Cleaners_Outing_Tracker.xlsx`
+## Outing Tracker
 
-Google Sheets compatible. One sheet: **Daily Log**.
+**Primary source:** Google Sheet (must be native Google Sheets format, not xlsx stored in Drive)  
+**Local backup:** `Great_Lake_Cleaners_Outing_Tracker.xlsx`  
+**Tab name:** `Daily Log`
 
-**Columns (0-based index):**
-| Col | Index | Field |
-|---|---|---|
-| Date | 0 | Date of outing |
-| Location / Corridor | 1 | Site name (must match `SITE_GPS` keys in tracker script for auto GPS) |
-| Duration (min) | 2 | Duration of outing in minutes |
-| Bags (#) | 3 | Garbage bags collected |
-| Weight (kg) | 4 | Garbage weight |
-| Notes | 5 | Free notes |
-| Cans (#) | 6 | Recycling — cans |
-| Bottles (#) | 7 | Recycling — bottles |
-| Recycling Weight (kg) | 8 | (not currently exported) |
-| Aluminum (kg) | 9 | Scrap metal |
-| Steel/Iron (kg) | 10 | Scrap metal |
-| Copper/Other (kg) | 11 | Scrap metal |
-| Number of people | 12 | Volunteers on this outing |
-| Notable / Unusual Finds | 13 | Notable finds |
+### Column Layout (0-based)
 
-**Volunteer hours:** calculated as person-hours (duration × volunteers), so a 70-min outing with 2 people = 2.33h.
+| Index | Excel col | Field | Notes |
+|---|---|---|---|
+| 0 | A | Date | |
+| 1 | B | Location / Corridor | Must match exactly for same-site merging |
+| 2 | C | Duration (min) | |
+| 3 | D | Bags (#) | Garbage |
+| 4 | E | Weight (kg) | Garbage |
+| 5 | F | Notes | |
+| 6 | G | Cans (#) | Recycling |
+| 7 | H | Bottles (#) | Recycling |
+| 8–11 | I–L | Scrap Metal | Not currently exported |
+| 12 | M | Number of people | Volunteers |
+| 13 | N | Notable / Unusual Finds | |
+| 14 | O | Latitude | GPS — enter on first visit to a new site |
+| 15 | P | Longitude | GPS — negative for Ontario |
+| 16 | Q | Instagram Post URL | Link to field log |
+
+**Volunteer hours** = person-hours: duration × volunteers. 70 min × 2 people = 2.33h.  
+**GPS:** enter once per new location. Leave blank on return visits — converter uses first non-empty value for the group. No fallback dictionary — blank GPS means no map pin.
 
 ---
 
 ## Python Script: `tracker_to_csv.py`
 
-Converts the outing tracker `.xlsx` to `cleanups/cleanups.csv` for WordPress import.
+### Data Sources (priority order)
+1. **Google Sheets** — if `config.toml` present with `spreadsheet_id`
+2. **Local xlsx** — if `--no-sheets` or `--xlsx` passed, or no config
+
+### Config Files
+
+**`config.toml`:**
+```toml
+spreadsheet_id   = "your-sheet-id-from-url"
+credentials_file = "credentials.json"
+# sheet_name     = "Daily Log"
+# output         = "cleanups/cleanups.csv"
+```
+
+**`credentials.json`** — service account key from Google Cloud Console. Add to `.gitignore`. Share the Google Sheet with the service account's `client_email` (Viewer).
+
+**Google Sheets requirement:** Must be a native Google Sheet. If converting from xlsx: File → Save as Google Sheets — the spreadsheet ID in the URL will change, update config.toml.
+
+### Usage
 
 ```bash
-python tracker_to_csv.py                                          # default paths
-python tracker_to_csv.py path/to/tracker.xlsx                    # custom tracker
-python tracker_to_csv.py path/to/tracker.xlsx -o cleanups.csv    # custom output
+python tracker_to_csv.py                    # Google Sheets (default)
+python tracker_to_csv.py --no-sheets        # local xlsx fallback
+python tracker_to_csv.py --xlsx my.xlsx     # specific local file
+python tracker_to_csv.py -o out.csv         # custom output path
 ```
 
-**Behaviour:**
-- Same-day + same-location outings are **merged** into one cleanup event (totals combined)
-- Same-day + different-location outings remain **separate**
-- GPS coordinates auto-filled from `SITE_GPS` lookup table at top of script — add new sites there
-- Volunteers = peak count for the event; hours = sum of person-hours across outings
-- Items recycled = cans + bottles, passed through to CSV and shown in notable_finds summary
-- Output columns match the plugin's CSV importer field map exactly
+### Sync Workflow
 
-**Sync workflow:**
-1. `python tracker_to_csv.py` → generates `cleanups/cleanups.csv`
-2. WP Admin → Tools → Import Cleanups CSV → upload file
-3. Duplicate date+site entries skipped automatically
+1. Log outings in Google Sheet (works from phone in the field)
+2. `python tracker_to_csv.py` — pulls from Sheets, writes `cleanups/cleanups.csv`
+3. WP Admin → Tools → Import Cleanups CSV → upload
+4. Duplicate date+site pairs skipped automatically
 
-**GPS lookup table** (in script, add new sites as needed):
-```python
-SITE_GPS = {
-    "Parkwood Gardens":  ("43.5520", "-80.2330"),
-    "Eramosa River":     ("43.5580", "-80.2460"),
-    "Speed River":       ("43.5400", "-80.2600"),
-    "Hanlon Creek":      ("43.5280", "-80.2840"),
-    "Guelph Lake":       ("43.6050", "-80.2280"),
-}
-```
+### Merge Behaviour
+
+- Same date + same location → one cleanup event, totals summed
+- Same date + different location → separate events
+- Hours = sum of person-hours across merged outings
+- Instagram URL = first non-empty URL in the group
+- GPS = first non-empty lat/lon in the group
 
 ---
 
 ## Current File Inventory
 
-| File | Purpose | Status |
-|---|---|---|
-| `great-lake-cleaners-plugin.zip` | WordPress plugin | ✅ Installed and working |
-| `great-lake-cleaners-theme.zip` | WordPress theme | ✅ Installed and working |
-| `tracker_to_csv.py` | Outing tracker → cleanups.csv converter | ✅ Working |
-| `cleanups/cleanups.csv` | Master cleanup event log | ✅ 4 events imported |
-| `Great_Lake_Cleaners_Outing_Tracker.xlsx` | Daily outing tracker | ✅ 4 outings logged |
-| `cleanup_report.py` | Instagram card + caption generator | From prior session |
-
----
-
-## WordPress Pages to Create
-
-| Page title | Slug | Content |
-|---|---|---|
-| Home | `home` | Blank — set as static front page in Settings → Reading |
-| Submit a Cleanup | `submit-cleanup` | `[glc_submit_form]` shortcode only |
+| File | Status |
+|---|---|
+| `great-lake-cleaners-plugin.zip` | ✅ Installed in WPLocal |
+| `great-lake-cleaners-theme.zip` | ✅ Installed in WPLocal |
+| `tracker_to_csv.py` | ✅ Working — pulls from Google Sheets |
+| `config.toml` | ✅ Configured |
+| `credentials.json` | ✅ In place (never commit to version control) |
+| `Great_Lake_Cleaners_Outing_Tracker.xlsx` | ✅ Local backup of Google Sheet |
+| `cleanup_report.py` | From earlier session — Instagram card generator |
 
 ---
 
 ## Next Steps
 
-- [ ] Provision VPS (OVHcloud Canada or WebSavers)
+- [ ] **Leaflet map styling** — muted/watercolour tiles to reduce visual noise in hero
+- [ ] **Build `single-cleanup_event.php`** — stats, map pin, photos, wildlife, Instagram link
+- [ ] **Build `archive-cleanup_event.php`** — cleanup listing template
+- [ ] Provision production VPS (OVHcloud Canada or WebSavers)
 - [ ] Point greatlakecleaners.ca nameservers to VPS
-- [ ] Install LAMP stack + WordPress
-- [ ] Install Great Lake Cleaners plugin + theme
-- [ ] Create Home page, set as static front page
-- [ ] Create Submit a Cleanup page with `[glc_submit_form]`
-- [ ] Import cleanups.csv seed data
-- [ ] **Review Leaflet map styling** — explore muted tile providers or custom style to reduce visual noise in hero
-- [ ] Build `archive-cleanup_event.php` and `single-cleanup_event.php` theme templates
+- [ ] Install LAMP stack + WordPress on VPS
+- [ ] Deploy plugin + theme to production
+- [ ] Create Home page (blank, set as static front page)
+- [ ] Create Submit a Cleanup page (`[glc_submit_form]`)
 - [ ] Post Instagram bio and first pinned post
 - [ ] Get a digital fish scale (~$15–20) for accurate weight logging
 - [ ] Connect with OPIRG Speed River Project coordinator
