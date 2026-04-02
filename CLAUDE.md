@@ -189,10 +189,11 @@ Public form via `[glc_submit_form]` shortcode. Submissions land as `pending`. Ad
 |---|---|
 | Submitter Name | `glc_submitter_name` |
 | Email | `glc_email` |
-| Phone | `glc_phone` |
 | Cleanup Date | `glc_cleanup_date` |
 | Waterway | `glc_waterway` |
 | Site / Location | `glc_site_name` |
+| GPS Latitude | `glc_gps_lat` |
+| GPS Longitude | `glc_gps_lon` |
 | Duration (min) | `glc_duration_min` |
 | Bags | `glc_bags` |
 | Weight (kg) | `glc_weight_kg` |
@@ -209,6 +210,8 @@ Public form via `[glc_submit_form]` shortcode. Submissions land as `pending`. Ad
 | Photo IDs | `glc_photo_ids` |
 
 Note: `items_recycled` and `weight_kg` are stored under those exact keys (matching `cleanup_event`) so `glc_get_impact_stats()` can count them without special-casing.
+
+Note: Phone field was removed from the public submission form. GPS coordinates are now collected via lat/lon inputs + browser geolocation button. "Hours per Person" field was removed — person-hours are calculated automatically from duration × volunteers.
 
 ### Shortcodes
 
@@ -258,13 +261,14 @@ Powered by `glc_get_impact_stats()` helper in `functions.php` — shared by the 
 | `style.css` | All theme styles |
 | `archive-cleanup_event.php` | Cleanups archive — all events + community submissions merged and sorted |
 | `page-submit-cleanup.php` | Submit a Cleanup page — form + sidebar tips (auto-loaded for slug `submit-cleanup`) |
-| `single-glc_submission.php` | Public view of a single approved community submission |
+| `single-cleanup_event.php` | Single view for tracker-imported cleanup events |
+| `single-glc_submission.php` | Single view for approved community submissions |
 
 ### Bundled Illustrations (assets/images/)
 
 | File | Used in |
 |---|---|
-| `glc-badge.png` | Header logo |
+| `glc-badge.png` | Header logo (130×130px) |
 | `stylized-map-rivers-lake.png` | About section (front page) |
 | `stylized-paddler.png` | Get Involved section (front page) |
 | `cleanup_stylized.png` | Submit a Cleanup section (front page) |
@@ -275,7 +279,7 @@ Powered by `glc_get_impact_stats()` helper in `functions.php` — shared by the 
 Settings → Reading → "A static page" → create blank page titled "Home" → set as Homepage.
 
 **Page structure top to bottom:**
-1. Header bar — badge, site name, tagline (Settings → General → Tagline), Instagram link, Submit a Cleanup button
+1. Header bar — badge (130×130px), site name, tagline (Settings → General → Tagline), Instagram link, Submit a Cleanup button
 2. Nav bar — assign at Appearance → Menus
 3. Hero — two-column: left = headline + body + CTA buttons; right = live Leaflet map (340px, rounded)
 4. Wave divider — white-to-navy SVG
@@ -286,6 +290,11 @@ Settings → Reading → "A static page" → create blank page titled "Home" →
 9. Recent Cleanups — 3 most recent events from DB
 10. Footer (includes wave divider into navy footer on all pages)
 
+### Header
+
+- Logo: `glc-badge.png` at 130×130px. Header padding reduced to compensate so overall header height is unchanged.
+- "Submit a Cleanup" button: white background, navy border — matches the hero outline button style. Previously red, changed for visual consistency.
+
 ### Hero Text
 
 In **`header.php`** inside `is_front_page()` block. Edit strings inside `esc_html_e( '...' )`. Apostrophes must be escaped as `\'` in PHP single-quoted strings — e.g. `doesn\'t`, `Guelph\'s`. Failure causes a fatal parse error.
@@ -294,17 +303,61 @@ In **`header.php`** inside `is_front_page()` block. Edit strings inside `esc_htm
 
 `archive-cleanup_event.php` — fetches all `cleanup_event` posts and all published `glc_submission` posts via `get_posts(-1)`, merges them into a single array, normalises any legacy display-format dates to `YYYY-MM-DD` via `strtotime()`, sorts globally by date descending, then paginates manually at 12 per page. This ensures correct interleaving regardless of post type or how dates were originally stored.
 
-Community cards show a green "Community" pill badge and a subtle left border. Clicking a community card links to `/cleanup-submission/{slug}/` which loads `single-glc_submission.php`. Photos only shown on the single view if the submitter gave repost consent.
+Community cards show a green "Community" pill badge and a subtle left border. Clicking a community card links to `/cleanup-submission/{slug}/` which loads `single-glc_submission.php`. Tracker event cards link to `/cleanups/{slug}/` which loads `single-cleanup_event.php`.
+
+### Single Cleanup Event Page (`/cleanups/{slug}/`)
+
+`single-cleanup_event.php` — loaded for all `cleanup_event` posts (tracker-imported). Layout top to bottom:
+
+1. ← All Cleanups back link
+2. Date + corridor badge (inferred from site name — matches Speed River, Eramosa River, Hanlon Creek, Guelph Lake, Grand River) + volunteer count byline
+3. **Featured image** (if attached to the post)
+4. **Blog body** — WordPress editor content rendered as free prose (`.glc-single-body`). The tracker `notes` column is imported into `post_content` and appears here. Can be freely edited in the WP block editor — add photos, call out participants, embed maps, etc.
+5. Stat tiles: Bags 🗑 / Debris ⚖ / Items Recycled ♻ / Hrs ⏱ (only tiles with data are shown)
+6. Notable Finds box (from `notable_finds` meta)
+7. Wildlife Observed box (from `wildlife_obs` meta, with green left accent)
+8. Restoration extras: native species planted 🌱 / metres of bank cleared 🏞 (pill badges)
+9. "View Field Log on Instagram →" outline button (if `instagram_url` set)
+
+Meta keys read: `cleanup_date`, `site_name`, `bags`, `weight_kg`, `hours`, `items_recycled`, `notable_finds`, `wildlife_obs`, `instagram_url`, `volunteers`, `species_planted`, `meters_bank_cleared`.
+
+### Single Community Submission Page (`/cleanup-submission/{slug}/`)
+
+`single-glc_submission.php` — loaded for all `glc_submission` posts. Layout mirrors the tracker single view:
+
+1. ← All Cleanups back link
+2. Date + "Community" green badge + "Submitted by [name]" byline
+3. **Featured image** (if attached)
+4. **Blog body** — WordPress editor content rendered as free prose (`.glc-single-body`). Admin can open any submission post in the editor and add narrative, photos, etc.
+5. Stat tiles: Bags 🗑 / Debris ⚖ / Items Recycled ♻ / Hrs ⏱
+6. Submitted photos gallery (only if photo repost consent was given)
+7. Notable Finds box
+8. "View Field Log on Instagram →" outline button
+
+Both post types use identical emoji icons for stat tiles (🗑 ⚖ ♻ ⏱) for visual consistency. The browser renders emoji with native colour (amber scales, red stopwatch hand, green recycling arrows), which is why they appear more vivid than SVG icons.
 
 ### Submit a Cleanup Page (`/submit-cleanup/`)
 
 `page-submit-cleanup.php` — auto-loaded by WordPress for any page with the slug `submit-cleanup`. Two-column layout: form on the left, sticky sidebar on the right with three info cards (what happens next, logging tips, corridor list). The sidebar collapses below the form on mobile.
 
-The form (`[glc_submit_form]`) has five sections: About You, The Cleanup, What You Collected (with Garbage / Recycling / Team sub-groups), Notable Finds & Field Log, and Photos. Helper text is displayed via CSS tooltip icons (`?`) rather than inline notes — this keeps all input fields in a two-column grid with consistent alignment. Consent checkbox for photo reposting.
+The form (`[glc_submit_form]`) has five sections:
+1. **About You** — Name (required), Email (optional)
+2. **The Cleanup** — Date (required), Duration, Waterway (required), Access Point, GPS Location (lat/lon inputs + "Use my location" browser geolocation button)
+3. **What You Collected** — Garbage (bags, weight, notes), Recycling (cans, bottles), Team (number of people)
+4. **Notable Finds & Field Log** — textarea + Instagram URL
+5. **Photos** — up to 5 images with repost consent checkbox
+
+Person-hours are calculated automatically from duration × volunteers; no manual hours entry. Phone field removed. GPS coordinates stored as `glc_gps_lat` / `glc_gps_lon`.
+
+Helper text displayed via CSS tooltip icons (`?`) rather than inline notes — keeps all input fields in a two-column grid with consistent alignment. Consent checkbox for photo reposting.
+
+### "What Happens Next?" Sidebar Card
+
+Uses CSS Grid layout (number badge spanning both rows, bold label top-right, description text bottom-right) for clean tabular alignment. Gap between items increased to 20px.
 
 ### Form Field Alignment
 
-Form uses CSS Grid (`grid-template-columns: 1fr 1fr`) on `.glc-field-row` for all sections. Textareas, file inputs, and the consent field span both columns via `grid-column: 1 / -1`. The garbage sub-group uses `.glc-field-row--3col` for three equal columns. Helper notes that would cause label height differences are implemented as `.glc-tooltip` hover icons instead.
+Form uses CSS Grid (`grid-template-columns: 1fr 1fr`) on `.glc-field-row` for all sections. Textareas, file inputs, geo field, and the consent field span both columns via `grid-column: 1 / -1`. The garbage sub-group uses `.glc-field-row--3col` for three equal columns.
 
 ### WordPress Pages Required
 
@@ -330,7 +383,7 @@ Form uses CSS Grid (`grid-template-columns: 1fr 1fr`) on `.glc-field-row` for al
 | 2 | C | Duration (min) | |
 | 3 | D | Bags (#) | Garbage |
 | 4 | E | Weight (kg) | Garbage |
-| 5 | F | Notes | |
+| 5 | F | Notes | Imported into post_content — appears as blog body on single event page |
 | 6 | G | Cans (#) | Recycling |
 | 7 | H | Bottles (#) | Recycling |
 | 8–11 | I–L | Scrap Metal | Not currently exported |
@@ -412,9 +465,9 @@ python tracker_to_csv.py -o out.csv         # custom output path
 - [ ] **Point greatlakecleaners.ca nameservers** to VPS
 - [ ] **Install LAMP stack + WordPress** on VPS
 - [ ] **Deploy plugin + theme to production**
-- [ ] **Build `single-cleanup_event.php`** — individual event view: stats, map pin, photos, wildlife observations, Instagram field log link
 - [ ] Re-import cleanups from Google Sheets now that date format issue is resolved (trash existing events, re-run `tracker_to_csv.py`, re-import CSV)
 - [ ] Post Instagram bio and first pinned post
 - [ ] Get a digital fish scale (~$15–20) for accurate weight logging
 - [ ] Connect with OPIRG Speed River Project coordinator
 - [ ] Register for City of Guelph Clean and Green (April)
+- [ ] Build donate/e-transfer page
