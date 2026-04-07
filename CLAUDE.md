@@ -64,15 +64,26 @@ Indiegogo and crowdfunding not appropriate for Phase 1. Better options:
 ## Technical Infrastructure
 
 ### Hosting
-- **Local dev:** WPLocal (Windows, WordPress 6.9.4) — actively in use, tested over HTTPS locally
-- **Production VPS:** OVHcloud Canada or WebSavers (not yet provisioned)
-- **Stack:** Ubuntu 24, Apache, MySQL, PHP 8.2, Python 3
+- **Local dev:** WPLocal (Windows) — used for development and testing
+- **Production VPS:** OVHcloud Canada — **live at greatlakecleaners.ca** ✅
+- **Stack:** Ubuntu 24, Apache 2.4, MySQL, PHP 8.3, Python 3
 - **WordPress** for public site and cleanup event management
+
+### Server Setup Notes
+- UFW firewall enabled: ports 22 (OpenSSH), 80, 443 open
+- fail2ban installed and active — protects SSH (5 failed attempts = 10 min ban)
+- certbot + python3-certbot-apache installed; SSL auto-renews via systemd timer
+- Apache modules enabled: `rewrite`, site config at `/etc/apache2/sites-available/greatlakecleaners.ca.conf`
+- WordPress installed at `/var/www/html/wordpress`
+- MySQL database: `wordpress`, user: `wpuser`@`localhost`
+- SVG MIME type confirmed working: Apache serves `image/svg+xml` correctly — verified via `curl -I`
 
 ### Domains
 - Registered at CanSpace
 - Primary: greatlakecleaners.ca
+- DNS: A record pointing to `167.114.129.162` (OVHcloud VPS IPv4); www/mail/ftp CNAMEs follow automatically
 - SSL: Let's Encrypt (free, auto-renews via certbot)
+- The `ownercheck` TXT record added during OVHcloud secondary DNS verification — can be left in place
 
 ### Post-Deployment Checklist (things stored in DB, not files)
 When deploying to VPS, the following must be re-done in WP Admin — they do not travel with the theme/plugin zips:
@@ -194,7 +205,8 @@ CSS class: `.glc-submit-receipt` — green-tinted pill badge, defined in theme's
 ## WordPress Theme: `great-lake-cleaners-theme`
 
 **File:** `great-lake-cleaners-theme.zip`  
-**Install:** Appearance → Themes → Upload → Activate.
+**Install:** Appearance → Themes → Upload → Activate.  
+**PHP upload limit:** Default WordPress limit is too small for the theme zip. Set in `/etc/php/8.3/apache2/php.ini`: `upload_max_filesize = 64M`, `post_max_size = 64M`, `max_execution_time = 300`, then `sudo systemctl restart apache2`.
 
 ### Theme File Structure
 
@@ -215,10 +227,15 @@ great-lake-cleaners-theme/
   assets/
     images/
       glc-badge.png            — shield logo (transparent bg)
-      stylized-thankyou.png    — thank-you illustration
-      stylized-paddler.png     — paddler illustration
-      stylized-map-rivers-lake.png
-      cleanup_stylized.png
+      stylized-thankyou.png    — thank-you illustration (PNG — has transparency)
+      stylized-paddler.jpg     — paddler illustration (JPG, 500px wide, ~85% quality)
+      stylized-map-rivers-lake.jpg — map illustration (JPG, 500px wide, ~85% quality)
+      cleanup_stylized.jpg     — cleanup illustration (JPG, 500px wide, ~85% quality)
+      icon-bag.svg             — Twemoji wastebasket (CC-BY 4.0)
+      icon-scale.svg           — Twemoji scales (CC-BY 4.0)
+      icon-recycle.svg         — Twemoji recycle (CC-BY 4.0)
+      icon-timer.svg           — Twemoji stopwatch (CC-BY 4.0)
+      icon-wave.svg            — Twemoji wave (CC-BY 4.0)
     js/
       nav.js                   — mobile menu toggle
 ```
@@ -352,7 +369,7 @@ Interior pages need top padding to clear the header wave (`::after` overhangs 38
 4. Submit a Cleanup
 ```
 
-Recent cleanups strip sits immediately after the hero with no `<hr>` separators. Cards are full-anchor `<a>` elements showing: date · site name · stats (bags, kg, recycled, hours). No "See All Cleanups" button — covered by the hero CTA.
+Recent cleanups strip sits immediately after the hero with no `<hr>` separators. Cards are full-anchor `<a>` elements showing: date · site name · icon + stats (bags, kg, recycled, hours). No "See All Cleanups" button — covered by the hero CTA.
 
 ### Archive Page (`/cleanups/`)
 
@@ -361,6 +378,8 @@ Left-aligned throughout (pill, heading, intro text, impact section). Fetches all
 ### Single Event Pages
 
 Both `single-cleanup_event.php` and `single-glc_submission.php` share `.glc-single-sub-wrap` and `.glc-single-event-map`. Both have `isolation: isolate` on the map wrapper. Layout: back link → header → featured image → blog body → stat tiles → finds → map.
+
+**Volunteer count removed from single event header** — the "1 person / N people" byline was removed from `single-cleanup_event.php`. Hours in the stat tile is sufficient; volunteer count was redundant and visually noisy.
 
 ### Submit a Cleanup Page
 
@@ -382,6 +401,37 @@ Form section order:
 | Home | `home` | Blank — set as static front page |
 | Submit a Cleanup | `submit-cleanup` | Leave blank — template handles layout |
 | Privacy Policy | `privacy-policy` | Leave blank — template handles content |
+
+### Performance
+
+HAR analysis (April 2026) identified and resolved the following:
+
+- **Illustrations converted to JPG** — `stylized-paddler`, `stylized-map-rivers-lake`, `cleanup_stylized` exported from Lightroom as JPG 85% quality at 500px wide. `stylized-thankyou` kept as PNG (has transparency). Total image payload reduced from ~6.5 MB to ~700 KB (~89% reduction).
+- **WordPress emoji system disabled** in `functions.php` via:
+  ```php
+  remove_action('wp_head', 'print_emoji_detection_script', 7);
+  remove_action('wp_print_styles', 'print_emoji_styles');
+  ```
+  This prevents WordPress intercepting Unicode emoji and fetching SVGs from `s.w.org`. These two lines must be inside `after_setup_theme` with the priority `7` on the first call preserved.
+- **Stat tile emoji replaced with local Twemoji SVGs** — the 5 icon SVGs (bag, scale, recycle, timer, wave) are downloaded from `s.w.org` (Twemoji, CC-BY 4.0) and served from `assets/images/`. Attribution required: "Emoji icons by Twemoji, licensed under CC BY 4.0" — add to footer or Privacy Policy page.
+- **Icon CSS sizing** — `font-size` has no effect on `<img>` elements. Icon spans use explicit pixel dimensions: `.glc-sub-stat-icon` at `28px × 28px`, `.glc-tip-icon` at `20px × 20px`, `.glc-404-icon img` at `64px × 64px`.
+
+### Icon Implementation Pattern
+
+Icons are referenced via `<img>` tags using PHP string concatenation — **never** mix PHP variable assignment in one `<?php ?>` block and then reference that variable inside an HTML attribute in a subsequent block. The correct pattern:
+
+```php
+<?php
+$idir = esc_url( get_template_directory_uri() ) . '/assets/images';
+if ( $bags ) echo '<span><img src="' . $idir . '/icon-bag.svg" alt="" width="20" height="20" ...> ' . esc_html( $bags ) . ' bags</span>';
+?>
+```
+
+The broken pattern (do not use — variable is not interpolated into HTML attribute):
+```php
+<?php $idir = get_template_directory_uri() . '/assets/images'; ?>
+<img src="<?php echo $idir; ?>/icon-bag.svg">  ← WRONG
+```
 
 ---
 
@@ -474,8 +524,8 @@ Samples background colour from four corners (median, robust to texture). Flood-f
 
 | File | Status |
 |---|---|
-| `great-lake-cleaners-plugin.zip` | ✅ Installed and working in WPLocal |
-| `great-lake-cleaners-theme.zip` | ✅ Installed and working in WPLocal |
+| `great-lake-cleaners-plugin.zip` | ✅ Installed and live on production |
+| `great-lake-cleaners-theme.zip` | ✅ Installed and live on production |
 | `tracker_to_csv.py` | ✅ Working — pulls from Google Sheets |
 | `config.toml` | ✅ Configured |
 | `credentials.json` | ✅ In place (never commit to version control) |
@@ -485,19 +535,12 @@ Samples background colour from four corners (median, robust to texture). Flood-f
 
 ## Next Steps
 
-- [ ] **Provision production VPS** (OVHcloud Canada or WebSavers)
-- [ ] **Point greatlakecleaners.ca nameservers** to VPS
-- [ ] **Install LAMP stack + WordPress** on VPS
-- [ ] **Deploy plugin + theme to production**
-- [ ] **Re-do site identity on VPS** — name, tagline, favicon (Appearance → Customize → Site Identity)
-- [ ] **Re-create pages on VPS** — Home, Submit a Cleanup, Privacy Policy (correct slugs required)
-- [ ] **Re-build nav menus on VPS** — primary and footer
-- [ ] Re-import cleanups from Google Sheets (trash existing events, re-run `tracker_to_csv.py`, re-import CSV)
 - [ ] Update `$contact` email in `page-privacy-policy.php` once email address is set up
+- [ ] Add Twemoji attribution to footer or Privacy Policy: *"Emoji icons by [Twemoji](https://twemoji.twitter.com/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)"*
 - [ ] Finalise badge/logo — preferred: clean vector shield (non-embroidered), processed through `remove_background.py`, drop into theme as `assets/images/glc-badge.png`
+- [ ] Build donate/e-transfer page
 - [ ] Post Instagram bio and first pinned post
 - [ ] Get a digital fish scale (~$15–20) for accurate weight logging
 - [ ] Connect with OPIRG Speed River Project coordinator
 - [ ] Register for City of Guelph Clean and Green (April)
-- [ ] Build donate/e-transfer page
 - [ ] Consider physical badge ("Watershed Steward" patch) for top contributors at year-end — award based on cleanups logged (3+), not weight or volume
