@@ -85,12 +85,16 @@ Indiegogo and crowdfunding not appropriate for Phase 1. Better options:
 - SSL: Let's Encrypt (free, auto-renews via certbot)
 - The `ownercheck` TXT record added during OVHcloud secondary DNS verification — can be left in place
 
+### Contact Email
+- **`info@greatlakecleaners.ca`** — live and configured ✅
+- Referenced in `page-privacy-policy.php` via `$contact` variable (already updated)
+
 ### Post-Deployment Checklist (things stored in DB, not files)
 When deploying to VPS, the following must be re-done in WP Admin — they do not travel with the theme/plugin zips:
 - **Appearance → Customize → Site Identity** — site name, tagline, and Site Icon (favicon). Upload `glc-badge.png` (transparent background version preferred) and WordPress generates all favicon sizes automatically. **Important:** if a custom logo is set here it takes priority over the fallback `glc-badge.png` in `assets/images/`. Clear this setting to use the file-based fallback.
 - **Settings → Reading** — set static front page to the "Home" page
 - **Appearance → Menus** — rebuild primary and footer nav menus
-- **Pages** — recreate "Home" and "Submit a Cleanup" pages with correct slugs
+- **Pages** — recreate "Home", "Submit a Cleanup", and "Photos" pages with correct slugs; set Photos page template to "Photos"
 - **Privacy Policy page** — create a blank page with slug `privacy-policy`; `page-privacy-policy.php` handles all content automatically
 - Use **Tools → Export / Import** (WXR) or WP Migrate to carry over posts, pages, menus, and options in one shot
 
@@ -112,7 +116,7 @@ great-lake-cleaners/
     post-type.php           — cleanup_event CPT registration
     acf-fields.php          — native WordPress meta box (replaces ACF)
     admin.php               — list table columns, sortable date, admin styles
-    shortcodes.php          — [glc_stats], [glc_map], [glc_archive]
+    shortcodes.php          — [glc_stats], [glc_map], [glc_archive], [glc_gallery]
     import.php              — Tools → Import Cleanups CSV
     submission.php          — glc_submission CPT + [glc_submit_form] shortcode
 ```
@@ -134,7 +138,7 @@ Fields via native "Cleanup Details" meta box below the block editor.
 | Items Recycled | `items_recycled` | cans + bottles |
 | Notable Finds | `notable_finds` | |
 | Native Species Planted | `species_planted` | |
-| Metres Bank Cleared | `meters_bank_cleared` | |
+| Metres Bank Cleared | `meters_bank_cleared` | displayed as km if ≥ 1000 m |
 | Wildlife Observed | `wildlife_obs` | |
 | Instagram Post URL | `instagram_url` | link to field log |
 
@@ -218,6 +222,7 @@ great-lake-cleaners-theme/
   footer.php                   — closes </main>, closes </div.glc-main-outer>, wave SVG, stats strip, <footer>
   front-page.php               — home page template
   page.php                     — standard page template
+  page-photos.php              — Photos page template (Template Name: Photos) — calls [glc_gallery]
   page-submit-cleanup.php      — Submit a Cleanup page shell + sidebar
   page-privacy-policy.php      — Privacy Policy (auto-generated content)
   archive-cleanup_event.php    — /cleanups/ archive
@@ -236,6 +241,7 @@ great-lake-cleaners-theme/
       icon-recycle.svg         — Twemoji recycle (CC-BY 4.0)
       icon-timer.svg           — Twemoji stopwatch (CC-BY 4.0)
       icon-wave.svg            — Twemoji wave (CC-BY 4.0)
+      icon-bank.svg            — custom river bank / shoreline icon (Twemoji palette)
     js/
       nav.js                   — mobile menu toggle
 ```
@@ -381,6 +387,37 @@ Both `single-cleanup_event.php` and `single-glc_submission.php` share `.glc-sing
 
 **Volunteer count removed from single event header** — the "1 person / N people" byline was removed from `single-cleanup_event.php`. Hours in the stat tile is sufficient; volunteer count was redundant and visually noisy.
 
+### Stat Tiles (single event pages)
+
+Five tiles displayed as a flex row: Bags · Debris (kg) · Items Recycled · Hrs · Bank Cleared.
+
+- **Bank Cleared** is a proper stat tile (not a pill) using `icon-bank.svg`. Auto-formats: values under 1000 m display as `500 m`; values at or above display as `2 km` (trailing zeros stripped via `rtrim`).
+- The old emoji-based restoration pill row for bank cleared has been removed. The `🌱 native species planted` pill still renders below Notable Finds if that field is set.
+- `.glc-sub-stat-lbl` has `text-align: center` — required so multi-word labels (ITEMS RECYCLED, BANK CLEARED) centre correctly when they wrap to two lines.
+
+### Card Stat Tokens (front page + archive cards)
+
+All stat tokens in `.glc-fp-slim-stats` and `.glc-fp-card-stats` use the `.glc-cs` span pattern:
+
+```php
+$ic = function( $icon, $val, $suffix = '' ) use ( $idir ) {
+    return '<span class="glc-cs"><img src="' . $idir . '/' . $icon . '" alt="" width="18" height="18" aria-hidden="true">' . esc_html( $val ) . ( $suffix ? ' ' . $suffix : '' ) . '</span>';
+};
+```
+
+CSS: `.glc-cs { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }` — icon and text are locked to the same centre line. The old `vertical-align: -0.2em` hack is gone. Both stat containers use `flex-wrap: wrap` so tokens reflow on narrow cards.
+
+### Photos Page (`/photos/`)
+
+- **Template:** `page-photos.php` (Template Name: Photos) — must be selected in Page Attributes when creating the Photos page in WP Admin
+- **Shortcode:** `[glc_gallery]` registered in `shortcodes.php`
+- **Sources:** Images attached to published `cleanup_event` posts + images from published `glc_submission` posts where `glc_photo_repost_ok = '1'`
+- **Attachment lookup:** Uses `get_posts( post_parent = $post_id, post_type = attachment )` — only works reliably for images **uploaded while editing** the post. Images selected from the pre-existing Media Library may retain their original `post_parent` (0 or another post) and will be missed.
+- **Layout:** Year tabs (pill buttons, descending) → responsive grid (`auto-fill, minmax(220px, 1fr)`) → vanilla JS lightbox with keyboard nav (←/→/Esc) and backdrop-click to close
+- **Caption overlay:** Site name shown on hover/focus via `.glc-thumb-caption`
+- **Lightbox meta bar:** Shows site name · cleanup date · "View outing →" link to the source post
+- **Empty state:** Renders a friendly message if no photos are found yet
+
 ### Submit a Cleanup Page
 
 Two-column layout: form left, sidebar right. Sidebar has three cards: "What happens next?", "Tips for logging", "Our corridors".
@@ -396,11 +433,12 @@ Form section order:
 
 ### WordPress Pages Required
 
-| Title | Slug | Notes |
-|---|---|---|
-| Home | `home` | Blank — set as static front page |
-| Submit a Cleanup | `submit-cleanup` | Leave blank — template handles layout |
-| Privacy Policy | `privacy-policy` | Leave blank — template handles content |
+| Title | Slug | Template | Notes |
+|---|---|---|---|
+| Home | `home` | (default) | Blank — set as static front page |
+| Photos | `photos` | Photos | Leave blank — template calls `[glc_gallery]` |
+| Submit a Cleanup | `submit-cleanup` | (default) | Leave blank — template handles layout |
+| Privacy Policy | `privacy-policy` | (default) | Leave blank — template handles content |
 
 ### Performance
 
@@ -413,24 +451,18 @@ HAR analysis (April 2026) identified and resolved the following:
   remove_action('wp_print_styles', 'print_emoji_styles');
   ```
   This prevents WordPress intercepting Unicode emoji and fetching SVGs from `s.w.org`. These two lines must be inside `after_setup_theme` with the priority `7` on the first call preserved.
-- **Stat tile emoji replaced with local Twemoji SVGs** — the 5 icon SVGs (bag, scale, recycle, timer, wave) are downloaded from `s.w.org` (Twemoji, CC-BY 4.0) and served from `assets/images/`. Attribution required: "Emoji icons by Twemoji, licensed under CC BY 4.0" — add to footer or Privacy Policy page.
-- **Icon CSS sizing** — `font-size` has no effect on `<img>` elements. Icon spans use explicit pixel dimensions: `.glc-sub-stat-icon` at `28px × 28px`, `.glc-tip-icon` at `20px × 20px`, `.glc-404-icon img` at `64px × 64px`.
+- **Stat tile emoji replaced with local Twemoji SVGs** — the icon SVGs are downloaded from `s.w.org` (Twemoji, CC-BY 4.0) and served from `assets/images/`. Attribution required: "Emoji icons by Twemoji, licensed under CC BY 4.0" — add to footer or Privacy Policy page.
+- **Icon CSS sizing** — `font-size` has no effect on `<img>` elements. Icon spans use explicit pixel dimensions: `.glc-sub-stat-icon` at `28px × 28px`, card stat icons at `18px × 18px`.
 
 ### Icon Implementation Pattern
 
-Icons are referenced via `<img>` tags using PHP string concatenation — **never** mix PHP variable assignment in one `<?php ?>` block and then reference that variable inside an HTML attribute in a subsequent block. The correct pattern:
+Card stat icons use the `$ic` closure (see Card Stat Tokens above). Single-event stat tiles use direct `<img>` tags inside `.glc-sub-stat-icon` spans. **Never** mix PHP variable assignment in one `<?php ?>` block and then reference that variable inside an HTML attribute in a subsequent block. The correct pattern for inline echo:
 
 ```php
 <?php
 $idir = esc_url( get_template_directory_uri() ) . '/assets/images';
-if ( $bags ) echo '<span><img src="' . $idir . '/icon-bag.svg" alt="" width="20" height="20" ...> ' . esc_html( $bags ) . ' bags</span>';
+if ( $bags ) echo '<span class="glc-cs"><img src="' . $idir . '/icon-bag.svg" alt="" width="18" height="18" aria-hidden="true">' . esc_html( $bags ) . ' bags</span>';
 ?>
-```
-
-The broken pattern (do not use — variable is not interpolated into HTML attribute):
-```php
-<?php $idir = get_template_directory_uri() . '/assets/images'; ?>
-<img src="<?php echo $idir; ?>/icon-bag.svg">  ← WRONG
 ```
 
 ---
@@ -535,11 +567,8 @@ Samples background colour from four corners (median, robust to texture). Flood-f
 
 ## Next Steps
 
-- [ ] Update `$contact` email in `page-privacy-policy.php` once email address is set up
 - [ ] Add Twemoji attribution to footer or Privacy Policy: *"Emoji icons by [Twemoji](https://twemoji.twitter.com/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)"*
-- [ ] Finalise badge/logo — preferred: clean vector shield (non-embroidered), processed through `remove_background.py`, drop into theme as `assets/images/glc-badge.png`
 - [ ] Build donate/e-transfer page
-- [ ] Post Instagram bio and first pinned post
 - [ ] Get a digital fish scale (~$15–20) for accurate weight logging
 - [ ] Connect with OPIRG Speed River Project coordinator
 - [ ] Register for City of Guelph Clean and Green (April)
