@@ -70,13 +70,79 @@ Indiegogo and crowdfunding not appropriate for Phase 1. Better options:
 - **WordPress** for public site and cleanup event management
 
 ### Server Setup Notes
-- UFW firewall enabled: ports 22 (OpenSSH), 80, 443 open
-- fail2ban installed and active — protects SSH (5 failed attempts = 10 min ban)
-- certbot + python3-certbot-apache installed; SSL auto-renews via systemd timer
-- Apache modules enabled: `rewrite`, site config at `/etc/apache2/sites-available/greatlakecleaners.ca.conf`
+- UFW firewall enabled: ports 22 (OpenSSH), 80, 443 open; port 25 for mail forwarding
+- fail2ban installed and active — three jails: `sshd`, `wordpress-auth`, `recidive`
+- certbot + python3-certbot-apache installed; SSL auto-renews via systemd timer (90-day cert, renews at 30 days)
+- Apache modules enabled: `rewrite`, `headers`, `ssl`, `mod_php`; PHP SAPI: `mod_php` (confirmed via `apachectl -M`)
 - WordPress installed at `/var/www/html/wordpress`
 - MySQL database: `wordpress`, user: `wpuser`@`localhost`
-- SVG MIME type confirmed working: Apache serves `image/svg+xml` correctly — verified via `curl -I`
+- SVG MIME type confirmed working: Apache serves `image/svg+xml` correctly
+- Mail server: Postfix on port 587 (authenticated SMTP) and port 25 (forwarding to Gmail); DKIM, SPF, rDNS, DMARC configured; Postfix rate limiting active
+- `expose_php = Off` and `display_errors = Off` set in `/etc/php/8.3/apache2/php.ini`
+
+### Apache Virtual Host Hardening
+Config files at `/etc/apache2/sites-available/`:
+- `greatlakecleaners.ca.conf` — port 80, redirect-only to HTTPS
+- `greatlakecleaners.ca-le-ssl.conf` — port 443, all real traffic
+
+**Uploads directory** (`/var/www/html/wordpress/wp-content/uploads`):
+- `php_admin_flag engine off` — disables PHP execution (mod_php confirmed)
+- `Options -ExecCGI` — disables CGI execution
+- `FilesMatch` — denies direct access to `.php`, `.php5`, `.phtml`, `.pl`, `.py`, `.cgi`, `.sh`
+- `RemoveHandler` / `RemoveType` — removes PHP handler registration
+- `AllowOverride None` — prevents `.htaccess` in uploads from overriding these protections
+- An `.htaccess` also exists in the uploads directory as a belt-and-suspenders layer
+
+**XML-RPC:** blocked via `<Files "xmlrpc.php"> Require all denied </Files>` in both vhosts
+
+**REST API user enumeration:** blocked via RewriteRules on `rest_route=/wp/v2/users` and `?author=N` query strings
+
+**HTTP security headers** (HTTPS vhost only):
+- `X-Frame-Options: SAMEORIGIN`
+- `X-Content-Type-Options: nosniff`
+- `X-XSS-Protection: 0` (legacy auditor disabled — modern browsers use built-in protection)
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: geolocation=(self), camera=(), microphone=()`
+- `Server` header suppressed via `ServerTokens Prod` + `Header always unset Server`
+
+**Content Security Policy** (enforced, not report-only):
+```
+default-src 'self';
+script-src 'self' 'unsafe-inline';
+style-src 'self' 'unsafe-inline';
+font-src 'self';
+img-src 'self' data: https://*.basemaps.cartocdn.com;
+connect-src 'self' https://*.basemaps.cartocdn.com;
+frame-src 'none';
+frame-ancestors 'none';
+object-src 'none';
+base-uri 'self';
+```
+`'unsafe-inline'` on `script-src` and `style-src` is required by Leaflet — it injects inline styles on map DOM elements and dynamic scripts at runtime. All other sources are self-hosted. The only external source is Carto for map tiles.
+
+**Self-hosted assets** (no external CDN dependencies):
+- Leaflet 1.9.4 JS + CSS — served from `great-lake-cleaners/assets/`
+- Nunito + Lato fonts — served from `great-lake-cleaners-theme/assets/fonts/`
+- All SVG icons — served from `great-lake-cleaners-theme/assets/images/`
+
+### fail2ban Jails
+- **sshd** — standard SSH protection
+- **wordpress-auth** — watches `greatlakecleaners-access.log` for POST to `wp-login.php` returning 200; `maxretry=4`, `findtime=7200` (2hr window catches ~20min slow-probe pattern), `bantime=600000` (~7 days); own IP excluded via `ignoreip`
+- **recidive** — watches `/var/log/fail2ban.log`; `maxretry=2`, `findtime=1d`, `bantime=-1` (permanent); bans all ports via `banaction=%(banaction_allports)s`
+
+To reset a rate limit transient (form submission/report):
+```bash
+wp transient delete --all
+# or
+DELETE FROM wp_options WHERE option_name LIKE '_transient_glc_%';
+```
+
+To manually ban/unban an IP:
+```bash
+sudo fail2ban-client set wordpress-auth banip 1.2.3.4
+sudo fail2ban-client set wordpress-auth unbanip 1.2.3.4
+```
 
 ### Domains
 - Registered at CanSpace
@@ -111,8 +177,10 @@ When deploying to VPS, the following must be re-done in WP Admin — they do not
 
 ```
 great-lake-cleaners/
-  great-lake-cleaners.php   — main loader, activation hook, transient-based rewrite flush,
-                              Turnstile constants + glc_verify_turnstile() helper
+  great-lake-cleaners.php   — main loader, activation hook, transient-based rewrite flush
+  assets/
+    leaflet.js              — Leaflet 1.9.4 (self-hosted — eliminates unpkg.com CDN dependency)
+    leaflet.css             — Leaflet 1.9.4 styles (self-hosted)
   includes/
     post-type.php           — cleanup_event CPT registration
     acf-fields.php          — native WordPress meta box (replaces ACF)
@@ -220,16 +288,8 @@ Both `[glc_submit_form]` and `[glc_report_form]` share the same three-layer defe
 1. **Nonce** (`wp_verify_nonce`) — WordPress built-in, already present
 2. **Honeypot** — hidden `name="glc_url"` field, CSS-offscreen (`left: -9999px`, `opacity: 0`, `pointer-events: none`, `tabindex="-1"`). Handler silently returns `null` if non-empty — no error shown to bot.
 3. **Rate limit** — WordPress transient keyed by hashed IP. Max 3 attempts per 10 minutes. Transient keys are form-specific: `glc_sub_rate_` (submission) and `glc_rep_rate_` (report). Returns user-visible error after limit hit.
-4. **Cloudflare Turnstile** — invisible widget (`data-size="invisible"`). Challenge fires silently on submit; token verified server-side via `https://challenges.cloudflare.com/turnstile/v0/siteverify`. Requires outbound HTTPS (port 443) from the server.
-5. **Field validation** — required fields, date format/range checks
-6. **`wp_mail()`** — only reached if all above pass
-
-**Turnstile configuration:**
-- Site key and secret key stored as constants in `great-lake-cleaners.php`: `GLC_TURNSTILE_SITE_KEY`, `GLC_TURNSTILE_SECRET_KEY`
-- Keys are registered to `greatlakecleaners.ca` in the Cloudflare Turnstile dashboard — update both the dashboard domain and these constants if the domain changes
-- Widget mode: **Invisible** (must match `data-size="invisible"` in HTML)
-- Cloudflare JS enqueued via `wp_enqueue_scripts` only on pages containing either GLC form shortcode (checks `has_shortcode()` against post content)
-- Shared verify helper: `glc_verify_turnstile( string $token ): bool` in `great-lake-cleaners.php`
+4. **Field validation** — required fields, date format/range checks
+5. **`wp_mail()`** — only reached if all above pass
 
 **Required indicator CSS:** Both forms use `.glc-required` (defined in `style.css` as `color: var(--glc-red); flex-shrink: 0`). The `*` span must sit **inside** `.glc-label-text` to stay inline — placing it outside causes it to wrap to a new line in the column flex layout.
 
@@ -486,7 +546,6 @@ Form section order:
 
 HAR analysis (April 2026) identified and resolved the following:
 
-- **Illustrations converted to JPG** — `stylized-paddler`, `stylized-map-rivers-lake`, `cleanup_stylized` exported from Lightroom as JPG 85% quality at 500px wide. `stylized-thankyou` kept as PNG (has transparency). Total image payload reduced from ~6.5 MB to ~700 KB (~89% reduction).
 - **WordPress emoji system disabled** in `functions.php` via:
   ```php
   remove_action('wp_head', 'print_emoji_detection_script', 7);
@@ -578,41 +637,44 @@ Same date + same location → one event, totals summed. Same date + different lo
 
 ---
 
-## Python Tool: `remove_background.py`
-
-Removes solid or textured backgrounds from badge/logo images, producing a transparent PNG.
-
-```bash
-python remove_background.py input.png output.png [tolerance]
-```
-
-Samples background colour from four corners (median, robust to texture). Flood-fills inward from edges, making pixels within `tolerance` of the sampled colour transparent. Interior pixels untouched.
-
-**Tolerance:** `15–20` clean white · `25–30` textured/linen (default: 28) · `30–35` heavy noise
-
-**Requires:** Python 3, Pillow, NumPy
-
----
-
 ## Current File Inventory
 
 | File | Status |
 |---|---|
-| `great-lake-cleaners-plugin.zip` | ✅ Installed and live on production |
-| `great-lake-cleaners-theme.zip` | ✅ Installed and live on production |
-| `tracker_to_csv.py` | ✅ Working — pulls from Google Sheets |
-| `config.toml` | ✅ Configured |
-| `credentials.json` | ✅ In place (never commit to version control) |
-| `Great_Lake_Cleaners_Outing_Tracker.xlsx` | ✅ Local backup of Google Sheet |
+| `great-lake-cleaners-plugin.zip` | Installed and live on production |
+| `great-lake-cleaners-theme.zip` | Installed and live on production |
+| `tracker_to_csv.py` | Working — pulls from Google Sheets |
+| `config.toml` | Configured |
+| `credentials.json` | In place (never commit to version control) |
+| `Great_Lake_Cleaners_Outing_Tracker.xlsx` | Local backup of Google Sheet |
 
 ---
 
 ## Next Steps
 
-- [ ] Add "Report an Issue" to primary nav menu (page slug: `report-issue`)
-- [ ] Add Twemoji attribution to footer or Privacy Policy: *"Emoji icons by [Twemoji](https://twemoji.twitter.com/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)"*
+- [ ] Set up UptimeRobot (free) for uptime + SSL certificate expiry monitoring
 - [ ] Build donate/e-transfer page
 - [ ] Get a digital fish scale (~$15–20) for accurate weight logging
 - [ ] Connect with OPIRG Speed River Project coordinator
 - [ ] Register for City of Guelph Clean and Green (April)
 - [ ] Consider physical badge ("Watershed Steward" patch) for top contributors at year-end — award based on cleanups logged (3+), not weight or volume
+
+## Server Hardening Completed
+
+- UFW firewall — ports 22, 80, 443, 25
+- SSH hardening — `PermitRootLogin no`, `PasswordAuthentication no`, keys only
+- fail2ban — sshd, wordpress-auth (4 attempts / 2hr window / 7-day ban), recidive (permanent ban after 2 bans in 24hr)
+- Apache uploads directory — PHP/CGI execution disabled, FilesMatch deny, AllowOverride None
+- XML-RPC blocked
+- REST API user enumeration blocked
+- Author archive enumeration blocked
+- HTTP security headers — X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, Permissions-Policy
+- Content Security Policy enforced
+- Self-hosted Leaflet (eliminates unpkg.com CDN)
+- Self-hosted fonts — Nunito + Lato (eliminates Google Fonts)
+- expose_php = Off, display_errors = Off
+- Mail server — DKIM, SPF, rDNS, DMARC, Postfix rate limiting
+- SSL certificate auto-renewal via certbot systemd timer
+- Unattended security upgrades
+- Automated backups
+- `Server` header suppression `security.conf`
