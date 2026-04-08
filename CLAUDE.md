@@ -111,7 +111,8 @@ When deploying to VPS, the following must be re-done in WP Admin — they do not
 
 ```
 great-lake-cleaners/
-  great-lake-cleaners.php   — main loader, activation hook, transient-based rewrite flush
+  great-lake-cleaners.php   — main loader, activation hook, transient-based rewrite flush,
+                              Turnstile constants + glc_verify_turnstile() helper
   includes/
     post-type.php           — cleanup_event CPT registration
     acf-fields.php          — native WordPress meta box (replaces ACF)
@@ -119,6 +120,7 @@ great-lake-cleaners/
     shortcodes.php          — [glc_stats], [glc_map], [glc_archive], [glc_gallery]
     import.php              — Tools → Import Cleanups CSV
     submission.php          — glc_submission CPT + [glc_submit_form] shortcode
+    report.php              — [glc_report_form] shortcode (email-only, no CPT)
 ```
 
 ### Custom Post Type: `cleanup_event`
@@ -194,6 +196,43 @@ After a successful submission, `[glc_submit_form]` shows:
 
 CSS class: `.glc-submit-receipt` — green-tinted pill badge, defined in theme's `style.css`.
 
+### Report an Issue (`[glc_report_form]`)
+
+Public form via `[glc_report_form]` shortcode on page slug `report-issue`. **Email-only — no CPT, no admin review queue.** Reports go directly to `info@greatlakecleaners.ca` via `wp_mail()`.
+
+**Two-stage flow:**
+1. **Triage cards** — side-by-side. City issues routed to Guelph's ArcGIS tool (external link). Waterway issues reveal the form via JS (no page reload, smooth scroll).
+2. **Form** — four sections: About You (optional), The Issue (date/waterway/description), Location (text + GPS), Photos (up to 3).
+
+**Email delivery:** Photos attached directly to the outbound email via `wp_mail()` attachments (temp files, cleaned up after send). `Reply-To` header set to reporter's email if provided, so replies go directly to them.
+
+**Success state** surfaces GRCA Spills Line (1-800-265-6613, 24 hr) and Environment Canada number for active hazards.
+
+**Error handling:** validation errors re-show the form section open (not hidden) so the user doesn't need to click the triage button again.
+
+**Destination email:** `GLC_REPORT_EMAIL` constant defined in `report.php` as `info@greatlakecleaners.ca`.
+
+### Spam Protection
+
+Both `[glc_submit_form]` and `[glc_report_form]` share the same three-layer defence. All checks run **before** `wp_mail()` is called — protecting mail server reputation (DKIM/SPF/rDNS setup on production).
+
+**Defence chain (in order):**
+1. **Nonce** (`wp_verify_nonce`) — WordPress built-in, already present
+2. **Honeypot** — hidden `name="glc_url"` field, CSS-offscreen (`left: -9999px`, `opacity: 0`, `pointer-events: none`, `tabindex="-1"`). Handler silently returns `null` if non-empty — no error shown to bot.
+3. **Rate limit** — WordPress transient keyed by hashed IP. Max 3 attempts per 10 minutes. Transient keys are form-specific: `glc_sub_rate_` (submission) and `glc_rep_rate_` (report). Returns user-visible error after limit hit.
+4. **Cloudflare Turnstile** — invisible widget (`data-size="invisible"`). Challenge fires silently on submit; token verified server-side via `https://challenges.cloudflare.com/turnstile/v0/siteverify`. Requires outbound HTTPS (port 443) from the server.
+5. **Field validation** — required fields, date format/range checks
+6. **`wp_mail()`** — only reached if all above pass
+
+**Turnstile configuration:**
+- Site key and secret key stored as constants in `great-lake-cleaners.php`: `GLC_TURNSTILE_SITE_KEY`, `GLC_TURNSTILE_SECRET_KEY`
+- Keys are registered to `greatlakecleaners.ca` in the Cloudflare Turnstile dashboard — update both the dashboard domain and these constants if the domain changes
+- Widget mode: **Invisible** (must match `data-size="invisible"` in HTML)
+- Cloudflare JS enqueued via `wp_enqueue_scripts` only on pages containing either GLC form shortcode (checks `has_shortcode()` against post content)
+- Shared verify helper: `glc_verify_turnstile( string $token ): bool` in `great-lake-cleaners.php`
+
+**Required indicator CSS:** Both forms use `.glc-required` (defined in `style.css` as `color: var(--glc-red); flex-shrink: 0`). The `*` span must sit **inside** `.glc-label-text` to stay inline — placing it outside causes it to wrap to a new line in the column flex layout.
+
 ### Shortcodes
 
 | Shortcode | Output |
@@ -203,6 +242,7 @@ CSS class: `.glc-submit-receipt` — green-tinted pill badge, defined in theme's
 | `[glc_archive]` | Paginated cleanup archive |
 | `[glc_submit_form]` | Community submission form |
 | `[glc_gallery]` | Photo gallery with year tabs + lightbox |
+| `[glc_report_form]` | Waterway issue report (two-stage: triage → form → email) |
 
 ---
 
@@ -224,6 +264,7 @@ great-lake-cleaners-theme/
   page.php                     — standard page template
   page-photos.php              — Photos page template (Template Name: Photos) — calls [glc_gallery]
   page-submit-cleanup.php      — Submit a Cleanup page shell + sidebar
+  page-report-issue.php        — Report an Issue page shell + sidebar
   page-privacy-policy.php      — Privacy Policy (auto-generated content)
   archive-cleanup_event.php    — /cleanups/ archive
   single-cleanup_event.php     — individual cleanup event
@@ -439,6 +480,7 @@ Form section order:
 | Photos | `photos` | Photos | Leave blank — template calls `[glc_gallery]` |
 | Submit a Cleanup | `submit-cleanup` | (default) | Leave blank — template handles layout |
 | Privacy Policy | `privacy-policy` | (default) | Leave blank — template handles content |
+| Report an Issue | `report-issue` | (default) | Leave blank — template handles layout |
 
 ### Performance
 
@@ -567,6 +609,7 @@ Samples background colour from four corners (median, robust to texture). Flood-f
 
 ## Next Steps
 
+- [ ] Add "Report an Issue" to primary nav menu (page slug: `report-issue`)
 - [ ] Add Twemoji attribution to footer or Privacy Policy: *"Emoji icons by [Twemoji](https://twemoji.twitter.com/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)"*
 - [ ] Build donate/e-transfer page
 - [ ] Get a digital fish scale (~$15–20) for accurate weight logging
