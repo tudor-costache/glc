@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p theme-dev)",
+      "Bash(unzip -q great-lake-cleaners-theme.zip -d theme-dev/)",
+      "Bash(grep -n \"glc-fp-label\\\\|glc-community-badge\\\\|glc-corridor-badge\\\\|glc-sidebar-heading\\\\|glc-section-subhead\\\\|glc-fp-card-date\\\\|glc-fp-slim-date\\\\|glc-impact-lbl\\\\|glc-stat-lbl\\\\|glc-sub-stat-lbl\" theme-dev/great-lake-cleaners-theme/*.php)",
+      "Bash(zip -qr ../great-lake-cleaners-theme.zip great-lake-cleaners-theme/)",
+      "Bash(powershell -Command \"Compress-Archive -Path 'great-lake-cleaners-theme' -DestinationPath '../great-lake-cleaners-theme.zip' -Force\")",
+      "Bash(powershell -Command \"Remove-Item -Recurse -Force 'C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\theme-dev'\")",
+      "Bash(powershell -Command \"Get-ChildItem 'C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\theme-dev' -Recurse | Remove-Item -Force -Recurse; Remove-Item -Force 'C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\theme-dev'\")",
+      "Bash(powershell:*)",
+      "Bash(echo \"exit $?\")",
+      "Bash(grep -v \"^$\")",
+      "Bash(python3 -c ':*)",
+      "Bash(python -c ':*)",
+      "Bash(rm _edit_submission.php)"
+    ]
+  }
+}

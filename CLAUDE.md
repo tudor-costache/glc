@@ -4,11 +4,13 @@
 
 **Organization:** Great Lake Cleaners  
 **Tagline:** The lake starts here.  
-**Mission:** Regular cleanups of Guelph's local waterways — by foot and paddle — that flow into the Great Lakes system via the Grand River and Lake Erie.  
+**Mission:** Regular cleanups of Ontario waterways — by foot and paddle — that flow into the Great Lakes system.  
 **Location:** Guelph, Ontario, Canada  
 **Stage:** Pre-incorporation, Phase 1 (personal/family effort, year one)
 
-## Operating Corridors
+## Home Corridors (Guelph)
+
+These are our primary operating corridors. The site and forms are intentionally Ontario-wide — people anywhere in Ontario are welcome to submit cleanups — but our own outings are based here.
 
 - Speed River
 - Eramosa River
@@ -253,12 +255,12 @@ Public form via `[glc_submit_form]` shortcode. Submissions land as `pending`. Ad
 
 Note: `items_recycled` and `weight_kg` are stored under those exact keys (matching `cleanup_event`) so `glc_get_impact_stats()` can count them without special-casing.
 
-Note: Phone field was removed from the public submission form. GPS coordinates are now collected via lat/lon inputs + browser geolocation button (requires HTTPS). Person-hours are calculated automatically from duration × volunteers. "Access Point" label replaced with plain "Location". "Number of People" field moved from section 3 ("What You Collected") into section 2 ("The Cleanup") where it belongs logically alongside Duration.
+Note: Phone field was removed from the public submission form. GPS coordinates are now collected via lat/lon inputs + browser geolocation button (requires HTTPS). Person-hours are calculated automatically from duration × volunteers. "Number of People" field is in section 2 ("The Cleanup"), not section 3. The Location (`glc_site_name`) field was removed from the public form — Waterway + GPS is sufficient. `glc_site_name` is still saved as meta (empty string) for schema compatibility but is no longer collected.
 
 ### Submission Form — Thank-You / Receipt State
 
 After a successful submission, `[glc_submit_form]` shows:
-1. A receipt line: *"You submitted: 3 bags, 6.0 kg, Parkwood Gardens, April 3"* — built from `$_POST` data still available after `glc_maybe_handle_submission()` returns `'success'`. Each part (bags, weight, location, date) is conditional — omitted if the field was empty.
+1. A receipt line: *"You submitted: 3 bags, 6.0 kg, Speed River, April 3"* — built from `$_POST` data still available after `glc_maybe_handle_submission()` returns `'success'`. Each part (bags, weight, waterway, date) is conditional — omitted if the field was empty.
 2. The `stylized-thankyou.png` illustration.
 3. The thank-you heading and body text.
 
@@ -269,8 +271,8 @@ CSS class: `.glc-submit-receipt` — green-tinted pill badge, defined in theme's
 Public form via `[glc_report_form]` shortcode on page slug `report-issue`. **Email-only — no CPT, no admin review queue.** Reports go directly to `info@greatlakecleaners.ca` via `wp_mail()`.
 
 **Two-stage flow:**
-1. **Triage cards** — side-by-side. City issues routed to Guelph's ArcGIS tool (external link). Waterway issues reveal the form via JS (no page reload, smooth scroll).
-2. **Form** — four sections: About You (optional), The Issue (date/waterway/description), Location (text + GPS), Photos (up to 3).
+1. **Triage cards** — side-by-side. Left card: "City or municipal issue" — general framing ("your municipality has resources, most have a 311 line"), with a note that other municipalities have their own methods, plus the City of Guelph ArcGIS link preserved for Guelph users. Right card: "Waterway issue" — reveals the form via JS (no page reload, smooth scroll).
+2. **Form** — four sections: About You (optional), The Issue (date, waterway as text input, description), Location (text + GPS with Ontario-wide bounds: lat 42–57, lon -95 to -74), Photos (up to 3).
 
 **Email delivery:** Photos attached directly to the outbound email via `wp_mail()` attachments (temp files, cleaned up after send). `Reply-To` header set to reporter's email if provided, so replies go directly to them.
 
@@ -311,6 +313,31 @@ Both `[glc_submit_form]` and `[glc_report_form]` share the same three-layer defe
 **File:** `great-lake-cleaners-theme.zip`  
 **Install:** Appearance → Themes → Upload → Activate.  
 **PHP upload limit:** Default WordPress limit is too small for the theme zip. Set in `/etc/php/8.3/apache2/php.ini`: `upload_max_filesize = 64M`, `post_max_size = 64M`, `max_execution_time = 300`, then `sudo systemctl restart apache2`.
+
+**Packaging the zip on Windows:** Two tools will silently corrupt the zip — avoid both:
+
+- **PowerShell `Compress-Archive`** — writes backslash path separators (`theme\style.css`). WordPress's installer on Linux treats these as filenames instead of paths and cannot find `style.css`, producing "The theme is missing the style.css stylesheet."
+- **Python's `zipfile` module (writing)** — on Windows, files with CRLF line endings accumulate extra `\r` bytes on each repack cycle (`\r\n` → `\r\r\n` → `\r\r\r\n`), causing PHP parse errors on the server. Python's `zipfile` is safe for *reading* only.
+
+**The correct workflow for editing files inside a zip:**
+1. Extract with Python's `zipfile` (read-only use — safe)
+2. Edit the extracted files
+3. Repack using .NET's `ZipFile` API (PowerShell), which writes forward-slash entries and preserves line endings:
+
+```powershell
+Add-Type -Assembly 'System.IO.Compression.FileSystem'
+$src = 'path\to\great-lake-cleaners-theme'
+$dest = 'path\to\great-lake-cleaners-theme.zip'
+if (Test-Path $dest) { Remove-Item $dest }
+$zip = [System.IO.Compression.ZipFile]::Open($dest, 'Create')
+Get-ChildItem $src -Recurse -File | ForEach-Object {
+    $rel = $_.FullName.Substring($src.Length + 1).Replace('\', '/')
+    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, "great-lake-cleaners-theme/$rel", 'Optimal') | Out-Null
+}
+$zip.Dispose()
+```
+
+The same applies to the plugin zip (`great-lake-cleaners-plugin.zip`) — substitute `great-lake-cleaners` as the folder name and destination path.
 
 ### Theme File Structure
 
@@ -521,16 +548,16 @@ CSS: `.glc-cs { display: inline-flex; align-items: center; gap: 4px; white-space
 
 ### Submit a Cleanup Page
 
-Two-column layout: form left, sidebar right. Sidebar has three cards: "What happens next?", "Tips for logging", "Our corridors".
+Two-column layout: form left, sidebar right. Sidebar has two cards: "What happens next?", "Tips for logging". The "Our corridors" card was removed — the form is Ontario-wide.
 
 Form section order:
 1. **About You** — name, email
-2. **The Cleanup** — date, duration, number of people, waterway, location, GPS
+2. **The Cleanup** — date, duration, number of people, waterway (optional), GPS
 3. **What You Collected** — garbage (bags, weight, notes), recycling (cans, bottles)
 4. **Notable Finds & Field Log** — notable finds textarea, Instagram URL
 5. **Photos** — upload + consent checkbox
 
-"Number of People" is in section 2 (not section 3) — it belongs with the outing details, not with what was collected. "Location" (not "Access Point") — the tooltip says "e.g. Riverside Park, Waterloo Ave bridge". Privacy note under submit button links to `/privacy-policy/`.
+**Waterway field:** optional text input (not a dropdown). Tooltip: *"e.g. Speed River, Grand River — or a nearby location name if unsure."* No separate Location field — waterway plus GPS is sufficient. Privacy note under submit button links to `/privacy-policy/`.
 
 ### WordPress Pages Required
 
