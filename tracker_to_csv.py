@@ -46,6 +46,7 @@ COL_NOTABLE      = 13
 COL_GPS_LAT      = 14
 COL_GPS_LON      = 15
 COL_INSTAGRAM    = 16
+COL_CORRIDOR     = 17
 
 DEFAULT_XLSX   = "Great_Lake_Cleaners_Outing_Tracker.xlsx"
 DEFAULT_CONFIG = "config.toml"
@@ -184,6 +185,7 @@ def _parse_rows(all_rows: list, source: str) -> list:
             "gps_lat":      _str(_cell(row, COL_GPS_LAT)),
             "gps_lon":      _str(_cell(row, COL_GPS_LON)),
             "instagram":    _str(_cell(row, COL_INSTAGRAM)),
+            "corridor":     _str(_cell(row, COL_CORRIDOR)),
         })
 
     return outings
@@ -218,12 +220,14 @@ def merge_to_events(outings: list) -> list:
         if recycle_parts:
             notable_str = (notable_str + "; Recyclables: " + ", ".join(recycle_parts)).lstrip("; ")
 
-        gps_lat = next((o["gps_lat"] for o in group if o["gps_lat"]), "")
-        gps_lon = next((o["gps_lon"] for o in group if o["gps_lon"]), "")
+        gps_lat  = next((o["gps_lat"]  for o in group if o["gps_lat"]),  "")
+        gps_lon  = next((o["gps_lon"]  for o in group if o["gps_lon"]),  "")
+        corridor = next((o["corridor"] for o in group if o["corridor"]), "")
 
         events.append({
             "date":                date,
             "site_name":           location,
+            "corridor":            corridor,
             "gps_lat":             gps_lat,
             "gps_lon":             gps_lon,
             "volunteers":          volunteers,
@@ -247,7 +251,7 @@ def merge_to_events(outings: list) -> list:
 # ── CSV output ────────────────────────────────────────────────────────────────
 
 CSV_COLUMNS = [
-    "date", "site_name", "gps_lat", "gps_lon",
+    "date", "site_name", "corridor", "gps_lat", "gps_lon",
     "volunteers", "hours", "bags", "weight_kg",
     "items_recycled", "species_planted", "meters_bank_cleared",
     "notable_finds", "wildlife_obs", "notes",

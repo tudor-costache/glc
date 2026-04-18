@@ -1,0 +1,27 @@
+Add-Type -Assembly 'System.IO.Compression.FileSystem'
+$root = Split-Path $MyInvocation.MyCommand.Path
+
+# Plugin — flat inside great-lake-cleaners/ folder (WordPress requires the folder name to match)
+$src  = "$root\plugin-dev\great-lake-cleaners"
+$dest = "$root\great-lake-cleaners-plugin.zip"
+if (Test-Path $dest) { Remove-Item $dest }
+$zip = [System.IO.Compression.ZipFile]::Open($dest, 'Create')
+Get-ChildItem $src -Recurse -File | ForEach-Object {
+    $rel = $_.FullName.Substring($src.Length + 1).Replace('\', '/')
+    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, "great-lake-cleaners/$rel", 'Optimal') | Out-Null
+}
+$zip.Dispose()
+Write-Host "Plugin repacked -> great-lake-cleaners-plugin.zip"
+
+# Theme — flat (style.css at zip root, no subfolder wrapper)
+# WordPress accepts this format and it avoids the "missing style.css" upload error
+$src  = "$root\theme-dev\great-lake-cleaners-theme"
+$dest = "$root\great-lake-cleaners-theme.zip"
+if (Test-Path $dest) { Remove-Item $dest }
+$zip = [System.IO.Compression.ZipFile]::Open($dest, 'Create')
+Get-ChildItem $src -Recurse -File | ForEach-Object {
+    $rel = $_.FullName.Substring($src.Length + 1).Replace('\', '/')
+    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $rel, 'Optimal') | Out-Null
+}
+$zip.Dispose()
+Write-Host "Theme repacked  -> great-lake-cleaners-theme.zip"

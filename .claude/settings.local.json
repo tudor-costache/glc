@@ -13,7 +13,13 @@
       "Bash(grep -v \"^$\")",
       "Bash(python3 -c ':*)",
       "Bash(python -c ':*)",
-      "Bash(rm _edit_submission.php)"
+      "Bash(rm _edit_submission.php)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \" import zipfile, sys with zipfile.ZipFile\\('great-lake-cleaners-plugin.zip'\\) as z: content = z.read\\('great-lake-cleaners/includes/shortcodes.php'\\).decode\\('utf-8'\\) sys.stdout.buffer.write\\(content.encode\\('utf-8'\\)\\) \")",
+      "Read(//tmp/**)",
+      "PowerShell(powershell -File \"C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\repack.ps1\")",
+      "Bash(python -c \" import zipfile, sys with zipfile.ZipFile\\('C:/Users/Tudor/Documents/GitHub/glc/great-lake-cleaners-plugin.zip'\\) as z: c = z.read\\('great-lake-cleaners/includes/shortcodes.php'\\).decode\\('utf-8'\\) sys.stdout.buffer.write\\(c.encode\\('utf-8'\\)\\) \")",
+      "PowerShell(cd C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc; powershell -File repack.ps1)"
     ]
   }
 }

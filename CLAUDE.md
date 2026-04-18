@@ -4,13 +4,11 @@
 
 **Organization:** Great Lake Cleaners  
 **Tagline:** The lake starts here.  
-**Mission:** Regular cleanups of Ontario waterways — by foot and paddle — that flow into the Great Lakes system.  
+**Mission:** Regular cleanups of Guelph's local waterways — by foot and paddle — that flow into the Great Lakes system via the Grand River and Lake Erie.  
 **Location:** Guelph, Ontario, Canada  
 **Stage:** Pre-incorporation, Phase 1 (personal/family effort, year one)
 
-## Home Corridors (Guelph)
-
-These are our primary operating corridors. The site and forms are intentionally Ontario-wide — people anywhere in Ontario are welcome to submit cleanups — but our own outings are based here.
+## Operating Corridors
 
 - Speed River
 - Eramosa River
@@ -72,79 +70,13 @@ Indiegogo and crowdfunding not appropriate for Phase 1. Better options:
 - **WordPress** for public site and cleanup event management
 
 ### Server Setup Notes
-- UFW firewall enabled: ports 22 (OpenSSH), 80, 443 open; port 25 for mail forwarding
-- fail2ban installed and active — three jails: `sshd`, `wordpress-auth`, `recidive`
-- certbot + python3-certbot-apache installed; SSL auto-renews via systemd timer (90-day cert, renews at 30 days)
-- Apache modules enabled: `rewrite`, `headers`, `ssl`, `mod_php`; PHP SAPI: `mod_php` (confirmed via `apachectl -M`)
+- UFW firewall enabled: ports 22 (OpenSSH), 80, 443 open
+- fail2ban installed and active — protects SSH (5 failed attempts = 10 min ban)
+- certbot + python3-certbot-apache installed; SSL auto-renews via systemd timer
+- Apache modules enabled: `rewrite`, site config at `/etc/apache2/sites-available/greatlakecleaners.ca.conf`
 - WordPress installed at `/var/www/html/wordpress`
 - MySQL database: `wordpress`, user: `wpuser`@`localhost`
-- SVG MIME type confirmed working: Apache serves `image/svg+xml` correctly
-- Mail server: Postfix on port 587 (authenticated SMTP) and port 25 (forwarding to Gmail); DKIM, SPF, rDNS, DMARC configured; Postfix rate limiting active
-- `expose_php = Off` and `display_errors = Off` set in `/etc/php/8.3/apache2/php.ini`
-
-### Apache Virtual Host Hardening
-Config files at `/etc/apache2/sites-available/`:
-- `greatlakecleaners.ca.conf` — port 80, redirect-only to HTTPS
-- `greatlakecleaners.ca-le-ssl.conf` — port 443, all real traffic
-
-**Uploads directory** (`/var/www/html/wordpress/wp-content/uploads`):
-- `php_admin_flag engine off` — disables PHP execution (mod_php confirmed)
-- `Options -ExecCGI` — disables CGI execution
-- `FilesMatch` — denies direct access to `.php`, `.php5`, `.phtml`, `.pl`, `.py`, `.cgi`, `.sh`
-- `RemoveHandler` / `RemoveType` — removes PHP handler registration
-- `AllowOverride None` — prevents `.htaccess` in uploads from overriding these protections
-- An `.htaccess` also exists in the uploads directory as a belt-and-suspenders layer
-
-**XML-RPC:** blocked via `<Files "xmlrpc.php"> Require all denied </Files>` in both vhosts
-
-**REST API user enumeration:** blocked via RewriteRules on `rest_route=/wp/v2/users` and `?author=N` query strings
-
-**HTTP security headers** (HTTPS vhost only):
-- `X-Frame-Options: SAMEORIGIN`
-- `X-Content-Type-Options: nosniff`
-- `X-XSS-Protection: 0` (legacy auditor disabled — modern browsers use built-in protection)
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Permissions-Policy: geolocation=(self), camera=(), microphone=()`
-- `Server` header suppressed via `ServerTokens Prod` + `Header always unset Server`
-
-**Content Security Policy** (enforced, not report-only):
-```
-default-src 'self';
-script-src 'self' 'unsafe-inline';
-style-src 'self' 'unsafe-inline';
-font-src 'self';
-img-src 'self' data: https://*.basemaps.cartocdn.com;
-connect-src 'self' https://*.basemaps.cartocdn.com;
-frame-src 'none';
-frame-ancestors 'none';
-object-src 'none';
-base-uri 'self';
-```
-`'unsafe-inline'` on `script-src` and `style-src` is required by Leaflet — it injects inline styles on map DOM elements and dynamic scripts at runtime. All other sources are self-hosted. The only external source is Carto for map tiles.
-
-**Self-hosted assets** (no external CDN dependencies):
-- Leaflet 1.9.4 JS + CSS — served from `great-lake-cleaners/assets/`
-- Nunito + Lato fonts — served from `great-lake-cleaners-theme/assets/fonts/`
-- All SVG icons — served from `great-lake-cleaners-theme/assets/images/`
-
-### fail2ban Jails
-- **sshd** — standard SSH protection
-- **wordpress-auth** — watches `greatlakecleaners-access.log` for POST to `wp-login.php` returning 200; `maxretry=4`, `findtime=7200` (2hr window catches ~20min slow-probe pattern), `bantime=600000` (~7 days); own IP excluded via `ignoreip`
-- **recidive** — watches `/var/log/fail2ban.log`; `maxretry=2`, `findtime=1d`, `bantime=-1` (permanent); bans all ports via `banaction=%(banaction_allports)s`
-
-To reset a rate limit transient (form submission/report):
-```bash
-wp transient delete --all
-# or
-DELETE FROM wp_options WHERE option_name LIKE '_transient_glc_%';
-```
-
-To manually ban/unban an IP:
-```bash
-sudo fail2ban-client set wordpress-auth banip 1.2.3.4
-sudo fail2ban-client set wordpress-auth unbanip 1.2.3.4
-```
+- SVG MIME type confirmed working: Apache serves `image/svg+xml` correctly — verified via `curl -I`
 
 ### Domains
 - Registered at CanSpace
@@ -179,10 +111,8 @@ When deploying to VPS, the following must be re-done in WP Admin — they do not
 
 ```
 great-lake-cleaners/
-  great-lake-cleaners.php   — main loader, activation hook, transient-based rewrite flush
-  assets/
-    leaflet.js              — Leaflet 1.9.4 (self-hosted — eliminates unpkg.com CDN dependency)
-    leaflet.css             — Leaflet 1.9.4 styles (self-hosted)
+  great-lake-cleaners.php   — main loader, activation hook, transient-based rewrite flush,
+                              Turnstile constants + glc_verify_turnstile() helper
   includes/
     post-type.php           — cleanup_event CPT registration
     acf-fields.php          — native WordPress meta box (replaces ACF)
@@ -255,12 +185,12 @@ Public form via `[glc_submit_form]` shortcode. Submissions land as `pending`. Ad
 
 Note: `items_recycled` and `weight_kg` are stored under those exact keys (matching `cleanup_event`) so `glc_get_impact_stats()` can count them without special-casing.
 
-Note: Phone field was removed from the public submission form. GPS coordinates are now collected via lat/lon inputs + browser geolocation button (requires HTTPS). Person-hours are calculated automatically from duration × volunteers. "Number of People" field is in section 2 ("The Cleanup"), not section 3. The Location (`glc_site_name`) field was removed from the public form — Waterway + GPS is sufficient. `glc_site_name` is still saved as meta (empty string) for schema compatibility but is no longer collected.
+Note: Phone field was removed from the public submission form. GPS coordinates are now collected via lat/lon inputs + browser geolocation button (requires HTTPS). Person-hours are calculated automatically from duration × volunteers. "Access Point" label replaced with plain "Location". "Number of People" field moved from section 3 ("What You Collected") into section 2 ("The Cleanup") where it belongs logically alongside Duration.
 
 ### Submission Form — Thank-You / Receipt State
 
 After a successful submission, `[glc_submit_form]` shows:
-1. A receipt line: *"You submitted: 3 bags, 6.0 kg, Speed River, April 3"* — built from `$_POST` data still available after `glc_maybe_handle_submission()` returns `'success'`. Each part (bags, weight, waterway, date) is conditional — omitted if the field was empty.
+1. A receipt line: *"You submitted: 3 bags, 6.0 kg, Parkwood Gardens, April 3"* — built from `$_POST` data still available after `glc_maybe_handle_submission()` returns `'success'`. Each part (bags, weight, location, date) is conditional — omitted if the field was empty.
 2. The `stylized-thankyou.png` illustration.
 3. The thank-you heading and body text.
 
@@ -271,8 +201,8 @@ CSS class: `.glc-submit-receipt` — green-tinted pill badge, defined in theme's
 Public form via `[glc_report_form]` shortcode on page slug `report-issue`. **Email-only — no CPT, no admin review queue.** Reports go directly to `info@greatlakecleaners.ca` via `wp_mail()`.
 
 **Two-stage flow:**
-1. **Triage cards** — side-by-side. Left card: "City or municipal issue" — general framing ("your municipality has resources, most have a 311 line"), with a note that other municipalities have their own methods, plus the City of Guelph ArcGIS link preserved for Guelph users. Right card: "Waterway issue" — reveals the form via JS (no page reload, smooth scroll).
-2. **Form** — four sections: About You (optional), The Issue (date, waterway as text input, description), Location (text + GPS with Ontario-wide bounds: lat 42–57, lon -95 to -74), Photos (up to 3).
+1. **Triage cards** — side-by-side. City issues routed to Guelph's ArcGIS tool (external link). Waterway issues reveal the form via JS (no page reload, smooth scroll).
+2. **Form** — four sections: About You (optional), The Issue (date/waterway/description), Location (text + GPS), Photos (up to 3).
 
 **Email delivery:** Photos attached directly to the outbound email via `wp_mail()` attachments (temp files, cleaned up after send). `Reply-To` header set to reporter's email if provided, so replies go directly to them.
 
@@ -289,9 +219,17 @@ Both `[glc_submit_form]` and `[glc_report_form]` share the same three-layer defe
 **Defence chain (in order):**
 1. **Nonce** (`wp_verify_nonce`) — WordPress built-in, already present
 2. **Honeypot** — hidden `name="glc_url"` field, CSS-offscreen (`left: -9999px`, `opacity: 0`, `pointer-events: none`, `tabindex="-1"`). Handler silently returns `null` if non-empty — no error shown to bot.
-3. **Rate limit** — WordPress transient keyed by hashed IP. Max 3 attempts per 10 minutes. Transient keys are form-specific: `glc_sub_rate_` (submission) and `glc_rep_rate_` (report). Returns user-visible error after limit hit.
-4. **Field validation** — required fields, date format/range checks
-5. **`wp_mail()`** — only reached if all above pass
+3. **Rate limit** — WordPress transient keyed by hashed IP. Max 5 attempts per 10 minutes. Transient keys are form-specific: `glc_sub_rate_` (submission) and `glc_rep_rate_` (report). **Counter increments only just before `wp_mail()` is called** — failed validation attempts do not burn a slot. Returns user-visible error after limit hit. To reset manually: `wp transient delete --all` via WP-CLI, or `DELETE FROM wp_options WHERE option_name LIKE '_transient_glc_%';` in MySQL.
+4. **Cloudflare Turnstile** — invisible widget (`data-size="invisible"`). Challenge fires silently on submit; token verified server-side via `https://challenges.cloudflare.com/turnstile/v0/siteverify`. Requires outbound HTTPS (port 443) from the server.
+5. **Field validation** — required fields, date format/range checks
+6. **`wp_mail()`** — only reached if all above pass
+
+**Turnstile configuration:**
+- Site key and secret key stored as constants in `great-lake-cleaners.php`: `GLC_TURNSTILE_SITE_KEY`, `GLC_TURNSTILE_SECRET_KEY`
+- Keys are registered to `greatlakecleaners.ca` in the Cloudflare Turnstile dashboard — update both the dashboard domain and these constants if the domain changes
+- Widget mode: **Invisible** (must match `data-size="invisible"` in HTML)
+- Cloudflare JS enqueued via `wp_enqueue_scripts` only on pages containing either GLC form shortcode (checks `has_shortcode()` against post content)
+- Shared verify helper: `glc_verify_turnstile( string $token ): bool` in `great-lake-cleaners.php`
 
 **Required indicator CSS:** Both forms use `.glc-required` (defined in `style.css` as `color: var(--glc-red); flex-shrink: 0`). The `*` span must sit **inside** `.glc-label-text` to stay inline — placing it outside causes it to wrap to a new line in the column flex layout.
 
@@ -313,31 +251,6 @@ Both `[glc_submit_form]` and `[glc_report_form]` share the same three-layer defe
 **File:** `great-lake-cleaners-theme.zip`  
 **Install:** Appearance → Themes → Upload → Activate.  
 **PHP upload limit:** Default WordPress limit is too small for the theme zip. Set in `/etc/php/8.3/apache2/php.ini`: `upload_max_filesize = 64M`, `post_max_size = 64M`, `max_execution_time = 300`, then `sudo systemctl restart apache2`.
-
-**Packaging the zip on Windows:** Two tools will silently corrupt the zip — avoid both:
-
-- **PowerShell `Compress-Archive`** — writes backslash path separators (`theme\style.css`). WordPress's installer on Linux treats these as filenames instead of paths and cannot find `style.css`, producing "The theme is missing the style.css stylesheet."
-- **Python's `zipfile` module (writing)** — on Windows, files with CRLF line endings accumulate extra `\r` bytes on each repack cycle (`\r\n` → `\r\r\n` → `\r\r\r\n`), causing PHP parse errors on the server. Python's `zipfile` is safe for *reading* only.
-
-**The correct workflow for editing files inside a zip:**
-1. Extract with Python's `zipfile` (read-only use — safe)
-2. Edit the extracted files
-3. Repack using .NET's `ZipFile` API (PowerShell), which writes forward-slash entries and preserves line endings:
-
-```powershell
-Add-Type -Assembly 'System.IO.Compression.FileSystem'
-$src = 'path\to\great-lake-cleaners-theme'
-$dest = 'path\to\great-lake-cleaners-theme.zip'
-if (Test-Path $dest) { Remove-Item $dest }
-$zip = [System.IO.Compression.ZipFile]::Open($dest, 'Create')
-Get-ChildItem $src -Recurse -File | ForEach-Object {
-    $rel = $_.FullName.Substring($src.Length + 1).Replace('\', '/')
-    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, "great-lake-cleaners-theme/$rel", 'Optimal') | Out-Null
-}
-$zip.Dispose()
-```
-
-The same applies to the plugin zip (`great-lake-cleaners-plugin.zip`) — substitute `great-lake-cleaners` as the folder name and destination path.
 
 ### Theme File Structure
 
@@ -548,16 +461,16 @@ CSS: `.glc-cs { display: inline-flex; align-items: center; gap: 4px; white-space
 
 ### Submit a Cleanup Page
 
-Two-column layout: form left, sidebar right. Sidebar has two cards: "What happens next?", "Tips for logging". The "Our corridors" card was removed — the form is Ontario-wide.
+Two-column layout: form left, sidebar right. Sidebar has three cards: "What happens next?", "Tips for logging", "Our corridors".
 
 Form section order:
 1. **About You** — name, email
-2. **The Cleanup** — date, duration, number of people, waterway (optional), GPS
+2. **The Cleanup** — date, duration, number of people, waterway, location, GPS
 3. **What You Collected** — garbage (bags, weight, notes), recycling (cans, bottles)
 4. **Notable Finds & Field Log** — notable finds textarea, Instagram URL
 5. **Photos** — upload + consent checkbox
 
-**Waterway field:** optional text input (not a dropdown). Tooltip: *"e.g. Speed River, Grand River — or a nearby location name if unsure."* No separate Location field — waterway plus GPS is sufficient. Privacy note under submit button links to `/privacy-policy/`.
+"Number of People" is in section 2 (not section 3) — it belongs with the outing details, not with what was collected. "Location" (not "Access Point") — the tooltip says "e.g. Riverside Park, Waterloo Ave bridge". Privacy note under submit button links to `/privacy-policy/`.
 
 ### WordPress Pages Required
 
@@ -573,6 +486,7 @@ Form section order:
 
 HAR analysis (April 2026) identified and resolved the following:
 
+- **Illustrations converted to JPG** — `stylized-paddler`, `stylized-map-rivers-lake`, `cleanup_stylized` exported from Lightroom as JPG 85% quality at 500px wide. `stylized-thankyou` kept as PNG (has transparency). Total image payload reduced from ~6.5 MB to ~700 KB (~89% reduction).
 - **WordPress emoji system disabled** in `functions.php` via:
   ```php
   remove_action('wp_head', 'print_emoji_detection_script', 7);
@@ -664,44 +578,41 @@ Same date + same location → one event, totals summed. Same date + different lo
 
 ---
 
+## Python Tool: `remove_background.py`
+
+Removes solid or textured backgrounds from badge/logo images, producing a transparent PNG.
+
+```bash
+python remove_background.py input.png output.png [tolerance]
+```
+
+Samples background colour from four corners (median, robust to texture). Flood-fills inward from edges, making pixels within `tolerance` of the sampled colour transparent. Interior pixels untouched.
+
+**Tolerance:** `15–20` clean white · `25–30` textured/linen (default: 28) · `30–35` heavy noise
+
+**Requires:** Python 3, Pillow, NumPy
+
+---
+
 ## Current File Inventory
 
 | File | Status |
 |---|---|
-| `great-lake-cleaners-plugin.zip` | Installed and live on production |
-| `great-lake-cleaners-theme.zip` | Installed and live on production |
-| `tracker_to_csv.py` | Working — pulls from Google Sheets |
-| `config.toml` | Configured |
-| `credentials.json` | In place (never commit to version control) |
-| `Great_Lake_Cleaners_Outing_Tracker.xlsx` | Local backup of Google Sheet |
+| `great-lake-cleaners-plugin.zip` | ✅ Installed and live on production |
+| `great-lake-cleaners-theme.zip` | ✅ Installed and live on production |
+| `tracker_to_csv.py` | ✅ Working — pulls from Google Sheets |
+| `config.toml` | ✅ Configured |
+| `credentials.json` | ✅ In place (never commit to version control) |
+| `Great_Lake_Cleaners_Outing_Tracker.xlsx` | ✅ Local backup of Google Sheet |
 
 ---
 
 ## Next Steps
 
-- [ ] Set up UptimeRobot (free) for uptime + SSL certificate expiry monitoring
+- [ ] Add "Report an Issue" to primary nav menu (page slug: `report-issue`)
+- [ ] Add Twemoji attribution to footer or Privacy Policy: *"Emoji icons by [Twemoji](https://twemoji.twitter.com/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)"*
 - [ ] Build donate/e-transfer page
 - [ ] Get a digital fish scale (~$15–20) for accurate weight logging
 - [ ] Connect with OPIRG Speed River Project coordinator
 - [ ] Register for City of Guelph Clean and Green (April)
 - [ ] Consider physical badge ("Watershed Steward" patch) for top contributors at year-end — award based on cleanups logged (3+), not weight or volume
-
-## Server Hardening Completed
-
-- UFW firewall — ports 22, 80, 443, 25
-- SSH hardening — `PermitRootLogin no`, `PasswordAuthentication no`, keys only
-- fail2ban — sshd, wordpress-auth (4 attempts / 2hr window / 7-day ban), recidive (permanent ban after 2 bans in 24hr)
-- Apache uploads directory — PHP/CGI execution disabled, FilesMatch deny, AllowOverride None
-- XML-RPC blocked
-- REST API user enumeration blocked
-- Author archive enumeration blocked
-- HTTP security headers — X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, Permissions-Policy
-- Content Security Policy enforced
-- Self-hosted Leaflet (eliminates unpkg.com CDN)
-- Self-hosted fonts — Nunito + Lato (eliminates Google Fonts)
-- expose_php = Off, display_errors = Off
-- Mail server — DKIM, SPF, rDNS, DMARC, Postfix rate limiting
-- SSL certificate auto-renewal via certbot systemd timer
-- Unattended security upgrades
-- Automated backups
-- `Server` header suppression `security.conf`
