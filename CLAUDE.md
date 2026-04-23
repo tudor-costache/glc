@@ -117,10 +117,13 @@ great-lake-cleaners/
     post-type.php           — cleanup_event CPT registration
     acf-fields.php          — native WordPress meta box (replaces ACF)
     admin.php               — list table columns, sortable date, admin styles
-    shortcodes.php          — [glc_stats], [glc_map], [glc_archive], [glc_gallery]
+    shortcodes.php          — [glc_stats], [glc_map], [glc_archive], [glc_gallery], [glc_timeline]
     import.php              — Tools → Import Cleanups CSV
     submission.php          — glc_submission CPT + [glc_submit_form] shortcode
     report.php              — [glc_report_form] shortcode (email-only, no CPT)
+  assets/
+    leaflet.css, leaflet.js — Leaflet v1.9.4, self-hosted
+    chart.min.js            — Chart.js v4.4.6, self-hosted (MIT)
 ```
 
 ### Custom Post Type: `cleanup_event`
@@ -138,6 +141,8 @@ Fields via native "Cleanup Details" meta box below the block editor.
 | Bags | `bags` | garbage bags |
 | Weight (kg) | `weight_kg` | |
 | Items Recycled | `items_recycled` | cans + bottles |
+| Tires Removed | `tires_removed` | integer count — feeds [glc_impact_highlights] |
+| Hazardous Waste Removed | `hazards_removed` | paint cans, motor oil, appliances, e-waste, etc. |
 | Notable Finds | `notable_finds` | |
 | Native Species Planted | `species_planted` | |
 | Metres Bank Cleared | `meters_bank_cleared` | displayed as km if ≥ 1000 m |
@@ -243,6 +248,8 @@ Both `[glc_submit_form]` and `[glc_report_form]` share the same three-layer defe
 | `[glc_submit_form]` | Community submission form |
 | `[glc_gallery]` | Photo gallery with year tabs + lightbox |
 | `[glc_report_form]` | Waterway issue report (two-stage: triage → form → email) |
+| `[glc_timeline]` | Cumulative debris (kg) + items recycled over time — dual Y-axis Chart.js line chart; includes cleanup_event + glc_submission data |
+| `[glc_impact_highlights]` | Three stat cards (unique sites, tires, hazards) + cumulative person-hours chart — cleanup_event data only |
 
 ---
 

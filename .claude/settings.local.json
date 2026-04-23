@@ -19,7 +19,13 @@
       "Read(//tmp/**)",
       "PowerShell(powershell -File \"C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\repack.ps1\")",
       "Bash(python -c \" import zipfile, sys with zipfile.ZipFile\\('C:/Users/Tudor/Documents/GitHub/glc/great-lake-cleaners-plugin.zip'\\) as z: c = z.read\\('great-lake-cleaners/includes/shortcodes.php'\\).decode\\('utf-8'\\) sys.stdout.buffer.write\\(c.encode\\('utf-8'\\)\\) \")",
-      "PowerShell(cd C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc; powershell -File repack.ps1)"
+      "PowerShell(cd C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc; powershell -File repack.ps1)",
+      "Bash(unzip -l great-lake-cleaners-plugin.zip)",
+      "Bash(unzip *)",
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "Bash(curl -L \"https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js\" -o \"C:/Users/Tudor/Documents/GitHub/glc/plugin-dev/great-lake-cleaners/assets/chart.min.js\")",
+      "WebFetch(domain:greatlakecleaners.ca)",
+      "Bash(curl -sL \"https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js\" -o \"plugin-dev/great-lake-cleaners/assets/chartjs-adapter-date-fns.bundle.min.js\")"
     ]
   }
 }
