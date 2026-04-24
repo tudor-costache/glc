@@ -117,7 +117,7 @@ great-lake-cleaners/
     post-type.php           — cleanup_event CPT registration
     acf-fields.php          — native WordPress meta box (replaces ACF)
     admin.php               — list table columns, sortable date, admin styles
-    shortcodes.php          — [glc_stats], [glc_map], [glc_archive], [glc_gallery], [glc_timeline], [glc_references]
+    shortcodes.php          — [glc_stats], [glc_map], [glc_archive], [glc_gallery], [glc_timeline]
     import.php              — Tools → Import Cleanups CSV
     submission.php          — glc_submission CPT + [glc_submit_form] shortcode
     report.php              — [glc_report_form] shortcode (email-only, no CPT)
@@ -142,7 +142,7 @@ Fields via native "Cleanup Details" meta box below the block editor.
 | Weight (kg) | `weight_kg` | |
 | Items Recycled | `items_recycled` | cans + bottles |
 | Tires Removed | `tires_removed` | integer count — feeds [glc_impact_highlights] |
-| Hazardous Waste Removed | `hazards_removed` | paint cans, motor oil, appliances, e-waste, etc. — stored but not currently surfaced in any shortcode |
+| Hazardous Waste Removed | `hazards_removed` | paint cans, motor oil, appliances, e-waste, etc. |
 | Notable Finds | `notable_finds` | |
 | Native Species Planted | `species_planted` | |
 | Metres Bank Cleared | `meters_bank_cleared` | displayed as km if ≥ 1000 m |
@@ -160,7 +160,7 @@ Public form via `[glc_submit_form]` shortcode. Submissions land as `pending`. Ad
 
 **CPT settings:** `publicly_queryable: true`, `exclude_from_search: true`, `query_var: true`, `rewrite slug: cleanup-submission`. Public single-post URLs resolve to `/cleanup-submission/{slug}/`.
 
-**Stats counting:** Published submissions count fully toward all public stats — cleanup count, weight, items recycled, and volunteer hours. The goal is for community members to make a mark: their efforts and cleanups appear on the map and are reflected in every cumulative total alongside the org's own outings.
+**Stats counting:** Published submissions add to the cleanup count and weight/recycled totals. Volunteer hours from submissions are NOT added to public stats (unverifiable).
 
 **Community submission meta keys:**
 
@@ -189,8 +189,6 @@ Public form via `[glc_submit_form]` shortcode. Submissions land as `pending`. Ad
 | Photo IDs | `glc_photo_ids` |
 
 Note: `items_recycled` and `weight_kg` are stored under those exact keys (matching `cleanup_event`) so `glc_get_impact_stats()` can count them without special-casing.
-
-**`glc_get_impact_stats()`** is defined in `theme/functions.php` (not the plugin) and powers the footer stats strip on every page. It counts both `cleanup_event` and `glc_submission` posts for: cleanup count, weight_kg, items_recycled, and hours (`hours` for events, `glc_hours` for submissions). Corridors count is cleanup_event only (no equivalent field on submissions). If the footer stats and a shortcode show different totals, the most likely cause is this function missing a post type or using the wrong meta key for submissions.
 
 Note: Phone field was removed from the public submission form. GPS coordinates are now collected via lat/lon inputs + browser geolocation button (requires HTTPS). Person-hours are calculated automatically from duration × volunteers. "Access Point" label replaced with plain "Location". "Number of People" field moved from section 3 ("What You Collected") into section 2 ("The Cleanup") where it belongs logically alongside Duration.
 
@@ -245,14 +243,13 @@ Both `[glc_submit_form]` and `[glc_report_form]` share the same three-layer defe
 | Shortcode | Output |
 |---|---|
 | `[glc_stats]` | Cumulative totals banner |
-| `[glc_map]` | Leaflet map of cleanup locations. Attributes: `height` (CSS value), `post_id` (single-event mode), `limit` (max markers per geographic cluster, 0 = no limit), `cluster_radius` (km radius for grouping nearby markers, 0 = no clustering). Hero uses `limit="5" cluster_radius="10"`, archive uses `limit="7" cluster_radius="10"`. Clustering is greedy: markers sorted by impact score (kg + bags×2), each joins the nearest cluster anchor within `cluster_radius` km or starts a new cluster — so dense areas (Guelph) are trimmed while sparse outliers (Rockwood, KW) show all their pins. |
+| `[glc_map]` | Leaflet map of all cleanup locations |
 | `[glc_archive]` | Paginated cleanup archive |
 | `[glc_submit_form]` | Community submission form |
 | `[glc_gallery]` | Photo gallery with year tabs + lightbox |
 | `[glc_report_form]` | Waterway issue report (two-stage: triage → form → email) |
 | `[glc_timeline]` | Cumulative debris (kg) + items recycled over time — dual Y-axis Chart.js line chart; includes cleanup_event + glc_submission data |
-| `[glc_impact_highlights]` | Three stat cards (unique sites, tires, total cleanups) + cumulative person-hours chart — unique sites, hours, and total cleanups include glc_submission data; tires are cleanup_event only (no equivalent field on submissions) |
-| `[glc_references]` | Wrapping shortcode — hides an inline reference list and replaces it with a gold-bordered trigger button. Clicking slides in a navy-headed panel from the right. Close via ✕, backdrop click, or Escape. Usage: `[glc_references]<ol>...</ol>[/glc_references]` in a Custom HTML block. Button label auto-counts `<li>` items: "Sources & References (12)". CSS/JS embedded once per page via static flag. |
+| `[glc_impact_highlights]` | Three stat cards (unique sites, tires, hazards) + cumulative person-hours chart — cleanup_event data only |
 
 ---
 
@@ -367,7 +364,6 @@ The page uses a flex column layout to ensure the white content box always fills 
 - Font: 0.92rem, bold, uppercase, `padding: 10px 16px`
 - Gap of 2px between items (no separator lines — tested, doesn't look good in practice)
 - Gold bottom-border on active/hover item
-- **Submenu** (`.sub-menu`) has **no** `border-top` — the gold top border was removed because it created double-underline artifacts where the nav item's gold bottom-border and the submenu border overlapped
 
 ### Footer Structure
 
@@ -376,9 +372,7 @@ The page uses a flex column layout to ensure the white content box always fills 
 3. `.glc-stats-strip` — full-width navy stats bar
 4. `<footer>`:
    - `.glc-footer-inner` — nav menu (`padding: 20px 32px 16px`)
-   - `.glc-footer-base` — copyright · org name · Privacy Policy · Instagram icon (tagline removed — redundant with header)
-
-**Stats strip** — all five stats show a `+` superscript to indicate minimums: `17+ Cleanups · 188+ kg · 26+ Volunteer Hours · 388+ Items Recycled · 3+ River Corridors`. The `kg` and corridors values previously lacked `+`; this was inconsistent and has been corrected.
+   - `.glc-footer-base` — copyright · org name · tagline · Privacy Policy · Instagram icon
 
 **Stats strip "Cleanups" label** is a hyperlink to the cleanups archive. Styled with `.glc-stat-lbl-link` — gold on hover, no underline.
 
@@ -431,12 +425,6 @@ Interior pages need top padding to clear the header wave (`::after` overhangs 38
 
 Recent cleanups strip sits immediately after the hero with no `<hr>` separators. Cards are full-anchor `<a>` elements showing: date · site name · icon + stats (bags, kg, recycled, hours). No "See All Cleanups" button — covered by the hero CTA.
 
-**Hours display on cards:** values under 1 hour display as minutes (e.g. `30 min`); values at or above 1 hour display as `1.5 h`. Applied in both `front-page.php` and `archive-cleanup_event.php`.
-
-**About section heading:** "We're Making an Impact" (was: "The lake starts here" — removed duplicate of header tagline). Includes an **Our Impact** button linking to `/about/`.
-
-**Get Involved CTA:** two-button row — **Follow on Instagram** (primary) + **Submit a Cleanup** (outline). The section explains Instagram is how to find upcoming outings; the second button covers the self-serve action.
-
 ### Archive Page (`/cleanups/`)
 
 Left-aligned throughout (pill, heading, intro text, impact section). Fetches all `cleanup_event` and published `glc_submission` posts, merges, sorts by date descending, paginates at 12 per page. Bottom section: Leaflet map only.
@@ -471,17 +459,12 @@ CSS: `.glc-cs { display: inline-flex; align-items: center; gap: 4px; white-space
 
 - **Template:** `page-photos.php` (Template Name: Photos) — must be selected in Page Attributes when creating the Photos page in WP Admin
 - **Shortcode:** `[glc_gallery]` registered in `shortcodes.php`
-- **Intro text:** "See how we make a difference:" — rendered as `.glc-photos-intro` paragraph in `page-photos.php` between the `<h1>` and the shortcode
 - **Sources:** Images attached to published `cleanup_event` posts + images from published `glc_submission` posts where `glc_photo_repost_ok = '1'`
-- **Gallery flag:** Only attachments with `_glc_gallery = '1'` meta appear in the gallery. All other attachments remain attached to their posts for documentation but are excluded from `/photos/`. This keeps the gallery curated — documentation shots (debris piles, before/after) stay on the outing post without cluttering the gallery.
-- **Flagging workflow:** Media Library → click any photo → attachment modal → **Gallery** row at bottom → tick "Feature in photo gallery" → Save. Implemented via `attachment_fields_to_edit` / `attachment_fields_to_save` hooks in `admin.php`.
-- **Attachment lookup:** Uses `get_posts( post_parent = $post_id, post_type = attachment, meta_query: _glc_gallery = 1 )` — only works reliably for images **uploaded while editing** the post. Images selected from the pre-existing Media Library may retain their original `post_parent` (0 or another post) and will be missed.
-- **Sort order:** Within each year tab, all photos (org + community submissions) are sorted by cleanup date descending — community photos interleave by date rather than falling to the bottom.
+- **Attachment lookup:** Uses `get_posts( post_parent = $post_id, post_type = attachment )` — only works reliably for images **uploaded while editing** the post. Images selected from the pre-existing Media Library may retain their original `post_parent` (0 or another post) and will be missed.
 - **Layout:** Year tabs (pill buttons, descending) → responsive grid (`auto-fill, minmax(220px, 1fr)`) → vanilla JS lightbox with keyboard nav (←/→/Esc) and backdrop-click to close
-- **Thumbnail crop:** `object-position: center top` on `.glc-gallery-thumb-btn img` — anchors to the top of the image when CSS clips it to the `4/3` aspect-ratio container, preventing heads being cropped on portrait photos (Option A). **Option B (not yet implemented):** register a `glc-thumb` custom image size with `crop: ['center', 'top']` in `functions.php`, use it instead of `medium` in the gallery shortcode, then run "Regenerate Thumbnails". Produces a smaller file (exact crop dimensions vs. full medium size downloaded and clipped by CSS) — worth doing if the gallery grows large.
 - **Caption overlay:** Site name shown on hover/focus via `.glc-thumb-caption`
 - **Lightbox meta bar:** Shows site name · cleanup date · "View outing →" link to the source post
-- **Empty state:** Renders a friendly message if no photos are flagged yet
+- **Empty state:** Renders a friendly message if no photos are found yet
 
 ### Submit a Cleanup Page
 
@@ -494,7 +477,7 @@ Form section order:
 4. **Notable Finds & Field Log** — notable finds textarea, Instagram URL
 5. **Photos** — upload + consent checkbox
 
-"Number of People" is in section 2 (not section 3) — it belongs with the outing details, not with what was collected. It has a `?` tooltip: "Used to calculate volunteer hours". "Location" (not "Access Point") — the tooltip says "e.g. Riverside Park, Waterloo Ave bridge". Privacy note under submit button links to `/privacy-policy/`.
+"Number of People" is in section 2 (not section 3) — it belongs with the outing details, not with what was collected. "Location" (not "Access Point") — the tooltip says "e.g. Riverside Park, Waterloo Ave bridge". Privacy note under submit button links to `/privacy-policy/`.
 
 ### WordPress Pages Required
 
@@ -640,4 +623,3 @@ Samples background colour from four corners (median, robust to texture). Flood-f
 - [ ] Connect with OPIRG Speed River Project coordinator
 - [ ] Register for City of Guelph Clean and Green (April)
 - [ ] Consider physical badge ("Watershed Steward" patch) for top contributors at year-end — award based on cleanups logged (3+), not weight or volume
-- [ ] **Gallery thumbnail Option B** — register `glc-thumb` custom image size with `crop: ['center', 'top']` in `functions.php`, update gallery shortcode to use it instead of `medium`, run "Regenerate Thumbnails". Reduces payload for portrait photos (server-side crop vs. CSS clip). Do when gallery is large enough that load time matters.

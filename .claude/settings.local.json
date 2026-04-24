@@ -25,7 +25,17 @@
       "WebFetch(domain:cdn.jsdelivr.net)",
       "Bash(curl -L \"https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js\" -o \"C:/Users/Tudor/Documents/GitHub/glc/plugin-dev/great-lake-cleaners/assets/chart.min.js\")",
       "WebFetch(domain:greatlakecleaners.ca)",
-      "Bash(curl -sL \"https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js\" -o \"plugin-dev/great-lake-cleaners/assets/chartjs-adapter-date-fns.bundle.min.js\")"
+      "Bash(curl -sL \"https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js\" -o \"plugin-dev/great-lake-cleaners/assets/chartjs-adapter-date-fns.bundle.min.js\")",
+      "Bash(php -l great-lake-cleaners.php)",
+      "Bash(php -l includes/shortcodes.php)",
+      "Bash(php -l includes/post-type.php)",
+      "Bash(php -l includes/acf-fields.php)",
+      "Bash(php -l includes/admin.php)",
+      "Bash(where php *)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/xampp/php/**)",
+      "Read(//c/Users/Tudor/AppData/Roaming/Local/**)",
+      "Read(//c/Users/Tudor/AppData/Roaming/**)"
     ]
   }
 }
