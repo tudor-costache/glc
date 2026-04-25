@@ -192,7 +192,7 @@ if ( have_posts() ) :
             <a href="<?php echo esc_url( $insta ); ?>"
                target="_blank" rel="noopener noreferrer"
                class="glc-btn-outline">
-                <?php esc_html_e( 'View Field Log on Instagram &rarr;', 'great-lake-cleaners' ); ?>
+                <?php esc_html_e( 'View Field Log on Instagram &rarr;', 'great-lake-cleaners' ); ?><span class="screen-reader-text"> (opens in new tab)</span>
             </a>
         </div>
         <?php endif; ?>

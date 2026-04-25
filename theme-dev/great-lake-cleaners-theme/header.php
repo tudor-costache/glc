@@ -175,7 +175,7 @@
                    class="glc-insta-link"
                    target="_blank"
                    rel="noopener noreferrer"
-                   aria-label="<?php esc_attr_e( 'Follow us on Instagram', 'great-lake-cleaners' ); ?>">
+                   aria-label="<?php esc_attr_e( 'Follow us on Instagram (opens in new tab)', 'great-lake-cleaners' ); ?>">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
                          stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
                          aria-hidden="true" focusable="false">

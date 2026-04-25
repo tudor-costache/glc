@@ -20,7 +20,8 @@
 - Shore cleanups on foot (dog walks = regular informal outings)
 - Paddle cleanups on water
 - Family outings — volunteers tracked per outing
-- Scrap metal and deposit-return items collected for revenue to fund operations
+- Deposit-return items (cans, bottles) collected for recycling — weight tracked separately from debris, not added to debris total
+- Scrap metal (bikes, tires, etc.) folded into debris weight — no separate tracking
 - Photos uploaded directly to WordPress posts (Instagram embed killed by Meta in 2020)
 - Instagram used as real-time field log; post URL stored in tracker and linked from cleanup post
 
@@ -94,7 +95,7 @@ When deploying to VPS, the following must be re-done in WP Admin — they do not
 - **Appearance → Customize → Site Identity** — site name, tagline, and Site Icon (favicon). Upload `glc-badge.png` (transparent background version preferred) and WordPress generates all favicon sizes automatically. **Important:** if a custom logo is set here it takes priority over the fallback `glc-badge.png` in `assets/images/`. Clear this setting to use the file-based fallback.
 - **Settings → Reading** — set static front page to the "Home" page
 - **Appearance → Menus** — rebuild primary and footer nav menus
-- **Pages** — recreate "Home", "Submit a Cleanup", and "Photos" pages with correct slugs; set Photos page template to "Photos"
+- **Pages** — recreate "Home", "Submit a Cleanup", "Photos", and "Join our Crew" pages with correct slugs; set Photos template to "Photos" and Join our Crew template to "Join our Crew"
 - **Privacy Policy page** — create a blank page with slug `privacy-policy`; `page-privacy-policy.php` handles all content automatically
 - Use **Tools → Export / Import** (WXR) or WP Migrate to carry over posts, pages, menus, and options in one shot
 
@@ -117,10 +118,11 @@ great-lake-cleaners/
     post-type.php           — cleanup_event CPT registration
     acf-fields.php          — native WordPress meta box (replaces ACF)
     admin.php               — list table columns, sortable date, admin styles
-    shortcodes.php          — [glc_stats], [glc_map], [glc_archive], [glc_gallery], [glc_timeline], [glc_references]
+    shortcodes.php          — [glc_stats], [glc_map], [glc_archive], [glc_gallery], [glc_timeline], [glc_references], [glc_impact_highlights]
     import.php              — Tools → Import Cleanups CSV
     submission.php          — glc_submission CPT + [glc_submit_form] shortcode
     report.php              — [glc_report_form] shortcode (email-only, no CPT)
+    crew-signup.php         — [glc_join_crew] shortcode + AJAX handler for crew email signup
   assets/
     leaflet.css, leaflet.js — Leaflet v1.9.4, self-hosted
     chart.min.js            — Chart.js v4.4.6, self-hosted (MIT)
@@ -141,6 +143,7 @@ Fields via native "Cleanup Details" meta box below the block editor.
 | Bags | `bags` | garbage bags |
 | Weight (kg) | `weight_kg` | |
 | Items Recycled | `items_recycled` | cans + bottles |
+| Recyclables Weight (kg) | `recycled_weight_kg` | weight of cans + bottles — not added to debris total; stored for future surfacing |
 | Tires Removed | `tires_removed` | integer count — feeds [glc_impact_highlights] |
 | Hazardous Waste Removed | `hazards_removed` | paint cans, motor oil, appliances, e-waste, etc. — stored but not currently surfaced in any shortcode |
 | Notable Finds | `notable_finds` | |
@@ -215,7 +218,7 @@ Public form via `[glc_report_form]` shortcode on page slug `report-issue`. **Ema
 
 **Success state** surfaces GRCA Spills Line (1-800-265-6613, 24 hr) and Environment Canada number for active hazards.
 
-**Error handling:** validation errors re-show the form section open (not hidden) so the user doesn't need to click the triage button again.
+**Error handling:** validation errors re-show the form section open (not hidden) so the user doesn't need to click the triage button again. Required-field validation errors return `['field' => 'field_id', 'message' => '...']` from the handler — the form rendering uses this to set `aria-invalid="true"` and `aria-describedby="glc-err-{field_id}"` on the offending input and render an inline `.glc-field-error` span. Non-field errors (security, rate limit) return a plain string and show in the `.glc-form-error` banner at the top. Same pattern applies in `submission.php`.
 
 **Destination email:** `GLC_REPORT_EMAIL` constant defined in `report.php` as `info@greatlakecleaners.ca`.
 
@@ -253,6 +256,7 @@ Both `[glc_submit_form]` and `[glc_report_form]` share the same three-layer defe
 | `[glc_timeline]` | Cumulative debris (kg) + items recycled over time — dual Y-axis Chart.js line chart; includes cleanup_event + glc_submission data |
 | `[glc_impact_highlights]` | Three stat cards (unique sites, tires, total cleanups) + cumulative person-hours chart — unique sites, hours, and total cleanups include glc_submission data; tires are cleanup_event only (no equivalent field on submissions) |
 | `[glc_references]` | Wrapping shortcode — hides an inline reference list and replaces it with a gold-bordered trigger button. Clicking slides in a navy-headed panel from the right. Close via ✕, backdrop click, or Escape. Usage: `[glc_references]<ol>...</ol>[/glc_references]` in a Custom HTML block. Button label auto-counts `<li>` items: "Sources & References (12)". CSS/JS embedded once per page via static flag. |
+| `[glc_join_crew]` | Email signup form — submits via AJAX to `crew-signup.php`. Sends notification to `info@greatlakecleaners.ca`. Rate limit: 3 attempts per IP per 10 minutes (transient key `glc_crew_{ip_hash}`). Honeypot + nonce protected. No CPT — email-only. |
 
 ---
 
@@ -275,6 +279,7 @@ great-lake-cleaners-theme/
   page-photos.php              — Photos page template (Template Name: Photos) — calls [glc_gallery]
   page-submit-cleanup.php      — Submit a Cleanup page shell + sidebar
   page-report-issue.php        — Report an Issue page shell + sidebar
+  page-join-crew.php           — Join our Crew page (Template Name: Join our Crew) — embeds [glc_join_crew]
   page-privacy-policy.php      — Privacy Policy (auto-generated content)
   archive-cleanup_event.php    — /cleanups/ archive
   single-cleanup_event.php     — individual cleanup event
@@ -302,10 +307,11 @@ great-lake-cleaners-theme/
 - **Navy:** `#1a4a6b` (single value — `--glc-navy`)
 - **Gold:** `#f5a623` (`--glc-gold`)
 - **Green:** `--glc-green` (accent for pills, labels, stat labels)
+- **Green dark:** `--glc-green-dark: #1a5e35` — ≈7:1 on green-light; used for `.glc-fp-label` and `.glc-community-badge` text (WCAG AA)
 - **Green light:** `--glc-green-light` (backgrounds for cards, tips)
 - **Off-white:** `--glc-off-white`
 - **Border:** `--glc-border`
-- **Muted:** `--glc-muted`
+- **Muted:** `--glc-muted: #4d5760` (updated from `#666666` for WCAG AA contrast)
 - **Body font:** Lato (`--glc-font-body`)
 - **Display font:** Nunito (`--glc-font-display`)
 - **Body text color:** `--glc-text`
@@ -435,7 +441,7 @@ Recent cleanups strip sits immediately after the hero with no `<hr>` separators.
 
 **About section heading:** "We're Making an Impact" (was: "The lake starts here" — removed duplicate of header tagline). Includes an **Our Impact** button linking to `/about/`.
 
-**Get Involved CTA:** two-button row — **Follow on Instagram** (primary) + **Submit a Cleanup** (outline). The section explains Instagram is how to find upcoming outings; the second button covers the self-serve action.
+**Get Involved CTA:** two-button row — **Follow on Instagram** (primary) + **Join our Crew** (outline, links to `/join-crew/`). Body copy: "Follow us on Instagram to see when and where we're heading out next, or sign up to join our cleanup crew."
 
 ### Archive Page (`/cleanups/`)
 
@@ -505,6 +511,16 @@ Form section order:
 | Submit a Cleanup | `submit-cleanup` | (default) | Leave blank — template handles layout |
 | Privacy Policy | `privacy-policy` | (default) | Leave blank — template handles content |
 | Report an Issue | `report-issue` | (default) | Leave blank — template handles layout |
+| Join our Crew | `join-crew` | Join our Crew | Leave blank — template handles layout + embeds [glc_join_crew] |
+
+### Accessibility
+
+- **Focus styles:** Global `:focus-visible` rule (3px solid `--glc-gold`, 2px offset) at end of `style.css`. Mouse users get `:focus:not(:focus-visible) { outline: none }`. Form inputs use gold outline on `:focus` (overrides the old `outline: none` which was a WCAG 2.4.7 failure). Tooltip uses `:focus-visible` only.
+- **Reduced motion:** `@media (prefers-reduced-motion: reduce)` block at end of `style.css` sets all `transition-duration` and `animation-duration` to `0.01ms !important`.
+- **Form error UX:** Required-field errors use `aria-invalid="true"` + `aria-describedby` pointing to a `.glc-field-error` inline span. Non-field errors (security/rate-limit) use a banner at the top. See error handling note in Report an Issue section above.
+- **Full-card aria-label:** Front-page slim cards build a descriptive `aria-label` from site name, date, and stat values so screen readers get meaningful link text instead of just the site name.
+- **Community badge contrast:** `.glc-community-badge` and `.glc-fp-label` use `--glc-green-dark` instead of `--glc-green` for WCAG AA compliance.
+- **screen-reader-text utility:** `.screen-reader-text` class used on "opens in new tab" spans throughout. External links (Instagram, Field log, City report tool) all have this.
 
 ### Performance
 
@@ -551,12 +567,14 @@ if ( $bags ) echo '<span class="glc-cs"><img src="' . $idir . '/icon-bag.svg" al
 | 5 | F | Notes | Imported into post_content |
 | 6 | G | Cans (#) | Recycling |
 | 7 | H | Bottles (#) | Recycling |
-| 8–11 | I–L | Scrap Metal | Not currently exported |
-| 12 | M | Number of people | Volunteers |
-| 13 | N | Notable / Unusual Finds | |
-| 14 | O | Latitude | GPS — enter on first visit to a new site |
-| 15 | P | Longitude | GPS — negative for Ontario |
-| 16 | Q | Instagram Post URL | Link to field log |
+| 8 | I | Recyclables Weight (kg) | Weight of cans + bottles — tracked separately, not added to debris weight |
+| 9 | J | Number of people | Volunteers |
+| 10 | K | Notable / Unusual Finds | |
+| 11 | L | Latitude | GPS — enter on first visit to a new site |
+| 12 | M | Longitude | GPS — negative for Ontario |
+| 13 | N | Instagram Post URL | Link to field log |
+| 14 | O | Corridor | Matches known corridor names for badge display |
+| 15 | P | Tires (#) | Count of tires removed — feeds [glc_impact_highlights] tire total |
 
 **Volunteer hours** = duration × volunteers. 70 min × 2 people = 2.33h.  
 **GPS:** enter once per new location. Blank = no map pin.  
@@ -633,11 +651,12 @@ Samples background colour from four corners (median, robust to texture). Flood-f
 
 ## Next Steps
 
-- [ ] Add "Report an Issue" to primary nav menu (page slug: `report-issue`)
+- [ ] **WP Admin:** Create "Join our Crew" page (slug: `join-crew`, template: Join our Crew)
+- [ ] Add "Report an Issue" and "Join our Crew" to primary nav menu
 - [ ] Add Twemoji attribution to footer or Privacy Policy: *"Emoji icons by [Twemoji](https://twemoji.twitter.com/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)"*
 - [ ] Build donate/e-transfer page
 - [ ] Get a digital fish scale (~$15–20) for accurate weight logging
+- [ ] Surface `recycled_weight_kg` publicly once sufficient data exists — best framing is item count + weight together with microplastic context
 - [ ] Connect with OPIRG Speed River Project coordinator
-- [ ] Register for City of Guelph Clean and Green (April)
 - [ ] Consider physical badge ("Watershed Steward" patch) for top contributors at year-end — award based on cleanups logged (3+), not weight or volume
 - [ ] **Gallery thumbnail Option B** — register `glc-thumb` custom image size with `crop: ['center', 'top']` in `functions.php`, update gallery shortcode to use it instead of `medium`, run "Regenerate Thumbnails". Reduces payload for portrait photos (server-side crop vs. CSS clip). Do when gallery is large enough that load time matters.

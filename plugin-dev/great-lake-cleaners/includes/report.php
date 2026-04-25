@@ -56,7 +56,25 @@ function glc_render_report_form() {
     }
 
     // ── Error state ───────────────────────────────────────────────────────────
-    $error = is_string( $result ) ? $result : '';
+    $error       = '';
+    $error_field = '';
+    if ( is_array( $result ) ) {
+        $error       = $result['message'];
+        $error_field = $result['field'];
+    } elseif ( is_string( $result ) && $result !== 'success' ) {
+        $error = $result;
+    }
+
+    $fa = function( $field_id ) use ( $error_field ) {
+        return $error_field === $field_id
+            ? ' aria-invalid="true" aria-describedby="glc-err-' . esc_attr( $field_id ) . '"'
+            : '';
+    };
+    $fe = function( $field_id ) use ( $error_field, $error ) {
+        return $error_field === $field_id
+            ? '<span id="glc-err-' . esc_attr( $field_id ) . '" class="glc-field-error" role="alert">' . esc_html( $error ) . '</span>'
+            : '';
+    };
 
     $city_url = 'https://experience.arcgis.com/experience/aa79df9526ab4c99914adc950eca9141';
     $privacy_url = home_url( '/privacy-policy/' );
@@ -129,7 +147,7 @@ function glc_render_report_form() {
             </p>
         </div>
 
-        <?php if ( $error ) : ?>
+        <?php if ( $error && ! $error_field ) : ?>
             <div class="glc-form-error" role="alert">
                 <?php echo esc_html( $error ); ?>
             </div>
@@ -199,7 +217,8 @@ function glc_render_report_form() {
                         </label>
                         <input type="date" id="glc_issue_date" name="glc_issue_date" required
                                value="<?php echo esc_attr( $_POST['glc_issue_date'] ?? date( 'Y-m-d' ) ); ?>"
-                               max="<?php echo esc_attr( date( 'Y-m-d' ) ); ?>">
+                               max="<?php echo esc_attr( date( 'Y-m-d' ) ); ?>"<?php echo $fa('glc_issue_date'); ?>>
+                        <?php echo $fe('glc_issue_date'); ?>
                     </div>
                     <div class="glc-field glc-field--half">
                         <label for="glc_issue_waterway">
@@ -207,7 +226,8 @@ function glc_render_report_form() {
                         </label>
                         <input type="text" id="glc_issue_waterway" name="glc_issue_waterway" required maxlength="200"
                                placeholder="<?php esc_attr_e( 'e.g. Speed River, Grand River', 'great-lake-cleaners' ); ?>"
-                               value="<?php echo esc_attr( $_POST['glc_issue_waterway'] ?? '' ); ?>">
+                               value="<?php echo esc_attr( $_POST['glc_issue_waterway'] ?? '' ); ?>"<?php echo $fa('glc_issue_waterway'); ?>>
+                        <?php echo $fe('glc_issue_waterway'); ?>
                     </div>
                 </div>
 
@@ -217,8 +237,9 @@ function glc_render_report_form() {
                             <span class="glc-label-text"><?php esc_html_e( 'What did you see?', 'great-lake-cleaners' ); ?><span class="glc-required" aria-hidden="true">*</span></span>
                         </label>
                         <textarea id="glc_issue_description" name="glc_issue_description"
-                                  rows="5" required
+                                  rows="5" required<?php echo $fa('glc_issue_description'); ?>
                                   placeholder="<?php esc_attr_e( 'Describe the issue — type of debris, approximate quantity, any hazard concern (e.g. chemicals, sharp materials). The more specific, the better.', 'great-lake-cleaners' ); ?>"><?php echo esc_textarea( $_POST['glc_issue_description'] ?? '' ); ?></textarea>
+                        <?php echo $fe('glc_issue_description'); ?>
                     </div>
                 </div>
 
@@ -238,7 +259,8 @@ function glc_render_report_form() {
                         </label>
                         <input type="text" id="glc_issue_location" name="glc_issue_location" required
                                value="<?php echo esc_attr( $_POST['glc_issue_location'] ?? '' ); ?>"
-                               placeholder="<?php esc_attr_e( 'e.g. nearest park / intersection', 'great-lake-cleaners' ); ?>">
+                               placeholder="<?php esc_attr_e( 'e.g. nearest park / intersection', 'great-lake-cleaners' ); ?>"<?php echo $fa('glc_issue_location'); ?>>
+                        <?php echo $fe('glc_issue_location'); ?>
                     </div>
                 </div>
 
@@ -381,19 +403,19 @@ function glc_maybe_handle_report() {
     $location    = sanitize_text_field( $_POST['glc_issue_location']    ?? '' );
 
     if ( ! $date || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
-        return 'Please enter a valid date.';
+        return [ 'field' => 'glc_issue_date', 'message' => 'Please enter a valid date.' ];
     }
     if ( strtotime( $date ) > time() ) {
-        return 'Date spotted cannot be in the future.';
+        return [ 'field' => 'glc_issue_date', 'message' => 'Date spotted cannot be in the future.' ];
     }
     if ( ! $waterway ) {
-        return 'Please enter the waterway name.';
+        return [ 'field' => 'glc_issue_waterway', 'message' => 'Please enter the waterway name.' ];
     }
     if ( ! $description ) {
-        return 'Please describe the issue.';
+        return [ 'field' => 'glc_issue_description', 'message' => 'Please describe the issue.' ];
     }
     if ( ! $location ) {
-        return 'Please describe the location.';
+        return [ 'field' => 'glc_issue_location', 'message' => 'Please describe the location.' ];
     }
 
     $name         = sanitize_text_field( $_POST['glc_reporter_name']    ?? '' );

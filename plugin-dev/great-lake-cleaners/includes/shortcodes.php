@@ -234,6 +234,8 @@ function glc_shortcode_map( $atts ) {
     ob_start(); ?>
     <div id="<?php echo esc_attr( $map_id ); ?>"
          class="glc-map"
+         role="application"
+         aria-label="<?php esc_attr_e( 'Cleanup locations map', 'great-lake-cleaners' ); ?>"
          style="height:<?php echo esc_attr( $atts['height'] ); ?>; width:100%; border-radius:8px;">
     </div>
     <script>
@@ -525,7 +527,7 @@ function glc_shortcode_gallery( $atts ) {
                 <img class="glc-lb-img" src="" alt="">
                 <div class="glc-lb-meta">
                     <span class="glc-lb-label"></span>
-                    <a class="glc-lb-link" href="" target="_blank" rel="noopener">View outing →</a>
+                    <a class="glc-lb-link" href="" target="_blank" rel="noopener">View outing →<span class="screen-reader-text"> (opens in new tab)</span></a>
                 </div>
             </div>
         </div>

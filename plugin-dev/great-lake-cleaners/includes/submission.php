@@ -411,16 +411,36 @@ function glc_render_submit_form() {
         </div>
     <?php return ob_get_clean(); }
 
-    $error = ( is_string( $result ) && $result !== 'success' ) ? $result : '';
+    $error       = '';
+    $error_field = '';
+    if ( is_array( $result ) ) {
+        $error       = $result['message'];
+        $error_field = $result['field'];
+    } elseif ( is_string( $result ) && $result !== 'success' ) {
+        $error = $result;
+    }
 
     $v = function( $key, $default = '' ) {
         return esc_attr( $_POST[ $key ] ?? $default );
     };
 
+    // $fa(id) → aria-invalid + aria-describedby attrs when that field errored
+    // $fe(id) → the error <span> to render after the input
+    $fa = function( $field_id ) use ( $error_field ) {
+        return $error_field === $field_id
+            ? ' aria-invalid="true" aria-describedby="glc-err-' . esc_attr( $field_id ) . '"'
+            : '';
+    };
+    $fe = function( $field_id ) use ( $error_field, $error ) {
+        return $error_field === $field_id
+            ? '<span id="glc-err-' . esc_attr( $field_id ) . '" class="glc-field-error" role="alert">' . esc_html( $error ) . '</span>'
+            : '';
+    };
+
     ?>
 
     <div class="glc-submit-wrap">
-        <?php if ( $error ) : ?>
+        <?php if ( $error && ! $error_field ) : ?>
         <div class="glc-form-error-banner" role="alert"><?php echo esc_html( $error ); ?></div>
         <?php endif; ?>
 
@@ -436,7 +456,8 @@ function glc_render_submit_form() {
                 <div class="glc-field-row">
                     <div class="glc-field glc-field--half">
                         <label for="glc_submitter_name"><span class="glc-label-text"><?php esc_html_e( 'Your Name', 'great-lake-cleaners' ); ?><span class="glc-required" aria-label="required">*</span></span></label>
-                        <input type="text" id="glc_submitter_name" name="glc_submitter_name" required maxlength="100" autocomplete="name" value="<?php echo $v('glc_submitter_name'); ?>">
+                        <input type="text" id="glc_submitter_name" name="glc_submitter_name" required maxlength="100" autocomplete="name" value="<?php echo $v('glc_submitter_name'); ?>"<?php echo $fa('glc_submitter_name'); ?>>
+                        <?php echo $fe('glc_submitter_name'); ?>
                     </div>
                     <div class="glc-field glc-field--half">
                         <label for="glc_email"><span class="glc-label-text"><?php esc_html_e( 'Email', 'great-lake-cleaners' ); ?><span class="glc-tooltip" aria-label="<?php esc_attr_e( 'Optional — so we can say thanks', 'great-lake-cleaners' ); ?>" tabindex="0">?<span class="glc-tooltip-text"><?php esc_html_e( 'Optional — so we can say thanks', 'great-lake-cleaners' ); ?></span></span></span></label>
@@ -455,7 +476,8 @@ function glc_render_submit_form() {
                 <div class="glc-field-row">
                     <div class="glc-field glc-field--half">
                         <label for="glc_cleanup_date"><span class="glc-label-text"><?php esc_html_e( 'Date', 'great-lake-cleaners' ); ?><span class="glc-required" aria-label="required">*</span></span></label>
-                        <input type="date" id="glc_cleanup_date" name="glc_cleanup_date" required max="<?php echo esc_attr( date('Y-m-d') ); ?>" value="<?php echo $v('glc_cleanup_date'); ?>">
+                        <input type="date" id="glc_cleanup_date" name="glc_cleanup_date" required max="<?php echo esc_attr( date('Y-m-d') ); ?>" value="<?php echo $v('glc_cleanup_date'); ?>"<?php echo $fa('glc_cleanup_date'); ?>>
+                        <?php echo $fe('glc_cleanup_date'); ?>
                     </div>
                     <div class="glc-field glc-field--half">
                         <label for="glc_duration_min"><?php esc_html_e( 'Duration (minutes)', 'great-lake-cleaners' ); ?></label>
@@ -645,9 +667,9 @@ function glc_maybe_handle_submission() {
     $date     = sanitize_text_field( $_POST['glc_cleanup_date']   ?? '' );
     $waterway = sanitize_text_field( $_POST['glc_waterway']       ?? '' );
 
-    if ( ! $name )     return 'Please enter your name.';
-    if ( ! $date || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) return 'Please enter a valid cleanup date.';
-    if ( strtotime( $date ) > time() ) return 'Cleanup date cannot be in the future.';
+    if ( ! $name )     return [ 'field' => 'glc_submitter_name', 'message' => 'Please enter your name.' ];
+    if ( ! $date || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) return [ 'field' => 'glc_cleanup_date', 'message' => 'Please enter a valid cleanup date.' ];
+    if ( strtotime( $date ) > time() ) return [ 'field' => 'glc_cleanup_date', 'message' => 'Cleanup date cannot be in the future.' ];
 
     $email         = sanitize_email(          $_POST['glc_email']           ?? '' );
     $phone         = sanitize_text_field(     $_POST['glc_phone']           ?? '' );

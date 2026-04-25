@@ -134,6 +134,14 @@ function glc_cleanup_meta_box_cb( $post ) {
         </div>
 
         <div class="glc-half">
+            <label for="glc_recycled_weight_kg">Recyclables Weight (kg)</label>
+            <input type="number" id="glc_recycled_weight_kg" name="glc_recycled_weight_kg"
+                   min="0" step="0.1"
+                   value="<?php echo $m('recycled_weight_kg'); ?>">
+            <p class="glc-field-note">Weight of cans + bottles — not counted in debris total</p>
+        </div>
+
+        <div class="glc-half">
             <label for="glc_tires_removed">Tires Removed</label>
             <input type="number" id="glc_tires_removed" name="glc_tires_removed"
                    min="0" step="1"
@@ -217,7 +225,7 @@ add_action( 'save_post_cleanup_event', function( $post_id ) {
 
     $number_fields = [
         'gps_lat', 'gps_lon', 'volunteers', 'hours',
-        'bags', 'weight_kg', 'items_recycled',
+        'bags', 'weight_kg', 'items_recycled', 'recycled_weight_kg',
         'tires_removed', 'hazards_removed',
         'species_planted', 'meters_bank_cleared',
     ];

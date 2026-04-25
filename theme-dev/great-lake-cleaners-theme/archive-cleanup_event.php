@@ -154,7 +154,7 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
             <a class="glc-archive-card-insta"
                href="<?php echo esc_url( $c['insta'] ); ?>"
                target="_blank" rel="noopener noreferrer">
-                Field log →
+                Field log →<span class="screen-reader-text"> (opens in new tab)</span>
             </a>
             <?php endif; ?>
 
@@ -167,7 +167,7 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
         <div class="nav-links">
             <?php if ( $paged > 1 ) : ?>
             <a class="page-numbers prev" href="<?php echo esc_url( get_pagenum_link( $paged - 1 ) ); ?>">
-                &larr; <?php esc_html_e( 'Older cleanups', 'great-lake-cleaners' ); ?>
+                &larr; <?php esc_html_e( 'Newer cleanups', 'great-lake-cleaners' ); ?>
             </a>
             <?php endif; ?>
             <?php for ( $p = 1; $p <= $total_pages; $p++ ) : ?>
@@ -181,7 +181,7 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
             <?php endfor; ?>
             <?php if ( $paged < $total_pages ) : ?>
             <a class="page-numbers next" href="<?php echo esc_url( get_pagenum_link( $paged + 1 ) ); ?>">
-                <?php esc_html_e( 'Newer cleanups', 'great-lake-cleaners' ); ?> &rarr;
+                <?php esc_html_e( 'Older cleanups', 'great-lake-cleaners' ); ?> &rarr;
             </a>
             <?php endif; ?>
         </div>

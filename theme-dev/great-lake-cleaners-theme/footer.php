@@ -90,11 +90,11 @@
             &nbsp;·&nbsp;
             <a href="https://instagram.com/greatlakecleaners"
                target="_blank" rel="noopener noreferrer"
-               aria-label="<?php esc_attr_e( 'Instagram', 'great-lake-cleaners' ); ?>"
+               aria-label="<?php esc_attr_e( 'Instagram (opens in new tab)', 'great-lake-cleaners' ); ?>"
                class="glc-footer-insta">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                      stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                     style="vertical-align: middle;">
+                     style="vertical-align: middle;" aria-hidden="true" focusable="false">
                     <rect x="2" y="2" width="20" height="20" rx="5"/>
                     <circle cx="12" cy="12" r="5"/>
                     <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/>

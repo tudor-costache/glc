@@ -72,9 +72,24 @@ get_header();
                 $weight   = glc_cleanup_field( $event, 'weight_kg' );
                 $recycled = glc_cleanup_field( $event, 'items_recycled' );
                 $hours    = glc_cleanup_field( $event, 'hours' );
+
+                // Build a text label for assistive tech so the full-card link is descriptive
+                $card_label_parts = [];
+                if ( $site ) $card_label_parts[] = $site;
+                if ( $date ) $card_label_parts[] = date( 'F j, Y', strtotime( $date ) );
+                if ( $bags ) $card_label_parts[] = $bags . ' ' . ( 1 === (int) $bags ? 'bag' : 'bags' );
+                if ( $weight ) $card_label_parts[] = $weight . ' kg';
+                if ( $recycled ) $card_label_parts[] = $recycled . ' items recycled';
+                if ( $hours ) {
+                    $card_label_parts[] = $hours < 1
+                        ? round( $hours * 60 ) . ' min'
+                        : number_format( $hours, 1 ) . ' h';
+                }
+                $card_label = implode( ', ', $card_label_parts );
             ?>
             <a class="glc-fp-slim-card"
-               href="<?php echo esc_url( get_permalink( $event->ID ) ); ?>">
+               href="<?php echo esc_url( get_permalink( $event->ID ) ); ?>"
+               aria-label="<?php echo esc_attr( $card_label ); ?>">
                 <?php if ( $date ) : ?>
                 <span class="glc-fp-slim-date">
                     <?php echo esc_html( date( 'M j, Y', strtotime( $date ) ) ); ?>
@@ -167,7 +182,7 @@ get_header();
                 <a href="https://instagram.com/greatlakecleaners"
                    class="glc-btn-primary"
                    target="_blank" rel="noopener noreferrer">
-                    Follow on Instagram
+                    Follow on Instagram<span class="screen-reader-text"> (opens in new tab)</span>
                 </a>
                 <?php
                 $crew_page = get_page_by_path( 'join-crew' );

@@ -115,6 +115,7 @@ function glc_process_csv_import( $filepath ) {
             'weight_kg'          => 'weight_kg',
             'items_recycled'     => 'items_recycled',
             'tires_removed'      => 'tires_removed',
+            'recycled_weight_kg' => 'recycled_weight_kg',
             'hazards_removed'    => 'hazards_removed',
             'species_planted'    => 'species_planted',
             'meters_bank_cleared'=> 'meters_bank_cleared',
