@@ -35,7 +35,9 @@
       "Read(//c/Program Files/**)",
       "Read(//c/xampp/php/**)",
       "Read(//c/Users/Tudor/AppData/Roaming/Local/**)",
-      "Read(//c/Users/Tudor/AppData/Roaming/**)"
+      "Read(//c/Users/Tudor/AppData/Roaming/**)",
+      "PowerShell(powershell -File repack.ps1 2>&1)",
+      "PowerShell(Copy-Item *)"
     ]
   }
 }

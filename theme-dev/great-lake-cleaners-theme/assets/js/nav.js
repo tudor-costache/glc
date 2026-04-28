@@ -75,4 +75,26 @@
             if ( link ) link.setAttribute( 'aria-expanded', 'false' );
         } );
     }
+
+    // ── Compact header on scroll ──────────────────────────────────────────────
+    var header = document.getElementById( 'glc-site-header' );
+    if ( header ) {
+        var ticking = false;
+        function updateCompact() {
+            var y = window.scrollY;
+            if ( ! header.classList.contains( 'is-compact' ) && y > 80 ) {
+                header.classList.add( 'is-compact' );
+            } else if ( header.classList.contains( 'is-compact' ) && y < 40 ) {
+                header.classList.remove( 'is-compact' );
+            }
+            ticking = false;
+        }
+        window.addEventListener( 'scroll', function() {
+            if ( ! ticking ) {
+                window.requestAnimationFrame( updateCompact );
+                ticking = true;
+            }
+        }, { passive: true } );
+        if ( window.scrollY > 80 ) header.classList.add( 'is-compact' );
+    }
 } )();

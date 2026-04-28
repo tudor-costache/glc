@@ -155,6 +155,10 @@
                              alt="<?php bloginfo( 'name' ); ?>"
                              class="glc-badge-img">
                     <?php endif; ?>
+                    <img src="<?php echo esc_url( get_stylesheet_directory_uri() . '/assets/images/glc-badge-sm.png' ); ?>"
+                         alt=""
+                         aria-hidden="true"
+                         class="glc-badge-sm-img">
                 </a>
             </div>
 

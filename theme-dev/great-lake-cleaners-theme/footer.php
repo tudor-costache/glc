@@ -82,8 +82,11 @@
 
     </div>
     <div class="glc-footer-base">
-        <p>&copy; <?php echo esc_html( date( 'Y' ) ); ?>
-            <?php bloginfo( 'name' ); ?> &nbsp;·&nbsp;
+        <p>
+            <span class="glc-footer-tagline"><?php bloginfo( 'description' ); ?></span>
+            &nbsp;·&nbsp;
+            &copy; <?php echo esc_html( date( 'Y' ) ); ?>
+            &nbsp;·&nbsp;
             <a href="<?php echo esc_url( home_url( '/privacy-policy/' ) ); ?>">
                 <?php esc_html_e( 'Privacy Policy', 'great-lake-cleaners' ); ?>
             </a>

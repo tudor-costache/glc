@@ -69,7 +69,7 @@ Text Domain: great-lake-cleaners
 /* ── Reset & Base ─────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { font-size: 17px; scroll-behavior: smooth; }
+html { font-size: 17px; scroll-behavior: smooth; overflow-anchor: none; }
 
 body {
     font-family: var(--glc-font-body);
@@ -130,7 +130,7 @@ a:hover { color: var(--glc-green); }
     box-shadow: 0 2px 12px rgba(0,0,0,0.22);
 }
 
-.glc-header-top { padding: 8px 0; }
+.glc-header-top { padding: 8px 0; transition: padding 0.6s ease-in-out; }
 
 .glc-header-inner {
     max-width: 1140px;
@@ -146,12 +146,33 @@ a:hover { color: var(--glc-green); }
     flex-shrink: 0;
 }
 
+.glc-logo-wrap a {
+    display: block;
+    position: relative; /* anchors the compact badge overlay */
+}
+
 .glc-badge-img {
     display: block;
     height: 135px;
     width: auto;
     object-fit: contain;
     filter: drop-shadow(0 2px 8px rgba(0,0,0,0.28));
+    transition: height 0.6s ease-in-out, opacity 0.4s ease-in-out;
+}
+
+/* Compact badge — hidden by default, fades in when header compresses */
+.glc-badge-sm-img {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    height: 56px;
+    width: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.28));
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease-in-out;
 }
 
 /* Brand text */
@@ -179,6 +200,9 @@ a:hover { color: var(--glc-green); }
     font-variant: small-caps;
     color: var(--glc-gold);
     margin-top: 7px;
+    max-height: 40px;
+    overflow: hidden;
+    transition: max-height 0.6s ease-in-out, opacity 0.5s ease-in-out, margin-top 0.6s ease-in-out;
 }
 
 .glc-brand-sep { color: rgba(255,255,255,0.25); }
@@ -273,7 +297,7 @@ a:hover { color: var(--glc-green); }
     letter-spacing: 0.05em;
     font-variant: small-caps;
     border-bottom: 3px solid transparent;
-    transition: color 0.2s, border-color 0.2s;
+    transition: color 0.2s, border-color 0.2s, padding 0.6s ease-in-out;
 }
 
 .glc-nav-menu a:hover,
@@ -458,6 +482,13 @@ a:hover { color: var(--glc-green); }
     pointer-events: none;
     z-index: 101;           /* above page content, same sticky stack as header */
 }
+
+/* ── Compact header (triggered after 80 px of scroll) ────────────────────── */
+.is-compact .glc-header-top   { padding: 4px 0; }
+.is-compact .glc-badge-img    { height: 56px; opacity: 0; }
+.is-compact .glc-badge-sm-img { opacity: 1; pointer-events: auto; }
+.is-compact .glc-brand-tag    { max-height: 0; opacity: 0; margin-top: 0; }
+.is-compact .glc-nav-menu a   { padding: 6px 16px; }
 
 /* Footer wave — three-layer depth effect, self-contained SVG */
 .glc-wave-footer {
@@ -874,6 +905,9 @@ a:hover { color: var(--glc-green); }
 }
 .glc-footer-base a { color: white; text-decoration: underline; }
 .glc-footer-base a:hover { color: var(--glc-gold); }
+.glc-footer-tagline {
+    color: var(--glc-gold);
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════
    CLEANUP ARCHIVE (archive-cleanup_event.php)
@@ -1891,9 +1925,16 @@ a:hover { color: var(--glc-green); }
 ══════════════════════════════════════════════════════════════════════════════ */
 @media ( max-width: 768px ) {
     .glc-header-inner { flex-wrap: wrap; gap: 14px; }
-    .glc-brand-name   { font-size: 2rem; }
     .glc-header-actions { display: none; }
     .glc-menu-toggle  { display: flex; margin-left: auto; }
+
+    /* Mobile: always compact — no full-height header */
+    .glc-header-top   { padding: 4px 0; }
+    .glc-badge-img    { height: 56px; opacity: 0; }
+    .glc-badge-sm-img { opacity: 1; pointer-events: auto; }
+    .glc-brand-name   { font-size: 2.1rem; }
+    .glc-brand-tag    { max-height: 0; opacity: 0; margin-top: 0; }
+    .glc-nav-menu a   { padding: 6px 16px; }
 
     .glc-nav-menu {
         flex-direction: column;
@@ -1932,9 +1973,14 @@ a:hover { color: var(--glc-green); }
     /* On mobile, stack hero map below text */
     .glc-fp-map  { order: 2; }
 
-    .glc-stats-strip { flex-wrap: wrap; }
-    .glc-stat { max-width: 50%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.1); }
-    .glc-stat:nth-child(odd) { border-right: 1px solid rgba(255,255,255,0.12); }
+    .glc-stats-strip { flex-wrap: nowrap; }
+    .glc-stat { flex: 1; min-width: 0; max-width: none; padding: 12px 6px; border-right: none; border-bottom: none; }
+    .glc-stat:nth-child(odd) { border-right: none; }
+    .glc-stat:nth-child(1),
+    .glc-stat:nth-child(2),
+    .glc-stat:nth-child(3) { border-right: 1px solid rgba(255,255,255,0.12); }
+    .glc-stat-val { font-size: 1.5rem; }
+    .glc-stat:last-child { display: none; } /* River Corridors hidden on mobile — static stat */
 
     .glc-main { padding: 0 20px 40px; }
     .glc-footer-inner { flex-direction: column; gap: 24px; }

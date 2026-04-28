@@ -195,8 +195,6 @@ Note: `items_recycled` and `weight_kg` are stored under those exact keys (matchi
 
 **`glc_get_impact_stats()`** is defined in `theme/functions.php` (not the plugin) and powers the footer stats strip on every page. It counts both `cleanup_event` and `glc_submission` posts for: cleanup count, weight_kg, items_recycled, and hours (`hours` for events, `glc_hours` for submissions). Corridors count is cleanup_event only (no equivalent field on submissions). If the footer stats and a shortcode show different totals, the most likely cause is this function missing a post type or using the wrong meta key for submissions.
 
-Note: Phone field was removed from the public submission form. GPS coordinates are now collected via lat/lon inputs + browser geolocation button (requires HTTPS). Person-hours are calculated automatically from duration × volunteers. "Access Point" label replaced with plain "Location". "Number of People" field moved from section 3 ("What You Collected") into section 2 ("The Cleanup") where it belongs logically alongside Duration.
-
 ### Submission Form — Thank-You / Receipt State
 
 After a successful submission, `[glc_submit_form]` shows:
@@ -288,6 +286,7 @@ great-lake-cleaners-theme/
   assets/
     images/
       glc-badge.png            — shield logo (transparent bg)
+      glc-badge-sm.png         — simplified shield logo for compact header (no text, readable at 56px)
       stylized-thankyou.png    — thank-you illustration (PNG — has transparency)
       stylized-paddler.jpg     — paddler illustration (JPG, 500px wide, ~85% quality)
       stylized-map-rivers-lake.jpg — map illustration (JPG, 500px wide, ~85% quality)
@@ -299,7 +298,7 @@ great-lake-cleaners-theme/
       icon-wave.svg            — Twemoji wave (CC-BY 4.0)
       icon-bank.svg            — custom river bank / shoreline icon (Twemoji palette)
     js/
-      nav.js                   — mobile menu toggle
+      nav.js                   — mobile menu toggle + compact header on scroll
 ```
 
 ### Visual Identity
@@ -363,14 +362,34 @@ The page uses a flex column layout to ensure the white content box always fills 
 ### Header
 
 - Sticky navy header with logo badge (135px, centered vertically)
-- Brand name at 2.6rem, tagline in gold uppercase
+- Brand name at 2.6rem, tagline in gold uppercase — **tagline hidden on mobile** (compact-always); tagline surfaces in the footer instead
 - `::after` pseudo-element creates the wave transition below the header — **never add `overflow: hidden` to `<header>`**, it clips the wave
 - Customizer logo setting must be cleared for file-based `glc-badge.png` to take effect
+- **`html { overflow-anchor: none }` must be preserved** — disables browser scroll anchoring so the compact header transition does not disturb `scrollY`. Without it, the browser compensates for the header height change by pulling `scrollY` down, which drops below the compact threshold, reverting the header, and causing a flash/oscillation loop.
+
+### Compact Header on Scroll
+
+**Desktop:** collapses after 80 px of scroll; expands again below 40 px (hysteresis prevents oscillation). JS in `nav.js`; CSS class `.is-compact` on `#glc-site-header`.
+
+**Mobile (`≤768px`):** compact styles applied unconditionally in the mobile media query — no full header state. The JS still adds/removes `.is-compact` on scroll but has no visual effect.
+
+| Element | Desktop default | Desktop compact | Mobile (always) |
+|---|---|---|---|
+| `.glc-header-top` | `padding: 8px 0` | `padding: 4px 0` | `padding: 4px 0` |
+| `.glc-badge-img` | `height: 135px`, `opacity: 1` | `height: 56px`, `opacity: 0` | `height: 56px`, `opacity: 0` |
+| `.glc-badge-sm-img` | `opacity: 0` | `opacity: 1` | `opacity: 1` |
+| `.glc-brand-name` | `2.6rem` | `2.6rem` (unchanged) | `2.1rem` |
+| `.glc-brand-tag` | visible | hidden | hidden |
+| `.glc-nav-menu a` | `padding: 10px 16px` | `padding: 6px 16px` | `padding: 6px 16px` |
+
+All transitions: `0.6s ease-in-out` (badge opacity crossfade at `0.4s`).
+
+**Badge crossfade:** `.glc-badge-sm-img` (the simplified logo) is always in the DOM inside the same `<a>`, absolutely positioned at `top: 50%; transform: translateY(-50%)` so it stays vertically centred as the large badge height collapses. The large badge fades out while shrinking; the small badge fades in. `aria-hidden="true"` on the small badge — the large badge's `alt` text already covers accessibility. `.glc-logo-wrap a` has `display: block; position: relative` to anchor the absolutely-positioned small badge.
 
 ### Navigation Bar
 
 - Sits below header in its own `.glc-nav-bar` div (same navy background)
-- Font: 0.92rem, bold, uppercase, `padding: 10px 16px`
+- Font: 0.92rem, bold, uppercase, `padding: 10px 16px` (compact: `6px 16px`)
 - Gap of 2px between items (no separator lines — tested, doesn't look good in practice)
 - Gold bottom-border on active/hover item
 - **Submenu** (`.sub-menu`) has **no** `border-top` — the gold top border was removed because it created double-underline artifacts where the nav item's gold bottom-border and the submenu border overlapped
@@ -382,7 +401,7 @@ The page uses a flex column layout to ensure the white content box always fills 
 3. `.glc-stats-strip` — full-width navy stats bar
 4. `<footer>`:
    - `.glc-footer-inner` — nav menu (`padding: 20px 32px 16px`)
-   - `.glc-footer-base` — copyright · org name · Privacy Policy · Instagram icon (tagline removed — redundant with header)
+   - `.glc-footer-base` — tagline (gold, `.glc-footer-tagline` span) · © year · Privacy Policy · Instagram icon. Single line; tagline sourced from `bloginfo('description')` so it stays in sync with WP Admin site identity.
 
 **Stats strip** — all five stats show a `+` superscript to indicate minimums: `17+ Cleanups · 188+ kg · 26+ Volunteer Hours · 388+ Items Recycled · 3+ River Corridors`. The `kg` and corridors values previously lacked `+`; this was inconsistent and has been corrected.
 
@@ -439,7 +458,7 @@ Recent cleanups strip sits immediately after the hero with no `<hr>` separators.
 
 **Hours display on cards:** values under 1 hour display as minutes (e.g. `30 min`); values at or above 1 hour display as `1.5 h`. Applied in both `front-page.php` and `archive-cleanup_event.php`.
 
-**About section heading:** "We're Making an Impact" (was: "The lake starts here" — removed duplicate of header tagline). Includes an **Our Impact** button linking to `/about/`.
+**About section heading:** "We're Making an Impact". Includes an **Our Impact** button linking to `/about/`.
 
 **Get Involved CTA:** two-button row — **Follow on Instagram** (primary) + **Join our Crew** (outline, links to `/join-crew/`). Body copy: "Follow us on Instagram to see when and where we're heading out next, or sign up to join our cleanup crew."
 
@@ -450,8 +469,6 @@ Left-aligned throughout (pill, heading, intro text, impact section). Fetches all
 ### Single Event Pages
 
 Both `single-cleanup_event.php` and `single-glc_submission.php` share `.glc-single-sub-wrap` and `.glc-single-event-map`. Both have `isolation: isolate` on the map wrapper. Layout: back link → header → featured image → blog body → stat tiles → finds → map.
-
-**Volunteer count removed from single event header** — the "1 person / N people" byline was removed from `single-cleanup_event.php`. Hours in the stat tile is sufficient; volunteer count was redundant and visually noisy.
 
 ### Stat Tiles (single event pages)
 
@@ -633,19 +650,6 @@ Samples background colour from four corners (median, robust to texture). Flood-f
 **Tolerance:** `15–20` clean white · `25–30` textured/linen (default: 28) · `30–35` heavy noise
 
 **Requires:** Python 3, Pillow, NumPy
-
----
-
-## Current File Inventory
-
-| File | Status |
-|---|---|
-| `great-lake-cleaners-plugin.zip` | ✅ Installed and live on production |
-| `great-lake-cleaners-theme.zip` | ✅ Installed and live on production |
-| `tracker_to_csv.py` | ✅ Working — pulls from Google Sheets |
-| `config.toml` | ✅ Configured |
-| `credentials.json` | ✅ In place (never commit to version control) |
-| `Great_Lake_Cleaners_Outing_Tracker.xlsx` | ✅ Local backup of Google Sheet |
 
 ---
 
