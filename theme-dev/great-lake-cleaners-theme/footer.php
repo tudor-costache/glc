@@ -11,7 +11,8 @@
 <!-- Wave into footer: lightest at top, deepens to navy at bottom -->
 <div class="glc-wave-footer" aria-hidden="true">
     <svg viewBox="0 0 1200 80" xmlns="http://www.w3.org/2000/svg"
-         preserveAspectRatio="none" width="100%" height="80">
+         preserveAspectRatio="none" width="100%" height="80"
+         aria-hidden="true" focusable="false" role="presentation">
         <!-- Top layer: lightest, highest crest, meets page content -->
         <path d="M0,28 C220,48 440,12 660,30 C860,48 1060,16 1200,36 L1200,80 L0,80 Z"
               fill="#5a9fc0" fill-opacity="0.45"/>
@@ -26,15 +27,19 @@
 
 <!-- Stats strip — appears on every page above the footer -->
 <div class="glc-stats-strip" aria-label="<?php esc_attr_e( 'Cumulative impact', 'great-lake-cleaners' ); ?>">
-    <?php $s = glc_get_impact_stats(); ?>
+    <?php
+    $s = glc_get_impact_stats();
+
+    $cleanups_page = get_page_by_path( 'cleanups' );
+    $cleanups_url  = $cleanups_page
+        ? get_permalink( $cleanups_page )
+        : get_post_type_archive_link( 'cleanup_event' );
+
+    $stats_page = get_page_by_path( 'stats' );
+    $stats_url  = $stats_page ? get_permalink( $stats_page ) : home_url( '/stats/' );
+    ?>
     <div class="glc-stat">
         <span class="glc-stat-val"><?php echo esc_html( $s['cleanups'] ); ?><sup>+</sup></span>
-        <?php
-        $cleanups_page = get_page_by_path( 'cleanups' );
-        $cleanups_url  = $cleanups_page
-            ? get_permalink( $cleanups_page )
-            : get_post_type_archive_link( 'cleanup_event' );
-        ?>
         <span class="glc-stat-lbl">
             <?php if ( $cleanups_url ) : ?>
             <a href="<?php echo esc_url( $cleanups_url ); ?>" class="glc-stat-lbl-link">
@@ -47,21 +52,37 @@
     </div>
     <div class="glc-stat">
         <span class="glc-stat-val"><?php echo esc_html( number_format( $s['weight_kg'], 0 ) ); ?><sup>+ kg</sup></span>
-        <span class="glc-stat-lbl"><?php esc_html_e( 'Debris Removed', 'great-lake-cleaners' ); ?></span>
+        <span class="glc-stat-lbl">
+            <a href="<?php echo esc_url( $stats_url . '#debris' ); ?>" class="glc-stat-lbl-link">
+                <?php esc_html_e( 'Debris Removed', 'great-lake-cleaners' ); ?>
+            </a>
+        </span>
     </div>
     <div class="glc-stat">
         <span class="glc-stat-val"><?php echo esc_html( number_format( $s['hours'], 0 ) ); ?><sup>+</sup></span>
-        <span class="glc-stat-lbl"><?php esc_html_e( 'Volunteer Hours', 'great-lake-cleaners' ); ?></span>
+        <span class="glc-stat-lbl">
+            <a href="<?php echo esc_url( $stats_url . '#hours' ); ?>" class="glc-stat-lbl-link">
+                <?php esc_html_e( 'Volunteer Hours', 'great-lake-cleaners' ); ?>
+            </a>
+        </span>
     </div>
     <?php if ( $s['recycled'] > 0 ) : ?>
     <div class="glc-stat">
         <span class="glc-stat-val"><?php echo esc_html( number_format( $s['recycled'] ) ); ?><sup>+</sup></span>
-        <span class="glc-stat-lbl"><?php esc_html_e( 'Items Recycled', 'great-lake-cleaners' ); ?></span>
+        <span class="glc-stat-lbl">
+            <a href="<?php echo esc_url( $stats_url . '#debris' ); ?>" class="glc-stat-lbl-link">
+                <?php esc_html_e( 'Items Recycled', 'great-lake-cleaners' ); ?>
+            </a>
+        </span>
     </div>
     <?php endif; ?>
     <div class="glc-stat">
         <span class="glc-stat-val"><?php echo esc_html( $s['corridors'] ); ?><sup>+</sup></span>
-        <span class="glc-stat-lbl"><?php esc_html_e( 'River Corridors', 'great-lake-cleaners' ); ?></span>
+        <span class="glc-stat-lbl">
+            <a href="<?php echo esc_url( $cleanups_url . '#cleanups-map' ); ?>" class="glc-stat-lbl-link">
+                <?php esc_html_e( 'River Corridors', 'great-lake-cleaners' ); ?>
+            </a>
+        </span>
     </div>
 </div>
 

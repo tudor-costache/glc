@@ -150,29 +150,45 @@ if ( have_posts() ) :
 
         <div id="glc-sub-lb" role="dialog" aria-modal="true" aria-label="<?php esc_attr_e( 'Photo lightbox', 'great-lake-cleaners' ); ?>"
              style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;
-                    align-items:center;justify-content:center;cursor:zoom-out;"
-             onclick="glcSubLbClose()">
+                    align-items:center;justify-content:center;">
+            <button id="glc-sub-lb-close" class="glc-lb-close"
+                    aria-label="<?php esc_attr_e( 'Close photo viewer', 'great-lake-cleaners' ); ?>">&#x2715;</button>
             <img id="glc-sub-lb-img" src="" alt=""
                  style="max-width:92vw;max-height:92vh;border-radius:6px;
                         box-shadow:0 4px 40px rgba(0,0,0,.7);display:block;">
         </div>
         <script>
         (function(){
+            var lb          = document.getElementById('glc-sub-lb');
+            var lbImg       = document.getElementById('glc-sub-lb-img');
+            var lbClose     = document.getElementById('glc-sub-lb-close');
+            var lastTrigger = null;
+
             function glcSubLbOpen(a) {
-                var lb = document.getElementById('glc-sub-lb');
-                document.getElementById('glc-sub-lb-img').src = a.dataset.src;
+                lastTrigger = a;
+                lbImg.src = a.dataset.src;
                 lb.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
+                lbClose.focus();
             }
             function glcSubLbClose() {
-                document.getElementById('glc-sub-lb').style.display = 'none';
-                document.getElementById('glc-sub-lb-img').src = '';
+                lb.style.display = 'none';
+                lbImg.src = '';
                 document.body.style.overflow = '';
+                if (lastTrigger) lastTrigger.focus();
             }
             window.glcSubLbOpen  = glcSubLbOpen;
             window.glcSubLbClose = glcSubLbClose;
-            document.addEventListener('keydown', function(e){
-                if (e.key === 'Escape') glcSubLbClose();
+
+            lbClose.addEventListener('click', glcSubLbClose);
+            lb.addEventListener('click', function(e) {
+                if (e.target === lb) glcSubLbClose();
+            });
+            document.addEventListener('keydown', function(e) {
+                if (lb.style.display === 'none') return;
+                if (e.key === 'Escape') { e.preventDefault(); glcSubLbClose(); }
+                // lbClose is the only focusable element — keep Tab inside the dialog
+                if (e.key === 'Tab')    { e.preventDefault(); lbClose.focus(); }
             });
         })();
         </script>

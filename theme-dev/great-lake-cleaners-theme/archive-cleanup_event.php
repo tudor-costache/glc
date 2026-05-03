@@ -135,7 +135,7 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
                 };
                 if ( $c['bags'] )     echo $ic( 'icon-bag.svg',     $c['bags'],                           1 === (int)$c['bags'] ? 'bag' : 'bags' );
                 if ( $c['weight'] )   echo $ic( 'icon-scale.svg',   $c['weight'],                         'kg' );
-                if ( $c['recycled'] ) echo $ic( 'icon-recycle.svg', $c['recycled'],                       '' );
+                if ( $c['recycled'] ) echo $ic( 'icon-recycle.svg', $c['recycled'],                       'items' );
                 if ( $c['hours'] ) {
                     if ( $c['hours'] < 1 ) {
                         echo $ic( 'icon-timer.svg', round( $c['hours'] * 60 ), 'min' );
@@ -195,9 +195,9 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
     <?php endif; ?>
 
     <!-- ── Where We've Made an Impact ───────────────────────────────────────── -->
-    <div class="glc-impact-section" aria-label="<?php esc_attr_e( 'Cleanup locations map', 'great-lake-cleaners' ); ?>">
+    <div id="cleanups-map" class="glc-impact-section" aria-label="<?php esc_attr_e( 'Cleanup locations map', 'great-lake-cleaners' ); ?>">
         <span class="glc-fp-label"><?php esc_html_e( 'Where We\'ve Made an Impact', 'great-lake-cleaners' ); ?></span>
-        <h2 class="glc-impact-heading"><?php esc_html_e( 'Every site tells a story.', 'great-lake-cleaners' ); ?></h2>
+        <h2 class="glc-impact-heading"><?php esc_html_e( 'Every site tells a story', 'great-lake-cleaners' ); ?></h2>
 
         <?php if ( ! empty( $all_cleanups ) ) : ?>
         <div class="glc-archive-map">

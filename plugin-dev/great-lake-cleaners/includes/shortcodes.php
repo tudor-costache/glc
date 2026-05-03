@@ -401,6 +401,7 @@ function glc_shortcode_gallery( $atts ) {
                 'thumb' => $thumb,
                 'alt'   => $alt,
                 'label' => $label,
+                'title' => $att->post_title,
                 'date'  => $date_str,
                 'url'   => $post_url,
             ];
@@ -432,6 +433,7 @@ function glc_shortcode_gallery( $atts ) {
                     'thumb' => $thumb,
                     'alt'   => $alt,
                     'label' => $label,
+                    'title' => get_the_title( $att_id ),
                     'date'  => $date,
                     'url'   => get_permalink( $s->ID ),
                 ];
@@ -538,7 +540,14 @@ function glc_shortcode_gallery( $atts ) {
         var wrap   = document.getElementById(<?php echo wp_json_encode( $gallery_id ); ?>);
         var lb     = document.getElementById(<?php echo wp_json_encode( $gallery_id . '-lb' ); ?>);
         var photos = <?php echo wp_json_encode( array_values( $all_photos ) ); ?>;
-        var currentIdx = 0;
+        var currentIdx  = 0;
+        var lastTrigger = null;
+        var focusables  = [
+            lb.querySelector('.glc-lb-close'),
+            lb.querySelector('.glc-lb-prev'),
+            lb.querySelector('.glc-lb-next'),
+            lb.querySelector('.glc-lb-link'),
+        ];
 
         // ── Tab switching ──────────────────────────────────────────────────
         var tabs  = wrap.querySelectorAll('.glc-gallery-tab');
@@ -571,7 +580,7 @@ function glc_shortcode_gallery( $atts ) {
             var p = photos[idx];
             lbImg.src       = p.src;
             lbImg.alt       = p.alt;
-            lbLabel.textContent = p.label + (p.date ? '  ·  ' + p.date : '');
+            lbLabel.textContent = p.title || p.label;
             lbLink.href     = p.url;
             lb.hidden = false;
             document.body.style.overflow = 'hidden';
@@ -581,10 +590,12 @@ function glc_shortcode_gallery( $atts ) {
         function closeLightbox() {
             lb.hidden = true;
             document.body.style.overflow = '';
+            if (lastTrigger) lastTrigger.focus();
         }
 
         wrap.querySelectorAll('.glc-gallery-thumb-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
+                lastTrigger = btn;
                 showPhoto( parseInt(btn.dataset.globalIdx, 10) );
             });
         });
@@ -599,9 +610,18 @@ function glc_shortcode_gallery( $atts ) {
 
         document.addEventListener('keydown', function(e) {
             if ( lb.hidden ) return;
-            if ( e.key === 'Escape' )     closeLightbox();
-            if ( e.key === 'ArrowLeft' )  showPhoto(currentIdx - 1);
-            if ( e.key === 'ArrowRight' ) showPhoto(currentIdx + 1);
+            if ( e.key === 'Escape' )     { closeLightbox(); return; }
+            if ( e.key === 'ArrowLeft' )  { showPhoto(currentIdx - 1); return; }
+            if ( e.key === 'ArrowRight' ) { showPhoto(currentIdx + 1); return; }
+            if ( e.key === 'Tab' ) {
+                e.preventDefault();
+                var fi = focusables.indexOf(document.activeElement);
+                if (e.shiftKey) {
+                    focusables[(fi <= 0 ? focusables.length : fi) - 1].focus();
+                } else {
+                    focusables[(fi + 1) % focusables.length].focus();
+                }
+            }
         });
     })();
     </script>

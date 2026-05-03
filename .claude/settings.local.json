@@ -37,7 +37,11 @@
       "Read(//c/Users/Tudor/AppData/Roaming/Local/**)",
       "Read(//c/Users/Tudor/AppData/Roaming/**)",
       "PowerShell(powershell -File repack.ps1 2>&1)",
-      "PowerShell(Copy-Item *)"
+      "PowerShell(Copy-Item *)",
+      "Skill(update-config)",
+      "PowerShell(Get-Content 'C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\.claude\\\\settings.json' | ConvertFrom-Json | Select-Object -ExpandProperty hooks | Select-Object -ExpandProperty PostToolUse | ForEach-Object { $_.hooks | Select-Object type, shell, timeout, statusMessage })",
+      "PowerShell($s = Get-Content 'C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\.claude\\\\settings.json' -Raw | ConvertFrom-Json; $s.hooks.PostToolUse[0].hooks[0] | Format-List)",
+      "PowerShell(powershell -File 'C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\repack.ps1')"
     ]
   }
 }

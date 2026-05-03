@@ -180,7 +180,7 @@
                    target="_blank"
                    rel="noopener noreferrer"
                    aria-label="<?php esc_attr_e( 'Follow us on Instagram (opens in new tab)', 'great-lake-cleaners' ); ?>">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
                          stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
                          aria-hidden="true" focusable="false">
                         <rect x="2" y="2" width="20" height="20" rx="5"/>

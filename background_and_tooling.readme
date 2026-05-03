@@ -1,0 +1,151 @@
+### Hosting
+- **Local dev:** WPLocal (Windows) — used for development and testing
+- **Production VPS:** OVHcloud Canada — **live at greatlakecleaners.ca** ✅
+- **Stack:** Ubuntu 24, Apache 2.4, MySQL, PHP 8.3, Python 3
+- **WordPress** for public site and cleanup event management
+
+
+
+### Server Setup Notes
+- UFW firewall enabled: ports 22 (OpenSSH), 80, 443 open
+- fail2ban installed and active — protects SSH (5 failed attempts = 10 min ban)
+- certbot + python3-certbot-apache installed; SSL auto-renews via systemd timer
+- Apache modules enabled: `rewrite`, site config at `/etc/apache2/sites-available/greatlakecleaners.ca.conf`
+- WordPress installed at `/var/www/html/wordpress`
+- MySQL database: `wordpress`, user: `wpuser`@`localhost`
+- SVG MIME type confirmed working: Apache serves `image/svg+xml` correctly — verified via `curl -I`
+
+### Domains
+- Registered at CanSpace
+- Primary: greatlakecleaners.ca
+- DNS: A record pointing to `167.114.129.162` (OVHcloud VPS IPv4); www/mail/ftp CNAMEs follow automatically
+- SSL: Let's Encrypt (free, auto-renews via certbot)
+- The `ownercheck` TXT record added during OVHcloud secondary DNS verification — can be left in place
+
+### Contact Email
+- **`info@greatlakecleaners.ca`** — live and configured ✅
+- Referenced in `page-privacy-policy.php` via `$contact` variable (already updated)
+
+### Post-Deployment Checklist (things stored in DB, not files)
+When deploying to VPS, the following must be re-done in WP Admin — they do not travel with the theme/plugin zips:
+- **Appearance → Customize → Site Identity** — site name, tagline, and Site Icon (favicon). Upload `glc-badge.png` (transparent background version preferred) and WordPress generates all favicon sizes automatically. **Important:** if a custom logo is set here it takes priority over the fallback `glc-badge.png` in `assets/images/`. Clear this setting to use the file-based fallback.
+- **Settings → Reading** — set static front page to the "Home" page
+- **Appearance → Menus** — rebuild primary and footer nav menus
+- **Pages** — recreate "Home", "Submit a Cleanup", "Photos", and "Join our Crew" pages with correct slugs; set Photos template to "Photos" and Join our Crew template to "Join our Crew"
+- **Privacy Policy page** — create a blank page with slug `privacy-policy`; `page-privacy-policy.php` handles all content automatically
+- Use **Tools → Export / Import** (WXR) or WP Migrate to carry over posts, pages, menus, and options in one shot
+
+
+### Spam Protection
+
+Both `[glc_submit_form]` and `[glc_report_form]` share the same three-layer defence. All checks run **before** `wp_mail()` is called — protecting mail server reputation (DKIM/SPF/rDNS setup on production).
+
+**Defence chain (in order):**
+1. **Nonce** (`wp_verify_nonce`) — WordPress built-in, already present
+2. **Honeypot** — hidden `name="glc_url"` field, CSS-offscreen (`left: -9999px`, `opacity: 0`, `pointer-events: none`, `tabindex="-1"`). Handler silently returns `null` if non-empty — no error shown to bot.
+3. **Rate limit** — WordPress transient keyed by hashed IP. Max 5 attempts per 10 minutes. Transient keys are form-specific: `glc_sub_rate_` (submission) and `glc_rep_rate_` (report). **Counter increments only just before `wp_mail()` is called** — failed validation attempts do not burn a slot. Returns user-visible error after limit hit. To reset manually: `wp transient delete --all` via WP-CLI, or `DELETE FROM wp_options WHERE option_name LIKE '_transient_glc_%';` in MySQL.
+4. **Cloudflare Turnstile** — invisible widget (`data-size="invisible"`). Challenge fires silently on submit; token verified server-side via `https://challenges.cloudflare.com/turnstile/v0/siteverify`. Requires outbound HTTPS (port 443) from the server.
+5. **Field validation** — required fields, date format/range checks
+6. **`wp_mail()`** — only reached if all above pass
+
+**Turnstile configuration:**
+- Site key and secret key stored as constants in `great-lake-cleaners.php`: `GLC_TURNSTILE_SITE_KEY`, `GLC_TURNSTILE_SECRET_KEY`
+- Keys are registered to `greatlakecleaners.ca` in the Cloudflare Turnstile dashboard — update both the dashboard domain and these constants if the domain changes
+- Widget mode: **Invisible** (must match `data-size="invisible"` in HTML)
+- Cloudflare JS enqueued via `wp_enqueue_scripts` only on pages containing either GLC form shortcode (checks `has_shortcode()` against post content)
+- Shared verify helper: `glc_verify_turnstile( string $token ): bool` in `great-lake-cleaners.php`
+
+
+
+
+
+---
+
+## Python Script: `tracker_to_csv.py`
+
+### Data Sources
+1. **Google Sheets** — if `config.toml` present with `spreadsheet_id`
+2. **Local xlsx** — if `--no-sheets` or `--xlsx` passed, or no config
+
+### Config Files
+
+**`config.toml`:**
+```toml
+spreadsheet_id   = "your-sheet-id-from-url"
+credentials_file = "credentials.json"
+```
+
+**`credentials.json`** — service account key. Add to `.gitignore`. Share Sheet with `client_email` (Viewer).
+
+### Usage
+
+```bash
+python tracker_to_csv.py                    # Google Sheets (default)
+python tracker_to_csv.py --no-sheets        # local xlsx fallback
+python tracker_to_csv.py --xlsx my.xlsx     # specific local file
+python tracker_to_csv.py -o out.csv         # custom output path
+```
+
+### Sync Workflow
+
+1. Log outings in Google Sheet
+2. `python tracker_to_csv.py` → writes `cleanups/cleanups.csv`
+3. WP Admin → Tools → Import Cleanups CSV → upload
+4. Duplicate date+site pairs skipped automatically
+
+### Merge Behaviour
+
+Same date + same location → one event, totals summed. Same date + different location → separate events. Hours = sum of person-hours. Instagram URL = first non-empty. GPS = first non-empty lat/lon.
+
+
+
+## Outing Tracker
+
+**Primary source:** Google Sheet (native format only — not xlsx stored in Drive)  
+**Local backup:** `Great_Lake_Cleaners_Outing_Tracker.xlsx`  
+**Tab name:** `Daily Log`
+
+### Column Layout (0-based)
+
+| Index | Excel col | Field | Notes |
+|---|---|---|---|
+| 0 | A | Date | |
+| 1 | B | Location / Corridor | Must match exactly for same-site merging |
+| 2 | C | Duration (min) | |
+| 3 | D | Bags (#) | Garbage |
+| 4 | E | Weight (kg) | Garbage |
+| 5 | F | Notes | Imported into post_content |
+| 6 | G | Cans (#) | Recycling |
+| 7 | H | Bottles (#) | Recycling |
+| 8 | I | Recyclables Weight (kg) | Weight of cans + bottles — tracked separately, not added to debris weight |
+| 9 | J | Number of people | Volunteers |
+| 10 | K | Notable / Unusual Finds | |
+| 11 | L | Latitude | GPS — enter on first visit to a new site |
+| 12 | M | Longitude | GPS — negative for Ontario |
+| 13 | N | Instagram Post URL | Link to field log |
+| 14 | O | Corridor | Matches known corridor names for badge display |
+| 15 | P | Tires (#) | Count of tires removed — feeds [glc_impact_highlights] tire total |
+
+**Volunteer hours** = duration × volunteers. 70 min × 2 people = 2.33h.  
+**GPS:** enter once per new location. Blank = no map pin.  
+**Date format:** Script normalises to `YYYY-MM-DD`. Store as date values in Google Sheets, not text.
+
+
+---
+
+## Python Tool: `remove_background.py`
+
+Removes solid or textured backgrounds from badge/logo images, producing a transparent PNG.
+
+```bash
+python remove_background.py input.png output.png [tolerance]
+```
+
+Samples background colour from four corners (median, robust to texture). Flood-fills inward from edges, making pixels within `tolerance` of the sampled colour transparent. Interior pixels untouched.
+
+**Tolerance:** `15–20` clean white · `25–30` textured/linen (default: 28) · `30–35` heavy noise
+
+**Requires:** Python 3, Pillow, NumPy
+
+---
+

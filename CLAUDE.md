@@ -5,99 +5,20 @@
 **Organization:** Great Lake Cleaners  
 **Tagline:** The lake starts here.  
 **Mission:** Regular cleanups of Guelph's local waterways — by foot and paddle — that flow into the Great Lakes system via the Grand River and Lake Erie.  
-**Location:** Guelph, Ontario, Canada  
-**Stage:** Pre-incorporation, Phase 1 (personal/family effort, year one)
-
-## Operating Corridors
-
-- Speed River
-- Eramosa River
-- Hanlon Creek
-- Guelph Lake area (secondary)
-
-## Cleanup Methodology
-
-- Shore cleanups on foot (dog walks = regular informal outings)
-- Paddle cleanups on water
-- Family outings — volunteers tracked per outing
-- Deposit-return items (cans, bottles) collected for recycling — weight tracked separately from debris, not added to debris total
-- Scrap metal (bikes, tires, etc.) folded into debris weight — no separate tracking
-- Photos uploaded directly to WordPress posts (Instagram embed killed by Meta in 2020)
-- Instagram used as real-time field log; post URL stored in tracker and linked from cleanup post
-
-## Phase Roadmap
-
-| Phase | Timeline | Focus |
-|---|---|---|
-| 1 — Individual | Now–~1 year | Personal/family cleanups, documentation, relationship building |
-| 2 — Informal group | 6–18 months | Unincorporated association, small donor base, city/GRCA relationships |
-| 3 — Nonprofit incorporation | 18–36 months | Provincial incorporation under ONCA, CRA charitable registration |
-
-## Key Relationships to Build
-
-- **City of Guelph** — Clean and Green program (April), parks permits
-- **GRCA** — Site access permits for conservation areas, Grand River Conservation Foundation (grants)
-- **OPIRG Guelph** — Speed River Project, existing volunteer network (collaborate not compete)
-- **Wellington Water Watchers** — 2Rivers Festival partnership history with OPIRG
-- **Swim Drink Fish / Lake Ontario Waterkeeper** — aligned mission, broader network
-- **CleanSwell / Litterati** — crowdsourced cleanup data platforms worth registering with for grant credibility
-
-## Revenue Streams (informal phase)
-
-- Deposit return containers → Beer Store (verify nearest open location at thebeerstore.ca/where-to-return-empties)
-- Eventually: grants (GRCA Foundation, TD Friends of the Environment, Ontario Trillium Foundation)
-
-## Fundraising Note
-
-Indiegogo and crowdfunding not appropriate for Phase 1. Better options:
-- Simple donate/e-transfer page on own site for now
-- Grants become viable after ONCA incorporation (Phase 3)
-
-## Legal / Incorporation Notes
-
-- Incorporate provincially under ONCA ($155, ServiceOntario) when ready
-- CRA charitable registration takes 6–12 months — file early
-- Environmental restoration qualifies under "other purposes beneficial to the community"
-- Purposes clause is the most scrutinized part of CRA application — draft carefully
 
 ---
 
-## Technical Infrastructure
+## ⚠️ Packaging — ALWAYS use repack.ps1
 
-### Hosting
-- **Local dev:** WPLocal (Windows) — used for development and testing
-- **Production VPS:** OVHcloud Canada — **live at greatlakecleaners.ca** ✅
-- **Stack:** Ubuntu 24, Apache 2.4, MySQL, PHP 8.3, Python 3
-- **WordPress** for public site and cleanup event management
+**After every edit session, run:**
+```
+! powershell -File repack.ps1
+```
 
-### Server Setup Notes
-- UFW firewall enabled: ports 22 (OpenSSH), 80, 443 open
-- fail2ban installed and active — protects SSH (5 failed attempts = 10 min ban)
-- certbot + python3-certbot-apache installed; SSL auto-renews via systemd timer
-- Apache modules enabled: `rewrite`, site config at `/etc/apache2/sites-available/greatlakecleaners.ca.conf`
-- WordPress installed at `/var/www/html/wordpress`
-- MySQL database: `wordpress`, user: `wpuser`@`localhost`
-- SVG MIME type confirmed working: Apache serves `image/svg+xml` correctly — verified via `curl -I`
+**Never** use `Compress-Archive`, Python `zipfile`, or `ZipFile.CreateFromDirectory` directly — all produce broken zips (wrong separators, missing directory entries, or mangled bytes). Only `repack.ps1` produces WordPress-valid zips with correct entry structure.
 
-### Domains
-- Registered at CanSpace
-- Primary: greatlakecleaners.ca
-- DNS: A record pointing to `167.114.129.162` (OVHcloud VPS IPv4); www/mail/ftp CNAMEs follow automatically
-- SSL: Let's Encrypt (free, auto-renews via certbot)
-- The `ownercheck` TXT record added during OVHcloud secondary DNS verification — can be left in place
-
-### Contact Email
-- **`info@greatlakecleaners.ca`** — live and configured ✅
-- Referenced in `page-privacy-policy.php` via `$contact` variable (already updated)
-
-### Post-Deployment Checklist (things stored in DB, not files)
-When deploying to VPS, the following must be re-done in WP Admin — they do not travel with the theme/plugin zips:
-- **Appearance → Customize → Site Identity** — site name, tagline, and Site Icon (favicon). Upload `glc-badge.png` (transparent background version preferred) and WordPress generates all favicon sizes automatically. **Important:** if a custom logo is set here it takes priority over the fallback `glc-badge.png` in `assets/images/`. Clear this setting to use the file-based fallback.
-- **Settings → Reading** — set static front page to the "Home" page
-- **Appearance → Menus** — rebuild primary and footer nav menus
-- **Pages** — recreate "Home", "Submit a Cleanup", "Photos", and "Join our Crew" pages with correct slugs; set Photos template to "Photos" and Join our Crew template to "Join our Crew"
-- **Privacy Policy page** — create a blank page with slug `privacy-policy`; `page-privacy-policy.php` handles all content automatically
-- Use **Tools → Export / Import** (WXR) or WP Migrate to carry over posts, pages, menus, and options in one shot
+- Plugin source: `plugin-dev/great-lake-cleaners/` — edit here only
+- Theme source: `theme-dev/great-lake-cleaners-theme/` — edit here only
 
 ---
 
@@ -220,25 +141,6 @@ Public form via `[glc_report_form]` shortcode on page slug `report-issue`. **Ema
 
 **Destination email:** `GLC_REPORT_EMAIL` constant defined in `report.php` as `info@greatlakecleaners.ca`.
 
-### Spam Protection
-
-Both `[glc_submit_form]` and `[glc_report_form]` share the same three-layer defence. All checks run **before** `wp_mail()` is called — protecting mail server reputation (DKIM/SPF/rDNS setup on production).
-
-**Defence chain (in order):**
-1. **Nonce** (`wp_verify_nonce`) — WordPress built-in, already present
-2. **Honeypot** — hidden `name="glc_url"` field, CSS-offscreen (`left: -9999px`, `opacity: 0`, `pointer-events: none`, `tabindex="-1"`). Handler silently returns `null` if non-empty — no error shown to bot.
-3. **Rate limit** — WordPress transient keyed by hashed IP. Max 5 attempts per 10 minutes. Transient keys are form-specific: `glc_sub_rate_` (submission) and `glc_rep_rate_` (report). **Counter increments only just before `wp_mail()` is called** — failed validation attempts do not burn a slot. Returns user-visible error after limit hit. To reset manually: `wp transient delete --all` via WP-CLI, or `DELETE FROM wp_options WHERE option_name LIKE '_transient_glc_%';` in MySQL.
-4. **Cloudflare Turnstile** — invisible widget (`data-size="invisible"`). Challenge fires silently on submit; token verified server-side via `https://challenges.cloudflare.com/turnstile/v0/siteverify`. Requires outbound HTTPS (port 443) from the server.
-5. **Field validation** — required fields, date format/range checks
-6. **`wp_mail()`** — only reached if all above pass
-
-**Turnstile configuration:**
-- Site key and secret key stored as constants in `great-lake-cleaners.php`: `GLC_TURNSTILE_SITE_KEY`, `GLC_TURNSTILE_SECRET_KEY`
-- Keys are registered to `greatlakecleaners.ca` in the Cloudflare Turnstile dashboard — update both the dashboard domain and these constants if the domain changes
-- Widget mode: **Invisible** (must match `data-size="invisible"` in HTML)
-- Cloudflare JS enqueued via `wp_enqueue_scripts` only on pages containing either GLC form shortcode (checks `has_shortcode()` against post content)
-- Shared verify helper: `glc_verify_turnstile( string $token ): bool` in `great-lake-cleaners.php`
-
 **Required indicator CSS:** Both forms use `.glc-required` (defined in `style.css` as `color: var(--glc-red); flex-shrink: 0`). The `*` span must sit **inside** `.glc-label-text` to stay inline — placing it outside causes it to wrap to a new line in the column flex layout.
 
 ### Shortcodes
@@ -275,6 +177,7 @@ great-lake-cleaners-theme/
   front-page.php               — home page template
   page.php                     — standard page template
   page-photos.php              — Photos page template (Template Name: Photos) — calls [glc_gallery]
+  page-stats.php               — Stats page template (Template Name: Stats) — calls [glc_timeline] + [glc_impact_highlights]
   page-submit-cleanup.php      — Submit a Cleanup page shell + sidebar
   page-report-issue.php        — Report an Issue page shell + sidebar
   page-join-crew.php           — Join our Crew page (Template Name: Join our Crew) — embeds [glc_join_crew]
@@ -405,7 +308,14 @@ All transitions: `0.6s ease-in-out` (badge opacity crossfade at `0.4s`).
 
 **Stats strip** — all five stats show a `+` superscript to indicate minimums: `17+ Cleanups · 188+ kg · 26+ Volunteer Hours · 388+ Items Recycled · 3+ River Corridors`. The `kg` and corridors values previously lacked `+`; this was inconsistent and has been corrected.
 
-**Stats strip "Cleanups" label** is a hyperlink to the cleanups archive. Styled with `.glc-stat-lbl-link` — gold on hover, no underline.
+**Stats strip — all labels are now links**, styled with `.glc-stat-lbl-link` (gold on hover, no underline):
+- **Cleanups** → `/cleanups/` archive
+- **Debris Removed** → `/stats/#debris` (timeline chart)
+- **Volunteer Hours** → `/stats/#hours` (impact highlights chart)
+- **Items Recycled** → `/stats/#debris` (same timeline chart as debris)
+- **River Corridors** → `/cleanups/#cleanups-map` (map section at bottom of archive)
+
+The stats URL is resolved via `get_page_by_path('stats')` with a `home_url('/stats/')` fallback.
 
 **Instagram hover specificity:** Must be `.glc-footer-base a.glc-footer-insta:hover` to beat `.glc-footer-base a:hover`.
 
@@ -466,6 +376,8 @@ Recent cleanups strip sits immediately after the hero with no `<hr>` separators.
 
 Left-aligned throughout (pill, heading, intro text, impact section). Fetches all `cleanup_event` and published `glc_submission` posts, merges, sorts by date descending, paginates at 12 per page. Bottom section: Leaflet map only.
 
+The map section div has `id="cleanups-map"` and `scroll-margin-top: 110px` — the River Corridors footer stat links directly to it. The section H2 reads "Every site tells a story" (no trailing period).
+
 ### Single Event Pages
 
 Both `single-cleanup_event.php` and `single-glc_submission.php` share `.glc-single-sub-wrap` and `.glc-single-event-map`. Both have `isolation: isolate` on the map wrapper. Layout: back link → header → featured image → blog body → stat tiles → finds → map.
@@ -525,6 +437,7 @@ Form section order:
 |---|---|---|---|
 | Home | `home` | (default) | Blank — set as static front page |
 | Photos | `photos` | Photos | Leave blank — template calls `[glc_gallery]` |
+| Stats | `stats` | Stats | Leave blank — template calls `[glc_timeline]` + `[glc_impact_highlights]` |
 | Submit a Cleanup | `submit-cleanup` | (default) | Leave blank — template handles layout |
 | Privacy Policy | `privacy-policy` | (default) | Leave blank — template handles content |
 | Report an Issue | `report-issue` | (default) | Leave blank — template handles layout |
@@ -538,20 +451,12 @@ Form section order:
 - **Full-card aria-label:** Front-page slim cards build a descriptive `aria-label` from site name, date, and stat values so screen readers get meaningful link text instead of just the site name.
 - **Community badge contrast:** `.glc-community-badge` and `.glc-fp-label` use `--glc-green-dark` instead of `--glc-green` for WCAG AA compliance.
 - **screen-reader-text utility:** `.screen-reader-text` class used on "opens in new tab" spans throughout. External links (Instagram, Field log, City report tool) all have this.
-
-### Performance
-
-HAR analysis (April 2026) identified and resolved the following:
-
-- **Illustrations converted to JPG** — `stylized-paddler`, `stylized-map-rivers-lake`, `cleanup_stylized` exported from Lightroom as JPG 85% quality at 500px wide. `stylized-thankyou` kept as PNG (has transparency). Total image payload reduced from ~6.5 MB to ~700 KB (~89% reduction).
-- **WordPress emoji system disabled** in `functions.php` via:
-  ```php
-  remove_action('wp_head', 'print_emoji_detection_script', 7);
-  remove_action('wp_print_styles', 'print_emoji_styles');
-  ```
-  This prevents WordPress intercepting Unicode emoji and fetching SVGs from `s.w.org`. These two lines must be inside `after_setup_theme` with the priority `7` on the first call preserved.
-- **Stat tile emoji replaced with local Twemoji SVGs** — the icon SVGs are downloaded from `s.w.org` (Twemoji, CC-BY 4.0) and served from `assets/images/`. Attribution required: "Emoji icons by Twemoji, licensed under CC BY 4.0" — add to footer or Privacy Policy page.
-- **Icon CSS sizing** — `font-size` has no effect on `<img>` elements. Icon spans use explicit pixel dimensions: `.glc-sub-stat-icon` at `28px × 28px`, card stat icons at `18px × 18px`.
+- **Instagram header link (WCAG 4.1.2 / 2.5.8):** `aria-label="Follow us on Instagram (opens in new tab)"` on the `<a>`. SVG is `width="24" height="24"` with `aria-hidden="true" focusable="false"`. `.glc-insta-link` has `min-width: 24px; min-height: 24px; padding: 2px` to meet the 24×24 CSS px target-size minimum.
+- **Stat card recycled-items suffix:** The `$ic` closure call for recycled items uses `'items'` as the suffix (not empty string) so screen readers hear "33 items" rather than a bare number. Applied in both `front-page.php` and `archive-cleanup_event.php`.
+- **Wave SVG (WCAG 1.1.1):** The `.glc-wave-footer` outer div has `aria-hidden="true"`. The `<svg>` element itself also carries `aria-hidden="true" focusable="false" role="presentation"` for compatibility with older browsers that ignore a parent's `aria-hidden`.
+- **Footer stat label contrast (WCAG 1.4.3):** `.glc-stat-lbl` is `color: rgba(255,255,255,0.78)` — confirmed ≈5.3:1 against navy.
+- **Footer base links (WCAG 1.4.1 / 1.4.3):** `.glc-footer-base a` must be defined **only once** in `style.css` (in the Site Footer section): `color: white; text-decoration: underline; transition: color 0.15s`. A duplicate rule previously existed in the Privacy Policy section that silently overrode this with `rgba(255,255,255,0.6)` and removed the underline — that duplicate has been removed. Do not re-add a second `.glc-footer-base a` rule elsewhere in the file.
+- **Decorative emoji (WCAG 1.1.1):** The `🌱` span in the native-species-planted row (`single-cleanup_event.php`) has `aria-hidden="true"` — the emoji is redundant with the adjacent text.
 
 ### Icon Implementation Pattern
 
@@ -564,103 +469,9 @@ if ( $bags ) echo '<span class="glc-cs"><img src="' . $idir . '/icon-bag.svg" al
 ?>
 ```
 
----
-
-## Outing Tracker
-
-**Primary source:** Google Sheet (native format only — not xlsx stored in Drive)  
-**Local backup:** `Great_Lake_Cleaners_Outing_Tracker.xlsx`  
-**Tab name:** `Daily Log`
-
-### Column Layout (0-based)
-
-| Index | Excel col | Field | Notes |
-|---|---|---|---|
-| 0 | A | Date | |
-| 1 | B | Location / Corridor | Must match exactly for same-site merging |
-| 2 | C | Duration (min) | |
-| 3 | D | Bags (#) | Garbage |
-| 4 | E | Weight (kg) | Garbage |
-| 5 | F | Notes | Imported into post_content |
-| 6 | G | Cans (#) | Recycling |
-| 7 | H | Bottles (#) | Recycling |
-| 8 | I | Recyclables Weight (kg) | Weight of cans + bottles — tracked separately, not added to debris weight |
-| 9 | J | Number of people | Volunteers |
-| 10 | K | Notable / Unusual Finds | |
-| 11 | L | Latitude | GPS — enter on first visit to a new site |
-| 12 | M | Longitude | GPS — negative for Ontario |
-| 13 | N | Instagram Post URL | Link to field log |
-| 14 | O | Corridor | Matches known corridor names for badge display |
-| 15 | P | Tires (#) | Count of tires removed — feeds [glc_impact_highlights] tire total |
-
-**Volunteer hours** = duration × volunteers. 70 min × 2 people = 2.33h.  
-**GPS:** enter once per new location. Blank = no map pin.  
-**Date format:** Script normalises to `YYYY-MM-DD`. Store as date values in Google Sheets, not text.
-
----
-
-## Python Script: `tracker_to_csv.py`
-
-### Data Sources
-1. **Google Sheets** — if `config.toml` present with `spreadsheet_id`
-2. **Local xlsx** — if `--no-sheets` or `--xlsx` passed, or no config
-
-### Config Files
-
-**`config.toml`:**
-```toml
-spreadsheet_id   = "your-sheet-id-from-url"
-credentials_file = "credentials.json"
-```
-
-**`credentials.json`** — service account key. Add to `.gitignore`. Share Sheet with `client_email` (Viewer).
-
-### Usage
-
-```bash
-python tracker_to_csv.py                    # Google Sheets (default)
-python tracker_to_csv.py --no-sheets        # local xlsx fallback
-python tracker_to_csv.py --xlsx my.xlsx     # specific local file
-python tracker_to_csv.py -o out.csv         # custom output path
-```
-
-### Sync Workflow
-
-1. Log outings in Google Sheet
-2. `python tracker_to_csv.py` → writes `cleanups/cleanups.csv`
-3. WP Admin → Tools → Import Cleanups CSV → upload
-4. Duplicate date+site pairs skipped automatically
-
-### Merge Behaviour
-
-Same date + same location → one event, totals summed. Same date + different location → separate events. Hours = sum of person-hours. Instagram URL = first non-empty. GPS = first non-empty lat/lon.
-
----
-
-## Python Tool: `remove_background.py`
-
-Removes solid or textured backgrounds from badge/logo images, producing a transparent PNG.
-
-```bash
-python remove_background.py input.png output.png [tolerance]
-```
-
-Samples background colour from four corners (median, robust to texture). Flood-fills inward from edges, making pixels within `tolerance` of the sampled colour transparent. Interior pixels untouched.
-
-**Tolerance:** `15–20` clean white · `25–30` textured/linen (default: 28) · `30–35` heavy noise
-
-**Requires:** Python 3, Pillow, NumPy
-
----
 
 ## Next Steps
 
-- [ ] **WP Admin:** Create "Join our Crew" page (slug: `join-crew`, template: Join our Crew)
-- [ ] Add "Report an Issue" and "Join our Crew" to primary nav menu
-- [ ] Add Twemoji attribution to footer or Privacy Policy: *"Emoji icons by [Twemoji](https://twemoji.twitter.com/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)"*
-- [ ] Build donate/e-transfer page
-- [ ] Get a digital fish scale (~$15–20) for accurate weight logging
-- [ ] Surface `recycled_weight_kg` publicly once sufficient data exists — best framing is item count + weight together with microplastic context
-- [ ] Connect with OPIRG Speed River Project coordinator
+- [ ] **Donate / support page** — Simple page (no crowdfunding). E-transfer or PayPal link, honest note that tax receipts aren't available until CRA charitable registration post-incorporation, brief breakdown of what funds cover (bags, gear, hosting). Link from "Get Involved" section on front page and footer nav. **Blocked on:** deciding on a dedicated e-transfer email or PayPal account to receive funds — use a separate address from `info@` to keep finances distinct.
 - [ ] Consider physical badge ("Watershed Steward" patch) for top contributors at year-end — award based on cleanups logged (3+), not weight or volume
 - [ ] **Gallery thumbnail Option B** — register `glc-thumb` custom image size with `crop: ['center', 'top']` in `functions.php`, update gallery shortcode to use it instead of `medium`, run "Regenerate Thumbnails". Reduces payload for portrait photos (server-side crop vs. CSS clip). Do when gallery is large enough that load time matters.

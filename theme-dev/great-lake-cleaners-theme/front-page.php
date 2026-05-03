@@ -104,7 +104,7 @@ get_header();
                     };
                     if ( $bags )     echo $ic( 'icon-bag.svg',     $bags,                       1 === (int)$bags ? 'bag' : 'bags' );
                     if ( $weight )   echo $ic( 'icon-scale.svg',   $weight,                     'kg' );
-                    if ( $recycled ) echo $ic( 'icon-recycle.svg', $recycled,                   '' );
+                    if ( $recycled ) echo $ic( 'icon-recycle.svg', $recycled,                   'items' );
                     if ( $hours ) {
                         if ( $hours < 1 ) {
                             echo $ic( 'icon-timer.svg', round( $hours * 60 ), 'min' );

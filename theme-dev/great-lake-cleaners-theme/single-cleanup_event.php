@@ -169,7 +169,7 @@ if ( have_posts() ) :
         <?php if ( $planted ) : ?>
         <div class="glc-single-event-restoration">
             <div class="glc-event-extra">
-                <span class="glc-event-extra-icon">🌱</span>
+                <span class="glc-event-extra-icon" aria-hidden="true">🌱</span>
                 <span><?php printf(
                     esc_html__( '%s native species planted', 'great-lake-cleaners' ),
                     '<strong>' . esc_html( $planted ) . '</strong>'

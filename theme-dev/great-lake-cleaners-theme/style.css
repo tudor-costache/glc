@@ -218,6 +218,10 @@ a:hover { color: var(--glc-green); }
 .glc-insta-link {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 2px;
     color: rgba(255,255,255,0.7);
     text-decoration: none;
     transition: color 0.2s;
@@ -582,7 +586,7 @@ a:hover { color: var(--glc-green); }
 }
 
 .glc-fp-label {
-    display: inline-block;
+    display: none;
     font-size: 0.8rem;
     font-weight: 700;
     font-variant: small-caps;
@@ -808,6 +812,7 @@ a:hover { color: var(--glc-green); }
 
 /* Responsive */
 @media (max-width: 768px) {
+    .glc-fp-label { display: inline-block; }
     .glc-fp-section,
     .glc-fp-section.glc-fp-reverse { grid-template-columns: 1fr; direction: ltr; }
     .glc-fp-recent-grid { grid-template-columns: 1fr; }
@@ -871,7 +876,6 @@ a:hover { color: var(--glc-green); }
     font-style: italic;
     margin-bottom: 6px;
 }
-.glc-footer-location { font-size: 0.8rem; color: rgba(255,255,255,0.5); }
 
 .glc-footer-menu {
     list-style: none;
@@ -903,7 +907,7 @@ a:hover { color: var(--glc-green); }
     max-width: 1140px;
     margin: 0 auto;
 }
-.glc-footer-base a { color: white; text-decoration: underline; }
+.glc-footer-base a { color: white; text-decoration: underline; transition: color 0.15s; }
 .glc-footer-base a:hover { color: var(--glc-gold); }
 .glc-footer-tagline {
     color: var(--glc-gold);
@@ -1812,6 +1816,7 @@ a:hover { color: var(--glc-green); }
     width: 100%;
     height: 200px;
     object-fit: cover;
+    object-position: center top;
     border-radius: 8px;
     display: block;
 }
@@ -2113,16 +2118,6 @@ a:hover { color: var(--glc-green); }
 .glc-privacy-body ul li {
     margin-bottom: 0.5em;
     line-height: 1.65;
-}
-
-.glc-footer-base a {
-    color: rgba(255,255,255,0.6);
-    text-decoration: none;
-    transition: color 0.15s;
-}
-
-.glc-footer-base a:hover {
-    color: white;
 }
 
 /* Instagram icon inline in the footer base bar */
@@ -2610,6 +2605,58 @@ a:hover { color: var(--glc-green); }
     opacity: 0;
     pointer-events: none;
     tab-index: -1;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Stats Page  (page-stats.php)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.glc-stats-page-wrap {
+    padding: 56px 32px 48px;
+    max-width: 1140px;
+    margin: 0 auto;
+}
+
+.glc-stats-page-header {
+    margin-bottom: 40px;
+}
+
+.glc-stats-page-h1 {
+    font-family: var(--glc-font-display);
+    font-size: 2rem;
+    color: var(--glc-navy);
+    margin: 8px 0 12px;
+}
+
+.glc-stats-page-intro {
+    color: var(--glc-muted);
+    font-size: 1rem;
+    margin: 0;
+}
+
+.glc-stats-section {
+    margin-bottom: 56px;
+    scroll-margin-top: 110px;
+}
+
+.glc-stats-section-h2 {
+    font-family: var(--glc-font-display);
+    font-size: 1.35rem;
+    color: var(--glc-navy);
+    margin: 0 0 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--glc-border);
+}
+
+/* Scroll offset for the archive map anchor */
+#cleanups-map {
+    scroll-margin-top: 110px;
+}
+
+@media (max-width: 700px) {
+    .glc-stats-page-wrap {
+        padding: 40px 16px 32px;
+    }
 }
 
 /* ── Global focus-visible ring ────────────────────────────────────────────── */
