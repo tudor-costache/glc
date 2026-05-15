@@ -86,7 +86,7 @@ if ( have_posts() ) :
 
         <?php if ( $notes ) : ?>
         <div class="glc-single-body">
-            <?php echo wp_kses_post( $notes ); ?>
+            <?php the_content(); ?>
         </div>
         <?php endif; ?>
 

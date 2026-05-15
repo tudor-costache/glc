@@ -43,10 +43,19 @@ add_action( 'wp_enqueue_scripts', function() {
         GLC_THEME_VERSION
     );
 
-    // Mobile nav toggle script
+    // Mobile nav toggle + compact header
     wp_enqueue_script(
         'glc-nav',
         get_stylesheet_directory_uri() . '/assets/js/nav.js',
+        [],
+        GLC_THEME_VERSION,
+        true
+    );
+
+    // Footer stats count-up animation
+    wp_enqueue_script(
+        'glc-stats-counter',
+        get_stylesheet_directory_uri() . '/assets/js/stats-counter.js',
         [],
         GLC_THEME_VERSION,
         true

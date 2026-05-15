@@ -39,7 +39,7 @@
     $stats_url  = $stats_page ? get_permalink( $stats_page ) : home_url( '/stats/' );
     ?>
     <div class="glc-stat">
-        <span class="glc-stat-val"><?php echo esc_html( $s['cleanups'] ); ?><sup>+</sup></span>
+        <span class="glc-stat-val"><span class="glc-count" data-count="<?php echo intval( $s['cleanups'] ); ?>"><?php echo esc_html( $s['cleanups'] ); ?></span><sup>+</sup></span>
         <span class="glc-stat-lbl">
             <?php if ( $cleanups_url ) : ?>
             <a href="<?php echo esc_url( $cleanups_url ); ?>" class="glc-stat-lbl-link">
@@ -51,7 +51,7 @@
         </span>
     </div>
     <div class="glc-stat">
-        <span class="glc-stat-val"><?php echo esc_html( number_format( $s['weight_kg'], 0 ) ); ?><sup>+ kg</sup></span>
+        <span class="glc-stat-val"><span class="glc-count" data-count="<?php echo intval( $s['weight_kg'] ); ?>"><?php echo esc_html( number_format( $s['weight_kg'], 0 ) ); ?></span><sup>+ kg</sup></span>
         <span class="glc-stat-lbl">
             <a href="<?php echo esc_url( $stats_url . '#debris' ); ?>" class="glc-stat-lbl-link">
                 <?php esc_html_e( 'Debris Removed', 'great-lake-cleaners' ); ?>
@@ -59,7 +59,7 @@
         </span>
     </div>
     <div class="glc-stat">
-        <span class="glc-stat-val"><?php echo esc_html( number_format( $s['hours'], 0 ) ); ?><sup>+</sup></span>
+        <span class="glc-stat-val"><span class="glc-count" data-count="<?php echo intval( $s['hours'] ); ?>"><?php echo esc_html( number_format( $s['hours'], 0 ) ); ?></span><sup>+</sup></span>
         <span class="glc-stat-lbl">
             <a href="<?php echo esc_url( $stats_url . '#hours' ); ?>" class="glc-stat-lbl-link">
                 <?php esc_html_e( 'Volunteer Hours', 'great-lake-cleaners' ); ?>
@@ -68,7 +68,7 @@
     </div>
     <?php if ( $s['recycled'] > 0 ) : ?>
     <div class="glc-stat">
-        <span class="glc-stat-val"><?php echo esc_html( number_format( $s['recycled'] ) ); ?><sup>+</sup></span>
+        <span class="glc-stat-val"><span class="glc-count" data-count="<?php echo intval( $s['recycled'] ); ?>"><?php echo esc_html( number_format( $s['recycled'] ) ); ?></span><sup>+</sup></span>
         <span class="glc-stat-lbl">
             <a href="<?php echo esc_url( $stats_url . '#debris' ); ?>" class="glc-stat-lbl-link">
                 <?php esc_html_e( 'Items Recycled', 'great-lake-cleaners' ); ?>
@@ -77,7 +77,7 @@
     </div>
     <?php endif; ?>
     <div class="glc-stat">
-        <span class="glc-stat-val"><?php echo esc_html( $s['corridors'] ); ?><sup>+</sup></span>
+        <span class="glc-stat-val"><span class="glc-count" data-count="<?php echo intval( $s['corridors'] ); ?>"><?php echo esc_html( $s['corridors'] ); ?></span><sup>+</sup></span>
         <span class="glc-stat-lbl">
             <a href="<?php echo esc_url( $cleanups_url . '#cleanups-map' ); ?>" class="glc-stat-lbl-link">
                 <?php esc_html_e( 'River Corridors', 'great-lake-cleaners' ); ?>
