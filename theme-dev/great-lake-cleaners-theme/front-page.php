@@ -57,14 +57,99 @@ get_header();
 
     </section>
 
-    <!-- ── Recent Cleanups strip (social proof — active org signal) ─────── -->
+    <!-- ── Recent Cleanups spotlight (featured latest + slim prior row) ──── -->
     <?php
-    $recent = glc_get_all_cleanups();
-    $recent = array_slice( $recent, 0, 3 );
-    if ( ! empty( $recent ) ) :
+    $recent  = glc_get_all_cleanups();
+    $recent  = array_slice( $recent, 0, 4 );
+    $featured = ! empty( $recent ) ? array_shift( $recent ) : null;
+    $idir     = esc_url( get_template_directory_uri() ) . '/assets/images';
+    $ic       = function( $icon, $val, $suffix = '' ) use ( $idir ) {
+        return '<span class="glc-cs"><img src="' . $idir . '/' . $icon . '" alt="" width="18" height="18" aria-hidden="true">' . esc_html( $val ) . ( $suffix ? ' ' . $suffix : '' ) . '</span>';
+    };
+
+    if ( $featured ) :
+        $f_date     = glc_cleanup_field( $featured, 'cleanup_date' );
+        $f_site     = glc_cleanup_field( $featured, 'site_name' );
+        $f_bags     = glc_cleanup_field( $featured, 'bags' );
+        $f_weight   = glc_cleanup_field( $featured, 'weight_kg' );
+        $f_recycled = glc_cleanup_field( $featured, 'items_recycled' );
+        $f_hours    = glc_cleanup_field( $featured, 'hours' );
+        $f_blurb    = '';
+        if ( $featured->post_excerpt ) {
+            $f_blurb = wp_strip_all_tags( $featured->post_excerpt );
+        } elseif ( $featured->post_content ) {
+            $f_blurb = wp_trim_words( wp_strip_all_tags( $featured->post_content ), 25, '…' );
+        }
+
+        $cleanups_page = get_page_by_path( 'cleanups' );
+        $cleanups_url  = $cleanups_page
+            ? get_permalink( $cleanups_page )
+            : get_post_type_archive_link( 'cleanup_event' );
     ?>
-    <section class="glc-fp-recent-strip" aria-labelledby="glc-recent-heading">
-        <div class="glc-fp-recent-grid glc-fp-recent-grid--slim">
+    <section class="glc-fp-spotlight" aria-labelledby="glc-recent-heading">
+
+        <div class="glc-spot-header">
+            <h2 id="glc-recent-heading" class="glc-spot-h2">Recent cleanups</h2>
+        </div>
+
+        <a class="glc-spot-featured"
+           href="<?php echo esc_url( get_permalink( $featured->ID ) ); ?>"
+           aria-label="<?php echo esc_attr( sprintf(
+               'Latest cleanup%s%s — read more',
+               $f_date ? ', ' . date( 'F j, Y', strtotime( $f_date ) ) : '',
+               $f_site ? ' at ' . $f_site : ''
+           ) ); ?>">
+
+            <div class="glc-spot-photo">
+                <?php
+                $thumb = get_the_post_thumbnail( $featured->ID, 'medium_large' );
+                if ( $thumb ) echo $thumb;
+                ?>
+                <span class="glc-spot-pill" aria-hidden="true">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1l2 4.5 5 .6-3.7 3.3 1.1 4.9L8 11.8 3.6 14.3l1.1-4.9L1 6.1l5-.6z"/></svg>
+                    Latest<?php if ( $f_date ) : ?> &middot; <?php echo esc_html( date( 'M j, Y', strtotime( $f_date ) ) ); ?><?php endif; ?>
+                </span>
+            </div>
+
+            <div class="glc-spot-body">
+                <?php if ( $f_site ) : ?>
+                <div class="glc-spot-meta"><?php echo esc_html( $f_site ); ?></div>
+                <?php endif; ?>
+                <h3 class="glc-spot-title"><?php echo esc_html( get_the_title( $featured->ID ) ); ?></h3>
+                <?php if ( $f_blurb ) : ?>
+                <p class="glc-spot-note"><?php echo esc_html( $f_blurb ); ?></p>
+                <?php endif; ?>
+                <ul class="glc-spot-stats">
+                    <?php if ( $f_bags ) : ?>
+                    <li>
+                        <span class="glc-spot-val"><?php echo esc_html( $f_bags ); ?></span>
+                        <span class="glc-spot-lbl"><?php echo 1 === (int) $f_bags ? 'Bag' : 'Bags'; ?></span>
+                    </li>
+                    <?php endif; ?>
+                    <?php if ( $f_weight ) : ?>
+                    <li>
+                        <span class="glc-spot-val"><?php echo esc_html( $f_weight ); ?> kg</span>
+                        <span class="glc-spot-lbl">Debris</span>
+                    </li>
+                    <?php endif; ?>
+                    <?php if ( $f_recycled ) : ?>
+                    <li>
+                        <span class="glc-spot-val"><?php echo esc_html( $f_recycled ); ?></span>
+                        <span class="glc-spot-lbl">Recycled</span>
+                    </li>
+                    <?php endif; ?>
+                    <?php if ( $f_hours ) : ?>
+                    <li>
+                        <span class="glc-spot-val"><?php echo $f_hours < 1 ? esc_html( round( $f_hours * 60 ) ) . ' min' : esc_html( number_format( $f_hours, 1 ) ) . ' h'; ?></span>
+                        <span class="glc-spot-lbl">On site</span>
+                    </li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+        </a>
+
+        <?php if ( ! empty( $recent ) ) : ?>
+        <div class="glc-spot-prior" aria-label="Prior cleanups">
             <?php foreach ( $recent as $event ) :
                 $date     = glc_cleanup_field( $event, 'cleanup_date' );
                 $site     = glc_cleanup_field( $event, 'site_name' );
@@ -73,55 +158,55 @@ get_header();
                 $recycled = glc_cleanup_field( $event, 'items_recycled' );
                 $hours    = glc_cleanup_field( $event, 'hours' );
 
-                // Build a text label for assistive tech so the full-card link is descriptive
                 $card_label_parts = [];
                 if ( $site ) $card_label_parts[] = $site;
                 if ( $date ) $card_label_parts[] = date( 'F j, Y', strtotime( $date ) );
                 if ( $bags ) $card_label_parts[] = $bags . ' ' . ( 1 === (int) $bags ? 'bag' : 'bags' );
                 if ( $weight ) $card_label_parts[] = $weight . ' kg';
                 if ( $recycled ) $card_label_parts[] = $recycled . ' items recycled';
-                if ( $hours ) {
-                    $card_label_parts[] = $hours < 1
-                        ? round( $hours * 60 ) . ' min'
-                        : number_format( $hours, 1 ) . ' h';
-                }
-                $card_label = implode( ', ', $card_label_parts );
+                if ( $hours ) $card_label_parts[] = ( $hours < 1 ? round( $hours * 60 ) . ' min' : number_format( $hours, 1 ) . ' h' );
             ?>
             <a class="glc-fp-slim-card"
                href="<?php echo esc_url( get_permalink( $event->ID ) ); ?>"
-               aria-label="<?php echo esc_attr( $card_label ); ?>">
+               aria-label="<?php echo esc_attr( implode( ', ', $card_label_parts ) ); ?>">
                 <?php if ( $date ) : ?>
-                <span class="glc-fp-slim-date">
-                    <?php echo esc_html( date( 'M j, Y', strtotime( $date ) ) ); ?>
-                </span>
+                <span class="glc-fp-slim-date"><?php echo esc_html( date( 'M j, Y', strtotime( $date ) ) ); ?></span>
                 <?php endif; ?>
                 <span class="glc-fp-slim-title"><?php echo esc_html( $site ); ?></span>
                 <span class="glc-fp-slim-stats">
                     <?php
-                    $idir = esc_url( get_template_directory_uri() ) . '/assets/images';
-                    $ic   = function( $icon, $val, $suffix = '' ) use ( $idir ) {
-                        return '<span class="glc-cs"><img src="' . $idir . '/' . $icon . '" alt="" width="18" height="18" aria-hidden="true">' . esc_html( $val ) . ( $suffix ? ' ' . $suffix : '' ) . '</span>';
-                    };
-                    if ( $bags )     echo $ic( 'icon-bag.svg',     $bags,                       1 === (int)$bags ? 'bag' : 'bags' );
-                    if ( $weight )   echo $ic( 'icon-scale.svg',   $weight,                     'kg' );
-                    if ( $recycled ) echo $ic( 'icon-recycle.svg', $recycled,                   'items' );
+                    if ( $bags )     echo $ic( 'icon-bag.svg',     $bags,     1 === (int)$bags ? 'bag' : 'bags' );
+                    if ( $weight )   echo $ic( 'icon-scale.svg',   $weight,   'kg' );
+                    if ( $recycled ) echo $ic( 'icon-recycle.svg', $recycled, 'items' );
                     if ( $hours ) {
-                        if ( $hours < 1 ) {
-                            echo $ic( 'icon-timer.svg', round( $hours * 60 ), 'min' );
-                        } else {
-                            echo $ic( 'icon-timer.svg', number_format( $hours, 1 ), 'h' );
-                        }
+                        echo $ic( 'icon-timer.svg',
+                            $hours < 1 ? round( $hours * 60 ) : number_format( $hours, 1 ),
+                            $hours < 1 ? 'min' : 'h'
+                        );
                     }
                     ?>
                 </span>
             </a>
             <?php endforeach; wp_reset_postdata(); ?>
         </div>
+        <?php endif; ?>
+
+        <div class="glc-spot-footer">
+            <a class="glc-spot-view-all" href="<?php echo esc_url( $cleanups_url ?: '#' ); ?>">
+                View all cleanups &rarr;
+            </a>
+        </div>
+
     </section>
 
     <?php endif; ?>
 
-    <hr class="glc-fp-divider">
+    <div class="glc-wave-divider" aria-hidden="true">
+        <svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0,11 C150,3 300,19 450,11 C600,3 750,19 900,11 C1050,3 1200,19 1200,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M0,16 C150,8 300,24 450,16 C600,8 750,24 900,16 C1050,8 1200,24 1200,16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.45"/>
+        </svg>
+    </div>
 
     <!-- ── 1. About / Mission ──────────────────────────────────────────────── -->
     <section class="glc-fp-section" aria-labelledby="glc-about-heading">
@@ -152,14 +237,19 @@ get_header();
         </div>
 
         <div class="glc-fp-visual">
-            <img src="<?php echo esc_url( get_stylesheet_directory_uri() . '/assets/images/stylized-map-rivers-lake.jpg' ); ?>"
-                 alt="Stylized map showing Ontario rivers flowing into the Grand River and Lake Erie"
+            <img src="<?php echo esc_url( get_stylesheet_directory_uri() . '/assets/images/photo-impact.jpg' ); ?>"
+                 alt="A pile of debris including metal pipes, broken boards, and bottles collected from a riverbank"
                  class="glc-fp-img">
         </div>
 
     </section>
 
-    <hr class="glc-fp-divider">
+    <div class="glc-wave-divider" aria-hidden="true">
+        <svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0,11 C150,3 300,19 450,11 C600,3 750,19 900,11 C1050,3 1200,19 1200,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M0,16 C150,8 300,24 450,16 C600,8 750,24 900,16 C1050,8 1200,24 1200,16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.45"/>
+        </svg>
+    </div>
 
     <!-- ── 2. Get Involved ────────────────────────────────────────────────── -->
     <section class="glc-fp-section glc-fp-reverse" aria-labelledby="glc-involved-heading">
@@ -167,7 +257,7 @@ get_header();
         <div class="glc-fp-text">
             <span class="glc-fp-label">Get Involved</span>
             <h2 class="glc-fp-h2" id="glc-involved-heading">
-                Clean your local waterway.
+                Clean your local waterway
             </h2>
             <div class="glc-fp-body">
                 <p>We run regular cleanups along local rivers and shorelines.
@@ -195,14 +285,20 @@ get_header();
         </div>
 
         <div class="glc-fp-visual">
-            <img src="<?php echo esc_url( get_stylesheet_directory_uri() . '/assets/images/stylized-paddler.jpg' ); ?>"
-                 alt="Illustration of a paddler cleaning up a river, with a great blue heron on the bank"
-                 class="glc-fp-img">
+            <img src="<?php echo esc_url( get_stylesheet_directory_uri() . '/assets/images/photo-get-involved.jpg' ); ?>"
+                 alt="A volunteer in a high-visibility vest pushing a shopping cart loaded with collected litter during a cleanup"
+                 class="glc-fp-img"
+                 style="object-position: center top">
         </div>
 
     </section>
 
-    <hr class="glc-fp-divider">
+    <div class="glc-wave-divider" aria-hidden="true">
+        <svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0,11 C150,3 300,19 450,11 C600,3 750,19 900,11 C1050,3 1200,19 1200,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M0,16 C150,8 300,24 450,16 C600,8 750,24 900,16 C1050,8 1200,24 1200,16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.45"/>
+        </svg>
+    </div>
 
     <!-- ── 3. Submit a Cleanup ────────────────────────────────────────────── -->
     <section class="glc-fp-section" aria-labelledby="glc-submit-heading">
@@ -210,7 +306,7 @@ get_header();
         <div class="glc-fp-text">
             <span class="glc-fp-label">Submit a Cleanup</span>
             <h2 class="glc-fp-h2" id="glc-submit-heading">
-                Did a cleanup? We want to count it.
+                Did a cleanup? We want to count it
             </h2>
             <div class="glc-fp-body">
                 <p>Every cleanup on a local waterway matters, whether it's a solo
@@ -252,8 +348,8 @@ get_header();
         </div>
 
         <div class="glc-fp-visual">
-            <img src="<?php echo esc_url( get_stylesheet_directory_uri() . '/assets/images/cleanup_stylized.jpg' ); ?>"
-                 alt="Illustration of a litter picker collecting cans and recyclables on a riverbank"
+            <img src="<?php echo esc_url( get_stylesheet_directory_uri() . '/assets/images/photo-submit.jpg' ); ?>"
+                 alt="A golden doodle dog standing beside a green bag of collected litter on the bank of the Speed River"
                  class="glc-fp-img">
         </div>
 

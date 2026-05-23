@@ -41,7 +41,9 @@
       "Skill(update-config)",
       "PowerShell(Get-Content 'C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\.claude\\\\settings.json' | ConvertFrom-Json | Select-Object -ExpandProperty hooks | Select-Object -ExpandProperty PostToolUse | ForEach-Object { $_.hooks | Select-Object type, shell, timeout, statusMessage })",
       "PowerShell($s = Get-Content 'C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\.claude\\\\settings.json' -Raw | ConvertFrom-Json; $s.hooks.PostToolUse[0].hooks[0] | Format-List)",
-      "PowerShell(powershell -File 'C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\repack.ps1')"
+      "PowerShell(powershell -File 'C:\\\\Users\\\\Tudor\\\\Documents\\\\GitHub\\\\glc\\\\repack.ps1')",
+      "WebFetch(domain:api.anthropic.com)",
+      "PowerShell($extractDir = \"C:\\\\Users\\\\Tudor\\\\.claude\\\\projects\\\\C--Users-Tudor-Documents-GitHub-glc\\\\32547121-d5db-425e-a91d-f853d5d8a85b\\\\tool-results\\\\design-bundle\")"
     ]
   }
 }

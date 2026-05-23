@@ -191,9 +191,12 @@ great-lake-cleaners-theme/
       glc-badge.png            — shield logo (transparent bg)
       glc-badge-sm.png         — simplified shield logo for compact header (no text, readable at 56px)
       stylized-thankyou.png    — thank-you illustration (PNG — has transparency)
-      stylized-paddler.jpg     — paddler illustration (JPG, 500px wide, ~85% quality)
-      stylized-map-rivers-lake.jpg — map illustration (JPG, 500px wide, ~85% quality)
-      cleanup_stylized.jpg     — cleanup illustration (JPG, 500px wide, ~85% quality)
+      stylized-paddler.jpg     — paddler illustration (retired from front page, kept as archive)
+      stylized-map-rivers-lake.jpg — map illustration (retired from front page, kept as archive)
+      cleanup_stylized.jpg     — cleanup illustration (retired from front page, kept as archive)
+      photo-impact.jpg         — debris pile on riverbank (800×1067, 85% JPEG) — "We're Making an Impact"
+      photo-get-involved.jpg   — volunteer with shopping cart (800×1067, 85% JPEG) — "Get Involved"
+      photo-submit.jpg         — dog on Speed River bank (800×600, 85% JPEG) — "Submit a Cleanup"
       icon-bag.svg             — Twemoji wastebasket (CC-BY 4.0)
       icon-scale.svg           — Twemoji scales (CC-BY 4.0)
       icon-recycle.svg         — Twemoji recycle (CC-BY 4.0)
@@ -358,19 +361,34 @@ Interior pages need top padding to clear the header wave (`::after` overhangs 38
 
 ```
 0. Hero (map + CTA)
-1. Recent Cleanups strip — slim cards, no heading pill, no divider, social proof
+1. Recent Cleanups spotlight — featured latest card + 3 slim prior cards
+   [wave divider]
 2. About / Mission
+   [wave divider]
 3. Get Involved
+   [wave divider]
 4. Submit a Cleanup
 ```
 
-Recent cleanups strip sits immediately after the hero with no `<hr>` separators. Cards are full-anchor `<a>` elements showing: date · site name · icon + stats (bags, kg, recycled, hours). No "See All Cleanups" button — covered by the hero CTA.
+**Wave dividers** — between every section pair: a `<div class="glc-wave-divider">` containing a dual-path SVG wave in muted navy tint (`color: #c3d5e1`), 22px tall. Echoes the header/footer wave identity at low amplitude. No more `<hr>` elements.
 
-**Hours display on cards:** values under 1 hour display as minutes (e.g. `30 min`); values at or above 1 hour display as `1.5 h`. Applied in both `front-page.php` and `archive-cleanup_event.php`.
+**Recent Cleanups spotlight** (section 1, class `glc-fp-spotlight`):
 
-**About section heading:** "We're Making an Impact". Includes an **Our Impact** button linking to `/about/`.
+- **Featured card** (`.glc-spot-featured`) — two-column grid (`1.05fr / 1fr`), full linked `<a>`. Left side (`.glc-spot-photo`): sky-blue/green gradient background, real photo if the post has a featured image (covered with `object-fit: cover`), gold "Latest · [date]" pill (`.glc-spot-pill`) overlaid top-left. Right side (`.glc-spot-body`): site name in small-caps green (`.glc-spot-meta`), post title as `<h3>` (`.glc-spot-title`), post excerpt/content trimmed to 25 words as a blurb (`.glc-spot-note`), and a 4-col stat grid (`.glc-spot-stats`) with Bags · Debris · Recycled · Hours.
+- **Prior row** (`.glc-spot-prior`) — remaining 3 most-recent cleanups as slim cards, same `.glc-fp-slim-card` style as before.
+- **"View all cleanups →"** link (`.glc-spot-view-all`) sits right-aligned in `.glc-spot-footer` *below* the prior row — not next to the heading, to separate it from the hero "See Our Cleanups" CTA.
+- Fetches 4 posts total via `glc_get_all_cleanups()`: index 0 = featured, 1–3 = prior.
+- Blurb source: `post_excerpt` first, else `wp_trim_words(post_content, 25)`.
 
-**Get Involved CTA:** two-button row — **Follow on Instagram** (primary) + **Join our Crew** (outline, links to `/join-crew/`). Body copy: "Follow us on Instagram to see when and where we're heading out next, or sign up to join our cleanup crew."
+**Hours display on cards:** values under 1 hour display as minutes (e.g. `30 min`); values at or above 1 hour display as `1.5 h`. Applied in `front-page.php` (both spotlight and prior cards) and `archive-cleanup_event.php`.
+
+**Front page section images** — real photos, 800px wide, 85% JPEG. `.glc-fp-visual` uses `aspect-ratio: 4/3; position: relative` (not `min-height`; not `display: flex`). `.glc-fp-img` uses `position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover`. Portrait photos need `object-position` tuned per image — the "Get Involved" photo uses `style="object-position: center top"` inline to keep the volunteer's face in frame.
+
+**About section heading:** "We're Making an Impact" (no trailing period). Includes an **Our Impact** button linking to `/about/`.
+
+**Get Involved heading:** "Clean your local waterway" (no trailing period). CTA: two-button row — **Follow on Instagram** (primary) + **Join our Crew** (outline). Body copy unchanged.
+
+**Submit a Cleanup heading:** "Did a cleanup? We want to count it" (no trailing period).
 
 ### Archive Page (`/cleanups/`)
 
