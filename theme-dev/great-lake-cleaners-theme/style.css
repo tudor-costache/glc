@@ -776,11 +776,12 @@ a:hover { color: var(--glc-green); }
     border-radius: 10px;
     padding: 14px 18px;
     text-decoration: none;
+    box-shadow: 0 2px 8px rgba(26,74,107,0.07);
     transition: border-color 0.15s, box-shadow 0.15s;
 }
 .glc-fp-slim-card:hover {
-    border-color: var(--glc-green);
-    box-shadow: 0 2px 12px rgba(26,74,107,0.08);
+    border-color: var(--glc-gold);
+    box-shadow: 0 4px 14px rgba(26,74,107,0.13);
 }
 .glc-fp-slim-date {
     font-size: 0.7rem;
@@ -854,18 +855,18 @@ a:hover { color: var(--glc-green); }
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
     gap: 0;
     background: var(--glc-white);
-    border: 1px solid var(--glc-border);
+    border: 2px solid var(--glc-border);
     border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 6px 24px rgba(26,74,107,0.08);
+    box-shadow: 0 4px 16px rgba(26,74,107,0.08);
     text-decoration: none;
-    transition: box-shadow 0.2s, transform 0.12s;
+    transition: box-shadow 0.2s, border-color 0.2s;
     margin-bottom: 16px;
     color: inherit;
 }
 .glc-spot-featured:hover, .glc-spot-featured:focus-visible {
-    box-shadow: 0 10px 30px rgba(26,74,107,0.16);
-    transform: translateY(-2px);
+    border-color: var(--glc-gold);
+    box-shadow: 0 6px 20px rgba(26,74,107,0.15);
 }
 .glc-spot-photo {
     position: relative;
@@ -889,6 +890,7 @@ a:hover { color: var(--glc-green); }
     gap: 6px;
     background: var(--glc-gold);
     color: var(--glc-navy);
+    transition: color 0.2s;
     font-family: var(--glc-font-display);
     font-weight: 800;
     font-size: 0.78rem;
@@ -898,6 +900,10 @@ a:hover { color: var(--glc-green); }
     border-radius: 20px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.18);
     z-index: 2;
+}
+.glc-spot-featured:hover .glc-spot-pill,
+.glc-spot-featured:focus-visible .glc-spot-pill {
+    color: white;
 }
 .glc-spot-body {
     padding: 26px 28px 24px;
