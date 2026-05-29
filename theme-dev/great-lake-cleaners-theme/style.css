@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.0.0
+Version:     1.0.1
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -713,7 +713,31 @@ a:hover { color: var(--glc-green); }
     background: var(--glc-off-white);
     border: 1px solid var(--glc-border);
     border-radius: 10px;
-    padding: 20px;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(26,74,107,0.07);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.glc-fp-cleanup-card:hover {
+    border-color: var(--glc-gold);
+    box-shadow: 0 4px 14px rgba(26,74,107,0.13);
+}
+.glc-archive-card-thumb {
+    position: relative;
+    height: 180px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #c8e6f7 0%, #b8d9b3 100%);
+}
+.glc-archive-card-thumb img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+.glc-archive-card-body {
+    padding: 16px 20px 20px;
 }
 .glc-fp-cleanup-card .glc-fp-card-date {
     font-size: 0.75rem;
@@ -2051,19 +2075,6 @@ a:hover { color: var(--glc-green); }
     white-space: nowrap;
 }
 
-/* Featured image */
-.glc-single-event-thumb {
-    margin-bottom: 32px;
-    border-radius: 12px;
-    overflow: hidden;
-}
-.glc-single-event-img {
-    width: 100%;
-    height: auto;
-    display: block;
-    max-height: 480px;
-    object-fit: cover;
-}
 
 /* Wildlife block — subtle teal left accent */
 .glc-single-event-wildlife {
@@ -2823,6 +2834,101 @@ a:hover { color: var(--glc-green); }
 /* Scroll offset for the archive map anchor */
 #cleanups-map {
     scroll-margin-top: 110px;
+}
+
+/* Wildlife Sightings table */
+.glc-wildlife-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 6px;
+    border: 1px solid var(--glc-border);
+}
+
+.glc-wildlife-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    background: #fff;
+}
+
+.glc-wildlife-table thead th {
+    background: var(--glc-navy);
+    color: #fff;
+    font-family: var(--glc-font-display);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 10px 14px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.glc-wildlife-table tbody tr:nth-child(even) {
+    background: var(--glc-off-white);
+}
+
+.glc-wildlife-table tbody tr:hover {
+    background: #eaf2f8;
+}
+
+.glc-wildlife-table td {
+    padding: 10px 14px;
+    vertical-align: top;
+    border-bottom: 1px solid var(--glc-border);
+    color: var(--glc-text);
+    line-height: 1.5;
+}
+
+.glc-wildlife-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.glc-wl-date {
+    white-space: nowrap;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--glc-navy);
+    width: 100px;
+}
+
+.glc-wl-site {
+    white-space: nowrap;
+    width: 160px;
+    color: var(--glc-muted);
+    font-size: 0.85rem;
+}
+
+.glc-wl-obs {
+    color: var(--glc-text);
+}
+
+.glc-wl-link {
+    white-space: nowrap;
+    text-align: right;
+}
+
+.glc-wl-link a {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--glc-navy);
+    text-decoration: none;
+    padding: 4px 10px;
+    border: 1.5px solid var(--glc-border);
+    border-radius: 4px;
+    transition: border-color 0.15s, background-color 0.15s;
+    display: inline-block;
+}
+
+.glc-wl-link a:hover {
+    border-color: var(--glc-gold);
+    background-color: var(--glc-gold);
+}
+
+.glc-wildlife-empty {
+    color: var(--glc-muted);
+    font-style: italic;
+    margin: 0;
 }
 
 @media (max-width: 700px) {

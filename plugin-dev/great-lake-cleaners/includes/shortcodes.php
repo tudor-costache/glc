@@ -1013,6 +1013,66 @@ function glc_shortcode_timeline() {
     return ob_get_clean();
 }
 
+// ── [glc_wildlife_log] ───────────────────────────────────────────────────────
+// All cleanup_event posts that have a wildlife_obs entry, sorted newest first.
+
+add_shortcode( 'glc_wildlife_log', 'glc_shortcode_wildlife_log' );
+function glc_shortcode_wildlife_log() {
+
+    $events = get_posts( [
+        'post_type'      => 'cleanup_event',
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
+        'meta_query'     => [ [
+            'key'     => 'wildlife_obs',
+            'value'   => '',
+            'compare' => '!=',
+        ] ],
+    ] );
+
+    if ( empty( $events ) ) {
+        return '<p class="glc-wildlife-empty">No wildlife sightings logged yet — check back after our next outing!</p>';
+    }
+
+    usort( $events, function( $a, $b ) {
+        $da = get_post_meta( $a->ID, 'cleanup_date', true );
+        $db = get_post_meta( $b->ID, 'cleanup_date', true );
+        return strcmp( $db, $da );
+    } );
+
+    ob_start(); ?>
+    <div class="glc-wildlife-table-wrap">
+    <table class="glc-wildlife-table">
+        <thead>
+            <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Site</th>
+                <th scope="col">Wildlife Observed</th>
+                <th scope="col"><span class="screen-reader-text">Link</span></th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php foreach ( $events as $event ) :
+            $date     = get_post_meta( $event->ID, 'cleanup_date', true );
+            $site     = get_post_meta( $event->ID, 'site_name', true );
+            $wildlife = get_post_meta( $event->ID, 'wildlife_obs', true );
+            if ( ! $wildlife ) continue;
+            $date_fmt = $date ? date( 'M j, Y', strtotime( $date ) ) : '—';
+        ?>
+        <tr>
+            <td class="glc-wl-date" data-label="Date"><?php echo esc_html( $date_fmt ); ?></td>
+            <td class="glc-wl-site" data-label="Site"><?php echo esc_html( $site ?: '—' ); ?></td>
+            <td class="glc-wl-obs"  data-label="Wildlife Observed"><?php echo esc_html( $wildlife ); ?></td>
+            <td class="glc-wl-link"><a href="<?php echo esc_url( get_permalink( $event->ID ) ); ?>">View outing &#8594;</a></td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    </div>
+    <?php
+    return ob_get_clean();
+}
+
 // ── [glc_references] ─────────────────────────────────────────────────────────
 // Replaces an inline reference list with a slide-out side panel.
 // Usage: [glc_references]<ol>...</ol>[/glc_references]

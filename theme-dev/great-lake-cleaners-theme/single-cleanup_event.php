@@ -77,13 +77,7 @@ if ( have_posts() ) :
 
         </header>
 
-        <!-- ── Blog body + featured image (free prose, no box) ─────────────── -->
-        <?php if ( has_post_thumbnail() ) : ?>
-        <div class="glc-single-event-thumb">
-            <?php the_post_thumbnail( 'large', [ 'class' => 'glc-single-event-img' ] ); ?>
-        </div>
-        <?php endif; ?>
-
+        <!-- ── Blog body (free prose; photos inserted via block editor) ──────── -->
         <?php if ( $notes ) : ?>
         <div class="glc-single-body">
             <?php the_content(); ?>

@@ -157,6 +157,7 @@ Public form via `[glc_report_form]` shortcode on page slug `report-issue`. **Ema
 | `[glc_impact_highlights]` | Three stat cards (unique sites, tires, total cleanups) + cumulative person-hours chart — unique sites, hours, and total cleanups include glc_submission data; tires are cleanup_event only (no equivalent field on submissions) |
 | `[glc_references]` | Wrapping shortcode — hides an inline reference list and replaces it with a gold-bordered trigger button. Clicking slides in a navy-headed panel from the right. Close via ✕, backdrop click, or Escape. Usage: `[glc_references]<ol>...</ol>[/glc_references]` in a Custom HTML block. Button label auto-counts `<li>` items: "Sources & References (12)". CSS/JS embedded once per page via static flag. |
 | `[glc_join_crew]` | Email signup form — submits via AJAX to `crew-signup.php`. Sends notification to `info@greatlakecleaners.ca`. Rate limit: 3 attempts per IP per 10 minutes (transient key `glc_crew_{ip_hash}`). Honeypot + nonce protected. No CPT — email-only. |
+| `[glc_wildlife_log]` | Chronological list of wildlife sightings — all `cleanup_event` posts with a `wildlife_obs` value, sorted newest first. Each entry shows date, site name, observation text, and a "View outing →" link. Used on the Stats page (`#wildlife` anchor). |
 
 ---
 
@@ -164,7 +165,8 @@ Public form via `[glc_report_form]` shortcode on page slug `report-issue`. **Ema
 
 **File:** `great-lake-cleaners-theme.zip`  
 **Install:** Appearance → Themes → Upload → Activate.  
-**PHP upload limit:** Default WordPress limit is too small for the theme zip. Set in `/etc/php/8.3/apache2/php.ini`: `upload_max_filesize = 64M`, `post_max_size = 64M`, `max_execution_time = 300`, then `sudo systemctl restart apache2`.
+**PHP upload limit:** Default WordPress limit is too small for the theme zip. Set in `/etc/php/8.3/apache2/php.ini`: `upload_max_filesize = 64M`, `post_max_size = 64M`, `max_execution_time = 300`, then `sudo systemctl restart apache2`.  
+**Cache busting:** `GLC_THEME_VERSION` in `functions.php` (and the matching `Version:` header in `style.css`) must be bumped whenever CSS or JS changes need to reach production. WordPress appends this as `?ver=X.X.X` on enqueued assets — if the version doesn't change, browsers serve the cached old file. Bump both values together and repack.
 
 ### Theme File Structure
 
@@ -177,7 +179,7 @@ great-lake-cleaners-theme/
   front-page.php               — home page template
   page.php                     — standard page template
   page-photos.php              — Photos page template (Template Name: Photos) — calls [glc_gallery]
-  page-stats.php               — Stats page template (Template Name: Stats) — calls [glc_timeline] + [glc_impact_highlights]
+  page-stats.php               — Stats page template (Template Name: Stats) — calls [glc_timeline] + [glc_impact_highlights] + [glc_wildlife_log]
   page-submit-cleanup.php      — Submit a Cleanup page shell + sidebar
   page-report-issue.php        — Report an Issue page shell + sidebar
   page-join-crew.php           — Join our Crew page (Template Name: Join our Crew) — embeds [glc_join_crew]

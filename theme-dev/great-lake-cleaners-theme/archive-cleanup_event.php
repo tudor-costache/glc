@@ -19,6 +19,7 @@ $all_cleanups = [];
 foreach ( $event_posts as $e ) {
     $all_cleanups[] = [
         'type'     => 'event',
+        'post_id'  => $e->ID,
         'date'     => get_post_meta( $e->ID, 'cleanup_date',   true ),
         'site'     => get_post_meta( $e->ID, 'site_name',      true ) ?: $e->post_title,
         'bags'     => get_post_meta( $e->ID, 'bags',           true ),
@@ -42,6 +43,7 @@ $sub_posts = get_posts( [
 foreach ( $sub_posts as $s ) {
     $all_cleanups[] = [
         'type'     => 'community',
+        'post_id'  => $s->ID,
         'date'     => get_post_meta( $s->ID, 'glc_cleanup_date',   true ),
         'site'     => get_post_meta( $s->ID, 'glc_site_name',      true )
                       ?: get_post_meta( $s->ID, 'glc_waterway',    true )
@@ -102,6 +104,34 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
         <?php foreach ( $page_items as $c ) : ?>
         <div class="glc-fp-cleanup-card<?php echo $c['type'] === 'community' ? ' glc-fp-cleanup-card--community' : ''; ?>">
 
+            <?php
+            // Resolve thumbnail URL for this card
+            $thumb_url = '';
+            if ( ! empty( $c['post_id'] ) ) {
+                if ( has_post_thumbnail( $c['post_id'] ) ) {
+                    $thumb_url = get_the_post_thumbnail_url( $c['post_id'], 'medium_large' );
+                }
+                if ( ! $thumb_url && $c['type'] === 'community' ) {
+                    $photo_ids_raw = get_post_meta( $c['post_id'], 'glc_photo_ids', true );
+                    if ( $photo_ids_raw ) {
+                        $ids = is_array( $photo_ids_raw )
+                            ? $photo_ids_raw
+                            : array_filter( array_map( 'intval', explode( ',', $photo_ids_raw ) ) );
+                        if ( $ids ) {
+                            $thumb_url = wp_get_attachment_image_url( (int) reset( $ids ), 'medium_large' );
+                        }
+                    }
+                }
+            }
+            ?>
+            <div class="glc-archive-card-thumb">
+                <?php if ( $thumb_url ) : ?>
+                <img src="<?php echo esc_url( $thumb_url ); ?>" alt="" loading="lazy">
+                <?php endif; ?>
+            </div>
+
+            <div class="glc-archive-card-body">
+
             <div class="glc-archive-card-top">
                 <?php if ( $c['date'] ) : ?>
                 <div class="glc-fp-card-date">
@@ -157,6 +187,8 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
                 Field log →<span class="screen-reader-text"> (opens in new tab)</span>
             </a>
             <?php endif; ?>
+
+            </div><!-- .glc-archive-card-body -->
 
         </div>
         <?php endforeach; ?>

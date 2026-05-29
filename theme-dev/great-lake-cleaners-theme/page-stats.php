@@ -23,6 +23,11 @@ get_header(); ?>
         <?php echo do_shortcode( '[glc_impact_highlights]' ); ?>
     </section>
 
+    <section class="glc-stats-section" id="wildlife">
+        <h2 class="glc-stats-section-h2"><?php esc_html_e( 'Wildlife Sightings', 'great-lake-cleaners' ); ?></h2>
+        <?php echo do_shortcode( '[glc_wildlife_log]' ); ?>
+    </section>
+
 </div>
 
 <?php get_footer();
