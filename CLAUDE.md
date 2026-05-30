@@ -153,11 +153,11 @@ Public form via `[glc_report_form]` shortcode on page slug `report-issue`. **Ema
 | `[glc_submit_form]` | Community submission form |
 | `[glc_gallery]` | Photo gallery with year tabs + lightbox |
 | `[glc_report_form]` | Waterway issue report (two-stage: triage → form → email) |
-| `[glc_timeline]` | Cumulative debris (kg) + items recycled over time — dual Y-axis Chart.js line chart; includes cleanup_event + glc_submission data |
-| `[glc_impact_highlights]` | Three stat cards (unique sites, tires, total cleanups) + cumulative person-hours chart — unique sites, hours, and total cleanups include glc_submission data; tires are cleanup_event only (no equivalent field on submissions) |
+| `[glc_timeline]` | Cumulative debris (kg) + items recycled over time — dual Y-axis Chart.js line chart; includes cleanup_event + glc_submission data. **No longer called by page-stats.php** (superseded by the inline SVG charts in the redesign) but still available as a shortcode. |
+| `[glc_impact_highlights]` | Three stat cards (unique sites, tires, total cleanups) + cumulative person-hours chart — unique sites, hours, and total cleanups include glc_submission data; tires are cleanup_event only (no equivalent field on submissions). **No longer called by page-stats.php** (superseded by the redesign) but still available as a shortcode. |
 | `[glc_references]` | Wrapping shortcode — hides an inline reference list and replaces it with a gold-bordered trigger button. Clicking slides in a navy-headed panel from the right. Close via ✕, backdrop click, or Escape. Usage: `[glc_references]<ol>...</ol>[/glc_references]` in a Custom HTML block. Button label auto-counts `<li>` items: "Sources & References (12)". CSS/JS embedded once per page via static flag. |
 | `[glc_join_crew]` | Email signup form — submits via AJAX to `crew-signup.php`. Sends notification to `info@greatlakecleaners.ca`. Rate limit: 3 attempts per IP per 10 minutes (transient key `glc_crew_{ip_hash}`). Honeypot + nonce protected. No CPT — email-only. |
-| `[glc_wildlife_log]` | Chronological list of wildlife sightings — all `cleanup_event` posts with a `wildlife_obs` value, sorted newest first. Each entry shows date, site name, observation text, and a "View outing →" link. Used on the Stats page (`#wildlife` anchor). |
+| `[glc_wildlife_log]` | Chronological list of wildlife sightings — all `cleanup_event` posts with a `wildlife_obs` value, sorted newest first. Each entry shows date, site name, observation text, and a "View outing →" link. **No longer called by page-stats.php** (superseded by the redesign's wildlife chip cards) but still available as a shortcode. |
 
 ---
 
@@ -179,7 +179,7 @@ great-lake-cleaners-theme/
   front-page.php               — home page template
   page.php                     — standard page template
   page-photos.php              — Photos page template (Template Name: Photos) — calls [glc_gallery]
-  page-stats.php               — Stats page template (Template Name: Stats) — calls [glc_timeline] + [glc_impact_highlights] + [glc_wildlife_log]
+  page-stats.php               — Stats page template (Template Name: Stats) — fully self-contained redesign; no shortcodes. Queries data directly and renders inline SVG charts + hero + wildlife chips.
   page-submit-cleanup.php      — Submit a Cleanup page shell + sidebar
   page-report-issue.php        — Report an Issue page shell + sidebar
   page-join-crew.php           — Join our Crew page (Template Name: Join our Crew) — embeds [glc_join_crew]
@@ -205,6 +205,7 @@ great-lake-cleaners-theme/
       icon-timer.svg           — Twemoji stopwatch (CC-BY 4.0)
       icon-wave.svg            — Twemoji wave (CC-BY 4.0)
       icon-bank.svg            — custom river bank / shoreline icon (Twemoji palette)
+      garbage-bag.png          — gradient garbage-bag icon (109×150, transparent) used in stats page haul rows and scale label
     js/
       nav.js                   — mobile menu toggle + compact header on scroll
 ```
@@ -213,6 +214,7 @@ great-lake-cleaners-theme/
 
 - **Navy:** `#1a4a6b` (single value — `--glc-navy`)
 - **Gold:** `#f5a623` (`--glc-gold`)
+- **Gold deep:** `#e08e12` (`--glc-gold-deep`) — used for eyebrow text and dot-grid scale label on stats page
 - **Green:** `--glc-green` (accent for pills, labels, stat labels)
 - **Green dark:** `--glc-green-dark: #1a5e35` — ≈7:1 on green-light; used for `.glc-fp-label` and `.glc-community-badge` text (WCAG AA)
 - **Green light:** `--glc-green-light` (backgrounds for cards, tips)
@@ -398,6 +400,38 @@ Left-aligned throughout (pill, heading, intro text, impact section). Fetches all
 
 The map section div has `id="cleanups-map"` and `scroll-margin-top: 110px` — the River Corridors footer stat links directly to it. The section H2 reads "Every site tells a story" (no trailing period).
 
+### Stats Page (`/stats/`) — `.dirCL-*` redesign
+
+**Template:** `page-stats.php` — fully self-contained. No shortcodes. Queries `cleanup_event` + `glc_submission` posts directly and renders everything inline.
+
+**Layout (top → bottom):**
+1. **Hero** (`.dirCL-hero`, `padding: 58px 64px 52px`) — two-column grid (`1.3fr 1fr`, `gap: 28px`). Left: giant gradient debris-kg number (`.dirCL-num`, `clamp(110px,14vw,168px)`, rises into view via `clip-path` animation), subhead, body copy, two CTAs. Right: moose weight factoid + "Our recent hauls" bag pictograph (last 3 calendar months, 1 bag ≈ 20 kg).
+2. **Debris & Recycling** (`.dirCL-sec--alt`, `id="debris"`) — inline SVG area chart (two series: navy debris, gold recycled), item dot pictograph (gold dots, 11px, 28-column grid).
+3. **Hours** (`.dirCL-sec`, `id="hours"`) — inline SVG area chart (green, single series).
+4. **Wildlife** (`.dirCL-sec--alt`, `id="wildlife"`) — chip cards (`.dirCL-wchip`), emoji auto-matched from observation text, linked to outing.
+
+**CSS class prefix:** `.dirCL-*` — all stats-page layout classes live in the "Stats Impact Redesign" block in `style.css`.
+
+**`.glc-main` padding override:** `.page-template-page-stats .glc-main { padding-left: 0; padding-right: 0; padding-bottom: 0; }` — sections provide their own padding so off-white bands extend edge-to-edge within the 1140px content column. Do not add side padding back to `.glc-main` for this page.
+
+**SVG charts:** rendered server-side in PHP (no Chart.js on this page). `glc_stats_smooth_path()` and `glc_stats_area_chart()` are defined locally in `page-stats.php`. Charts use Catmull-Rom → cubic bezier curves (tension 0.16), `pathLength="2600"` for consistent stroke-dash animation across varying path lengths.
+
+**Animations:**
+- Hero number: `glc-rise` (`clip-path` inset from bottom, 2.1s)
+- Chart lines: `glc-line-draw` (stroke-dashoffset 2600→0, 1.9s)
+- Chart areas: `glc-fade` (opacity 0→1, 1.3s)
+- Dots: `glc-pop` (scale 0.5→1 + fade, staggered by diagonal wave). Dots are hidden by default (`opacity:0; transform:scale(.5)`); an `IntersectionObserver` adds `.glc-dots-visible` to `.dirCL-itemblock` when 10% enters viewport, which triggers the animation. All animations respect `prefers-reduced-motion`.
+
+**Moose factoid:** `count = max(1, round(debris_kg / 350))`. Caps at 12 emoji, shows `+N` beyond. Label: "one moose" (singular) or "N moose".
+
+**Recent hauls:** debris bucketed by calendar month, last 3 months shown. `bags = max(1, round(monthKg / 20))`. Uses `garbage-bag.png` from `assets/images/`.
+
+**Item dot pictograph:** self-scaling — `itemsPerDot` chosen from `[2,5,10,20,25,50,…]` so grid never exceeds 672 dots (28 cols × 24 rows). Animation stagger delay = `500 + (col + row) * 16` ms.
+
+**Wildlife emoji:** `glc_stats_wildlife_emoji()` (defined in `page-stats.php`) pattern-matches observation text to assign emoji (turtle→🐢, goose→🪿, duck→🦆, heron→🪶, deer→🦌, moose→🫎, beaver→🦫, otter→🦦, frog→🐸, snake→🐍, hawk/eagle→🦅, crane→🦩, fish→🐟, fox→🦊, default→🌿).
+
+**Footer anchor links** (`#debris`, `#hours`) still work — `.dirCL-sec` has `scroll-margin-top: 110px`.
+
 ### Single Event Pages
 
 Both `single-cleanup_event.php` and `single-glc_submission.php` share `.glc-single-sub-wrap` and `.glc-single-event-map`. Both have `isolation: isolate` on the map wrapper. Layout: back link → header → featured image → blog body → stat tiles → finds → map.
@@ -457,7 +491,7 @@ Form section order:
 |---|---|---|---|
 | Home | `home` | (default) | Blank — set as static front page |
 | Photos | `photos` | Photos | Leave blank — template calls `[glc_gallery]` |
-| Stats | `stats` | Stats | Leave blank — template calls `[glc_timeline]` + `[glc_impact_highlights]` |
+| Stats | `stats` | Stats | Leave blank — template is self-contained (no shortcodes needed) |
 | Submit a Cleanup | `submit-cleanup` | (default) | Leave blank — template handles layout |
 | Privacy Policy | `privacy-policy` | (default) | Leave blank — template handles content |
 | Report an Issue | `report-issue` | (default) | Leave blank — template handles layout |
