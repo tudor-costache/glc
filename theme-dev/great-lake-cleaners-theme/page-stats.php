@@ -325,27 +325,15 @@ function glc_stats_area_chart( $series, $height, $days, $max_day, $first_ts = 0 
 	return ob_get_clean();
 }
 
-// Simple emoji mapper for wildlife observations
-function glc_stats_wildlife_emoji( $obs ) {
+// Image mapper for wildlife observations — returns filename relative to assets/images, or null.
+function glc_stats_wildlife_img( $obs ) {
 	$obs = strtolower( $obs );
-	if ( strpos( $obs, 'turtle' )  !== false ) return '🐢';
-	if ( strpos( $obs, 'goose' )   !== false
-	  || strpos( $obs, 'geese' )   !== false ) return '🪿';
-	if ( strpos( $obs, 'duck' )    !== false ) return '🦆';
-	if ( strpos( $obs, 'heron' )   !== false ) return '🪶';
-	if ( strpos( $obs, 'deer' )    !== false ) return '🦌';
-	if ( strpos( $obs, 'moose' )   !== false ) return '🫎';
-	if ( strpos( $obs, 'beaver' )  !== false ) return '🦫';
-	if ( strpos( $obs, 'otter' )   !== false ) return '🦦';
-	if ( strpos( $obs, 'frog' )    !== false
-	  || strpos( $obs, 'toad' )    !== false ) return '🐸';
-	if ( strpos( $obs, 'snake' )   !== false ) return '🐍';
-	if ( strpos( $obs, 'hawk' )    !== false
-	  || strpos( $obs, 'eagle' )   !== false ) return '🦅';
-	if ( strpos( $obs, 'crane' )   !== false ) return '🦩';
-	if ( strpos( $obs, 'fish' )    !== false ) return '🐟';
-	if ( strpos( $obs, 'fox' )     !== false ) return '🦊';
-	return '🌿';
+	if ( strpos( $obs, 'snapping' ) !== false ) return 'snapping-turtle.png';
+	if ( strpos( $obs, 'painted' )  !== false ) return 'painted-turtle.png';
+	if ( strpos( $obs, 'goose' )    !== false
+	  || strpos( $obs, 'geese' )    !== false ) return 'canada-goose.png';
+	if ( strpos( $obs, 'snake' )    !== false ) return 'snake.png';
+	return null;
 }
 
 // Asset paths
@@ -534,18 +522,33 @@ get_header();
 		<p class="dirCL-sec-note">We're not just removing debris — we're protecting habitat.</p>
 
 		<div class="dirCL-wild">
-			<?php foreach ( $_wildlife_events as $_we ) :
-				$_wobs  = get_post_meta( $_we->ID, 'wildlife_obs',  true );
-				$_wsite = get_post_meta( $_we->ID, 'site_name',     true );
-				$_wdate = get_post_meta( $_we->ID, 'cleanup_date',  true );
+			<?php
+			$_wi = 0;
+			foreach ( $_wildlife_events as $_we ) :
+				$_wobs     = get_post_meta( $_we->ID, 'wildlife_obs', true );
+				$_wsite    = get_post_meta( $_we->ID, 'site_name',    true );
+				$_wdate    = get_post_meta( $_we->ID, 'cleanup_date', true );
 				$_wdate_fmt = $_wdate ? date( 'M j, Y', strtotime( $_wdate ) ) : '';
-				$_wemoji = glc_stats_wildlife_emoji( $_wobs );
+				$_wimg     = glc_stats_wildlife_img( $_wobs );
+				$_wdelay   = number_format( 0.15 + $_wi * 0.12, 2 ) . 's';
+				$_wi++;
 			?>
-			<a class="dirCL-wchip" href="<?php echo esc_url( get_permalink( $_we->ID ) ); ?>">
-				<div class="e" aria-hidden="true"><?php echo $_wemoji; ?></div>
-				<div>
+			<a class="dirCL-wchip" href="<?php echo esc_url( get_permalink( $_we->ID ) ); ?>"
+			   style="--d:<?php echo esc_attr( $_wdelay ); ?>">
+				<?php if ( $_wimg ) : ?>
+				<div class="wfig">
+					<img src="<?php echo esc_url( get_template_directory_uri() . '/assets/images/' . $_wimg ); ?>"
+					     alt="<?php echo esc_attr( $_wobs ); ?>" draggable="false" />
+				</div>
+				<?php endif; ?>
+				<div class="wbody">
+					<?php if ( $_wdate_fmt ) : ?>
+					<div class="wdate"><?php echo esc_html( $_wdate_fmt ); ?></div>
+					<?php endif; ?>
 					<div class="obs"><?php echo esc_html( $_wobs ); ?></div>
-					<div class="meta"><?php echo esc_html( trim( $_wsite . ( $_wsite && $_wdate_fmt ? ' · ' : '' ) . $_wdate_fmt ) ); ?></div>
+					<?php if ( $_wsite ) : ?>
+					<div class="wsite"><?php echo esc_html( $_wsite ); ?></div>
+					<?php endif; ?>
 				</div>
 			</a>
 			<?php endforeach; ?>

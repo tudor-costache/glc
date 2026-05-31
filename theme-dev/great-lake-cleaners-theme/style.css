@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.0.9
+Version:     1.1.0
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -754,12 +754,13 @@ a:hover { color: var(--glc-green); }
     font-family: var(--glc-font-display);
     font-weight: 800;
     color: var(--glc-navy);
-    font-size: 1rem;
+    font-size: 1.18rem;
     margin-bottom: 10px;
     text-decoration: none;
     display: block;
+    transition: color .18s ease;
 }
-.glc-fp-cleanup-card .glc-fp-card-title:hover { text-decoration: underline; }
+.glc-fp-cleanup-card .glc-fp-card-title:hover { color: var(--glc-gold-deep); text-decoration: none; }
 .glc-fp-cleanup-card .glc-fp-card-stats {
     display: flex;
     flex-wrap: wrap;
@@ -3355,31 +3356,62 @@ a:hover { color: var(--glc-green); }
     animation: glc-pop .4s ease both;
 }
 
-/* Wildlife chips */
-.dirCL-wild { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+/* Wildlife chips — illustration-led cards (silhouettes match the moose & brand palette) */
+.dirCL-wild { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .dirCL-wchip {
-    background: #fafaf8;
+    background: var(--glc-off-white);
     border: 1px solid var(--glc-border);
     border-radius: 16px;
-    padding: 22px;
+    overflow: hidden;
     display: flex;
-    gap: 16px;
-    align-items: center;
+    flex-direction: column;
     text-decoration: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    color: inherit;
+    box-shadow: 0 10px 30px rgba(26,74,107,.06);
+    transition: border-color .18s ease, box-shadow .18s ease;
 }
-.dirCL-wchip:hover {
-    border-color: var(--glc-navy);
-    box-shadow: 0 4px 16px rgba(26,74,107,.1);
+.dirCL-wchip:hover,
+.dirCL-wchip:focus-visible {
+    border-color: var(--glc-gold);
+    box-shadow: 0 14px 34px rgba(26,74,107,.12);
+    outline: none;
 }
-.dirCL-wchip .e  { font-size: 2.6rem; flex-shrink: 0; }
+.dirCL-wchip:hover .obs,
+.dirCL-wchip:focus-visible .obs { color: var(--glc-gold-deep); }
+.dirCL-wchip .wfig {
+    position: relative;
+    padding: 24px 22px 14px;
+    min-height: 160px;
+    background: linear-gradient(150deg, #f3f9fb 0%, #edf6f0 100%);
+    border-bottom: 1px solid var(--glc-border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+.dirCL-wchip .wfig img {
+    width: 90%;
+    max-width: 250px;
+    height: auto;
+    display: block;
+    animation: glc-rise 1.5s var(--d, .2s) cubic-bezier(.4,0,.2,1) both;
+}
+.dirCL-wchip .wbody { padding: 16px 20px 20px; }
 .dirCL-wchip .obs {
     font-family: var(--glc-font-display);
     font-weight: 800;
-    font-size: 1.15rem;
+    font-size: 1.18rem;
     color: var(--glc-navy);
+    transition: color .18s ease;
 }
-.dirCL-wchip .meta { font-size: .84rem; color: var(--glc-muted); margin-top: 3px; }
+.dirCL-wchip .wdate {
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant: small-caps;
+    letter-spacing: 0.08em;
+    color: var(--glc-green);
+    margin-bottom: 4px;
+}
+.dirCL-wchip .wsite { font-size: .84rem; color: var(--glc-muted); margin-top: 3px; }
 
 /* ── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 760px) {
