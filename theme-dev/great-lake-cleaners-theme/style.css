@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.0.4
+Version:     1.0.9
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -2966,6 +2966,7 @@ a:hover { color: var(--glc-green); }
     .glc-dots-visible .dirCL-dots i,
     .dirCL-haul-bags img { animation: none; opacity: 1; transform: scale(1); }
     .dirCL-eyebrow .dot  { animation: none; }
+    .dirCL-herostage-moose .dirCL-mooseimg { animation: none; }
 }
 
 /* Stats page — sections handle their own padding edge-to-edge */
@@ -3069,7 +3070,103 @@ a:hover { color: var(--glc-green); }
 }
 .dirCL-sub b { color: var(--glc-green-dark); font-weight: 700; }
 
-/* Moose factoid */
+/* ── Merged hero panel — number + moose as one unit ────────────────────────── */
+.dirCL-herostage {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.04fr 0.96fr;
+    gap: 24px;
+    align-items: center;
+    border-radius: 22px;
+    padding: 36px 42px;
+    overflow: hidden;
+}
+.dirCL-herostage.is-soft {
+    background: linear-gradient(118deg, #f3f9fb 0%, #edf6f0 100%);
+    box-shadow: 0 16px 44px rgba(26,74,107,.08);
+}
+.dirCL-herostage.is-plain {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+.dirCL-herostage-text {
+    display: flex;
+    flex-direction: column;
+}
+.dirCL-herostage-text .dirCL-hl { margin-bottom: 6px; }
+.dirCL-herostage-text .dirCL-hero-cta { margin-top: 28px; }
+
+/* Flowing lead sentence: bold display opener → body, one paragraph */
+.dirCL-lede {
+    font-size: 1.12rem;
+    color: var(--glc-muted);
+    line-height: 1.55;
+    max-width: 40ch;
+}
+.dirCL-lede .lede-h {
+    display: block;
+    font-family: var(--glc-font-display);
+    font-weight: 900;
+    font-size: 30px;
+    color: var(--glc-navy);
+    line-height: 1.06;
+    letter-spacing: -0.01em;
+    margin-bottom: 12px;
+}
+.dirCL-lede .mp { color: var(--glc-green-dark); font-weight: 700; }
+
+/* Moose illustration column */
+.dirCL-herostage-moose {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.dirCL-herostage-moose .moose-q {
+    font-family: var(--glc-font-display);
+    font-weight: 800;
+    font-size: 1.22rem;
+    color: var(--glc-gold-deep, #e08e12);
+    letter-spacing: -0.005em;
+    line-height: 1.15;
+    text-align: center;
+    margin-bottom: 8px;
+}
+.dirCL-herostage-moose .dirCL-moosewrap { position: relative; }
+.dirCL-herostage-moose .dirCL-mooseimg {
+    width: 500px;
+    max-width: 100%;
+    height: auto;
+    display: block;
+    animation: glc-rise 2.1s 0.3s cubic-bezier(.4,0,.2,1) both;
+}
+.dirCL-herostage-moose .moose-label {
+    position: absolute;
+    top: 47%;
+    left: 60%;
+    transform: translate(-50%, -50%);
+    font-family: var(--glc-font-display);
+    font-weight: 800;
+    font-size: 26px;
+    color: #f5a623;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    text-shadow: 0 2px 13px rgba(14,43,64,.4);
+}
+.dirCL-herostage-moose .moose-cap {
+    font-family: var(--glc-font-display);
+    font-weight: 900;
+    font-size: 1.5rem;
+    color: var(--glc-navy);
+    letter-spacing: -0.01em;
+    margin-top: 8px;
+    text-align: center;
+}
+
+/* Moose */
 .dirCL-weighcard { padding: 0; }
 .dirCL-weighcard .cap {
     font-family: var(--glc-font-display);
@@ -3154,6 +3251,19 @@ a:hover { color: var(--glc-green); }
     animation: glc-pop .42s ease both;
 }
 .dirCL-haul-bags img:first-child { margin-left: 0; }
+
+/* Wave section separator — matches .glc-wave-divider on the front page */
+.dirCL-wave {
+    display: block;
+    width: 100%;
+    height: 22px;
+    margin: 0;
+    padding: 0 64px;
+    color: #c3d5e1;
+    overflow: visible;
+    box-sizing: border-box;
+}
+.dirCL-wave svg { width: 100%; height: 100%; display: block; }
 
 /* ── Content sections ───────────────────────────────────────────────────────── */
 .dirCL-sec {
@@ -3276,6 +3386,9 @@ a:hover { color: var(--glc-green); }
     .page-template-page-stats .glc-main { padding: 0; }
     .dirCL-hero { padding: 40px 28px; }
     .dirCL-hero-grid { grid-template-columns: 1fr; gap: 32px; }
+    .dirCL-herostage { grid-template-columns: 1fr; gap: 18px; padding: 26px 22px; }
+    .dirCL-herostage-moose .moose-label { font-size: 20px; }
+    .dirCL-wave { padding: 0 28px; }
     .dirCL-sec  { padding: 36px 28px; }
     .dirCL-wild { grid-template-columns: 1fr; }
     .dirCL-dots { grid-template-columns: repeat(14, 1fr); }

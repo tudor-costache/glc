@@ -205,7 +205,8 @@ great-lake-cleaners-theme/
       icon-timer.svg           — Twemoji stopwatch (CC-BY 4.0)
       icon-wave.svg            — Twemoji wave (CC-BY 4.0)
       icon-bank.svg            — custom river bank / shoreline icon (Twemoji palette)
-      garbage-bag.png          — gradient garbage-bag icon (109×150, transparent) used in stats page haul rows and scale label
+      garbage-bag.png          — gradient garbage-bag icon (109×150, transparent) used in stats page recent-hauls pictograph (hidden by default)
+      moose-scene.png          — moose-and-river illustration (1080×733, transparent PNG) used in stats page hero; displayed at 500px wide. No drop-shadow — transparent PNG + drop-shadow creates an artefact border.
     js/
       nav.js                   — mobile menu toggle + compact header on scroll
 ```
@@ -405,28 +406,27 @@ The map section div has `id="cleanups-map"` and `scroll-margin-top: 110px` — t
 **Template:** `page-stats.php` — fully self-contained. No shortcodes. Queries `cleanup_event` + `glc_submission` posts directly and renders everything inline.
 
 **Layout (top → bottom):**
-1. **Hero** (`.dirCL-hero`, `padding: 58px 64px 52px`) — two-column grid (`1.3fr 1fr`, `gap: 28px`). Left: giant gradient debris-kg number (`.dirCL-num`, `clamp(110px,14vw,168px)`, rises into view via `clip-path` animation), subhead, body copy, two CTAs. Right: moose weight factoid + "Our recent hauls" bag pictograph (last 3 calendar months, 1 bag ≈ 20 kg).
-2. **Debris & Recycling** (`.dirCL-sec--alt`, `id="debris"`) — inline SVG area chart (two series: navy debris, gold recycled), item dot pictograph (gold dots, 11px, 28-column grid).
-3. **Hours** (`.dirCL-sec`, `id="hours"`) — inline SVG area chart (green, single series).
-4. **Wildlife** (`.dirCL-sec--alt`, `id="wildlife"`) — chip cards (`.dirCL-wchip`), emoji auto-matched from observation text, linked to outing.
+1. **Hero** (`.dirCL-hero`, `padding: 58px 64px 52px`) — eyebrow pill ("Stopping plastic at the source") then `.dirCL-herostage is-plain` merged panel (2-column grid `1.04fr 0.96fr`, gap 24px, no container chrome — sits directly on white). Left (`.dirCL-herostage-text`): giant gradient debris-kg number (`.dirCL-num`, `clamp(110px,14vw,168px)`, rises via `clip-path` animation), flowing `.dirCL-lede` sentence (bold `.lede-h` opener + body + `.mp` microplastics highlight), two CTAs. Right (`.dirCL-herostage-moose`): gold question "How much debris did we remove?", `moose-scene.png` illustration (500px wide, rises via `glc-rise`), gold "one moose" label absolutely positioned over the body (`top:47%; left:60%`), navy "lifted out of the river" caption below.
+2. **Wave separator** (`.dirCL-wave`) — `<svg viewBox="0 0 1200 22">` dual-path wave, `color: #c3d5e1` via `currentColor`, same markup as `.glc-wave-divider` on the front page. Appears before each content section (debris, hours, wildlife).
+3. **Debris & Recycling** (`.dirCL-sec`, `id="debris"`) — inline SVG area chart (two series: navy debris, gold recycled), item dot pictograph (gold dots, 11px, 28-column grid).
+4. **Hours** (`.dirCL-sec`, `id="hours"`) — inline SVG area chart (green, single series).
+5. **Wildlife** (`.dirCL-sec`, `id="wildlife"`) — chip cards (`.dirCL-wchip`), emoji auto-matched from observation text, linked to outing.
 
 **CSS class prefix:** `.dirCL-*` — all stats-page layout classes live in the "Stats Impact Redesign" block in `style.css`.
 
-**`.glc-main` padding override:** `.page-template-page-stats .glc-main { padding-left: 0; padding-right: 0; padding-bottom: 0; }` — sections provide their own padding so off-white bands extend edge-to-edge within the 1140px content column. Do not add side padding back to `.glc-main` for this page.
+**`.glc-main` padding override:** `.page-template-page-stats .glc-main { padding-left: 0; padding-right: 0; padding-bottom: 0; }` — sections provide their own padding so content extends edge-to-edge within the 1140px column. Do not add side padding back to `.glc-main` for this page. **Consequence for `.dirCL-wave`:** because `.glc-main` has no side padding, the wave spans the full column width by default. `.dirCL-wave` has `padding: 0 64px` (matching `.dirCL-sec`) so it aligns with the content above and below rather than going gutter-to-gutter.
 
 **SVG charts:** rendered server-side in PHP (no Chart.js on this page). `glc_stats_smooth_path()` and `glc_stats_area_chart()` are defined locally in `page-stats.php`. Charts use Catmull-Rom → cubic bezier curves (tension 0.16), `pathLength="2600"` for consistent stroke-dash animation across varying path lengths.
 
 **Animations:**
-- Hero number: `glc-rise` (`clip-path` inset from bottom, 2.1s)
+- Hero number + moose: `glc-rise` (`clip-path` inset from bottom, 2.1s)
 - Chart lines: `glc-line-draw` (stroke-dashoffset 2600→0, 1.9s)
 - Chart areas: `glc-fade` (opacity 0→1, 1.3s)
 - Dots: `glc-pop` (scale 0.5→1 + fade, staggered by diagonal wave). Dots are hidden by default (`opacity:0; transform:scale(.5)`); an `IntersectionObserver` adds `.glc-dots-visible` to `.dirCL-itemblock` when 10% enters viewport, which triggers the animation. All animations respect `prefers-reduced-motion`.
 
-**Moose factoid:** `count = max(1, round(debris_kg / 350))`. Caps at 12 emoji, shows `+N` beyond. Label: "one moose" (singular) or "N moose".
+**Moose metaphor:** `count = max(1, round(debris_kg / 350))`. Label: "one moose" (singular) or "N moose". Rendered as `moose-scene.png` (transparent PNG, moose standing in a river with debris collage at the base) displayed at 500px wide with gold label overlay. No drop-shadow on the image — the PNG is transparent and a drop-shadow creates an unexpected border artefact.
 
-**Recent hauls:** debris bucketed by calendar month, last 3 months shown. `bags = max(1, round(monthKg / 20))`. Uses `garbage-bag.png` from `assets/images/`.
-
-**Item dot pictograph:** self-scaling — `itemsPerDot` chosen from `[2,5,10,20,25,50,…]` so grid never exceeds 672 dots (28 cols × 24 rows). Animation stagger delay = `500 + (col + row) * 16` ms.
+**Item dot pictograph:** self-scaling — `itemsPerDot` chosen from `[2,5,10,20,25,50,…]` so grid never exceeds 672 dots (28 cols × 24 rows). Dots are gold (`#f5a623`), `max-width: 11px`. Animation stagger delay = `500 + (col + row) * 16` ms.
 
 **Wildlife emoji:** `glc_stats_wildlife_emoji()` (defined in `page-stats.php`) pattern-matches observation text to assign emoji (turtle→🐢, goose→🪿, duck→🦆, heron→🪶, deer→🦌, moose→🫎, beaver→🦫, otter→🦦, frog→🐸, snake→🐍, hawk/eagle→🦅, crane→🦩, fish→🐟, fox→🦊, default→🌿).
 

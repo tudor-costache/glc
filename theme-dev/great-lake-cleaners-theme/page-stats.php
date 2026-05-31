@@ -119,7 +119,7 @@ $_moose_count = max( 1, (int) round( $_total_debris / $_MOOSE_KG ) );
 $_moose_shown = min( $_moose_count, $_MAX_MOOSE );
 $_moose_label = $_moose_count === 1 ? 'one moose' : number_format( $_moose_count ) . ' moose';
 
-// Recent haul: last 3 calendar months with data (1 bag ≈ 20 kg)
+// Recent haul: last 3 calendar months with data (1 bag ≈ 15 kg)
 $_month_haul = [];
 foreach ( $_grouped as $_date => $_totals ) {
 	$_mk = substr( $_date, 0, 7 );  // YYYY-MM
@@ -134,7 +134,7 @@ $_haul_rows = [];
 foreach ( $_recent_months as $_m ) {
 	$_haul_rows[] = [
 		'name' => $_m['name'],
-		'bags' => max( 1, (int) round( $_m['kg'] / 20 ) ),
+		'bags' => max( 1, (int) round( $_m['kg'] / 15 ) ),
 	];
 }
 
@@ -370,21 +370,19 @@ get_header();
 			Stopping plastic at the source
 		</div>
 
-		<div class="dirCL-hero-grid">
+		<div class="dirCL-herostage is-plain">
 
-			<!-- LEFT: big number + copy + CTAs -->
-			<div class="dirCL-hero-left">
+			<!-- LEFT: big number + flowing lede + CTAs -->
+			<div class="dirCL-herostage-text">
 				<div class="dirCL-hl">
 					<span class="dirCL-num" aria-label="<?php echo esc_attr( $_debris_display . ' kilograms' ); ?>">
 						<?php echo esc_html( $_debris_display ); ?><small>kg</small>
 					</span>
-					<span class="cap2">of plastics and debris hauled out</span>
 				</div>
-				<p class="dirCL-sub">
-					from local waterways by hand and by paddle.
-					We intercept debris upstream, before it fragments into
-					<b>microplastics</b> and enters our lakes.
-					Help keep our waters clean:
+				<p class="dirCL-lede">
+					<b class="lede-h">of plastics and debris hauled out from local waterways</b>
+					by hand and by paddle. We intercept debris upstream, before it fragments into
+					<b class="mp">microplastics</b> and enters our lakes. Help keep our waters clean:
 				</p>
 				<div class="dirCL-hero-cta">
 					<a class="glc-btn-primary" href="<?php echo esc_url( home_url( '/join-crew/' ) ); ?>">Join the Crew</a>
@@ -392,56 +390,31 @@ get_header();
 				</div>
 			</div>
 
-			<!-- RIGHT: moose factoid + recent haul -->
-			<div class="dirCL-hero-right">
-
-				<!-- Moose weight factoid -->
-				<div class="dirCL-weighcard">
-					<div class="cap">What <?php echo esc_html( $_debris_display ); ?> kg weighs</div>
-					<div class="dirCL-moose" aria-label="<?php echo esc_attr( 'Approximately ' . $_moose_label ); ?>">
-						<?php for ( $i = 0; $i < $_moose_shown; $i++ ) : ?>
-						<span class="m" aria-hidden="true">🫎</span>
-						<?php endfor; ?>
-						<?php if ( $_moose_count > $_MAX_MOOSE ) : ?>
-						<span class="more">+<?php echo $_moose_count - $_MAX_MOOSE; ?></span>
-						<?php endif; ?>
-					</div>
-					<div class="eqline">≈ <b><?php echo esc_html( $_moose_label ); ?></b>, lifted out of the river</div>
+			<!-- RIGHT: moose illustration -->
+			<div class="dirCL-herostage-moose">
+				<div class="moose-q">How much debris did we remove?</div>
+				<div class="dirCL-moosewrap">
+					<img class="dirCL-mooseimg"
+					     src="<?php echo esc_url( get_template_directory_uri() . '/assets/images/moose-scene.png' ); ?>"
+					     alt="<?php echo esc_attr( '≈ ' . $_moose_label . ', lifted out of the river' ); ?>"
+					     draggable="false" />
+					<div class="moose-label" aria-hidden="true"><?php echo esc_html( $_moose_label ); ?></div>
 				</div>
+				<div class="moose-cap">lifted out of the river</div>
+			</div>
 
-				<!-- Recent haul bag pictograph -->
-				<?php if ( ! empty( $_haul_rows ) ) : ?>
-				<div class="dirCL-haul">
-					<div class="dirCL-haul-head">
-						<h4>Our recent hauls</h4>
-						<span class="dirCL-haul-scale">
-							<img src="<?php echo $_bag_url; ?>" alt="" width="13" aria-hidden="true">
-							Each bag = <b>~20 kg</b> of debris
-						</span>
-					</div>
-					<div class="dirCL-haul-rows">
-						<?php foreach ( $_haul_rows as $_row ) : ?>
-						<div class="dirCL-haul-row">
-							<div class="ml"><?php echo esc_html( $_row['name'] ); ?></div>
-							<div class="dirCL-haul-bags" aria-label="<?php echo esc_attr( $_row['bags'] . ' ' . ( $_row['bags'] === 1 ? 'bag' : 'bags' ) ); ?>">
-								<?php for ( $i = 0; $i < $_row['bags']; $i++ ) : ?>
-								<img src="<?php echo $_bag_url; ?>" alt=""
-								     style="animation-delay:<?php echo 300 + $i * 55; ?>ms"
-								     aria-hidden="true">
-								<?php endfor; ?>
-							</div>
-						</div>
-						<?php endforeach; ?>
-					</div>
-				</div>
-				<?php endif; ?>
-
-			</div><!-- .dirCL-hero-right -->
-		</div><!-- .dirCL-hero-grid -->
+		</div><!-- .dirCL-herostage -->
 	</div><!-- .dirCL-hero -->
 
+	<div class="dirCL-wave" aria-hidden="true">
+		<svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+			<path d="M0,11 C150,3 300,19 450,11 C600,3 750,19 900,11 C1050,3 1200,19 1200,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+			<path d="M0,16 C150,8 300,24 450,16 C600,8 750,24 900,16 C1050,8 1200,24 1200,16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.45"/>
+		</svg>
+	</div>
+
 	<!-- ═══ DEBRIS & RECYCLING ══════════════════════════════════════════════ -->
-	<div class="dirCL-sec dirCL-sec--alt" id="debris">
+	<div class="dirCL-sec" id="debris">
 		<h3 class="dirCL-sec-h">Debris &amp; Recycling <b>diverted</b> over time</h3>
 		<p class="dirCL-sec-note">Everything we collect by hand and by paddle helps reduce the microplastic load in our Great Lakes.</p>
 
@@ -506,6 +479,13 @@ get_header();
 		</div>
 	</div>
 
+	<div class="dirCL-wave" aria-hidden="true">
+		<svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+			<path d="M0,11 C150,3 300,19 450,11 C600,3 750,19 900,11 C1050,3 1200,19 1200,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+			<path d="M0,16 C150,8 300,24 450,16 C600,8 750,24 900,16 C1050,8 1200,24 1200,16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.45"/>
+		</svg>
+	</div>
+
 	<!-- ═══ HOURS ON THE WATER ══════════════════════════════════════════════ -->
 	<div class="dirCL-sec" id="hours">
 		<h3 class="dirCL-sec-h"><?php echo esc_html( $_hours_display ); ?> hours <b>on the water</b></h3>
@@ -540,9 +520,16 @@ get_header();
 		</div>
 	</div>
 
+	<div class="dirCL-wave" aria-hidden="true">
+		<svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+			<path d="M0,11 C150,3 300,19 450,11 C600,3 750,19 900,11 C1050,3 1200,19 1200,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+			<path d="M0,16 C150,8 300,24 450,16 C600,8 750,24 900,16 C1050,8 1200,24 1200,16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.45"/>
+		</svg>
+	</div>
+
 	<!-- ═══ WILDLIFE ════════════════════════════════════════════════════════ -->
 	<?php if ( ! empty( $_wildlife_events ) ) : ?>
-	<div class="dirCL-sec dirCL-sec--alt" id="wildlife">
+	<div class="dirCL-sec" id="wildlife">
 		<h3 class="dirCL-sec-h">Who we met <b>along the way</b></h3>
 		<p class="dirCL-sec-note">We're not just removing debris — we're protecting habitat.</p>
 

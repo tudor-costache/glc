@@ -6,7 +6,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.0.4' );
+define( 'GLC_THEME_VERSION', '1.0.9' );
 
 // ── Theme setup ───────────────────────────────────────────────────────────────
 add_action( 'after_setup_theme', function() {
