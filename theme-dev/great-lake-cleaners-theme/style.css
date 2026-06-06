@@ -3381,7 +3381,7 @@ a:hover { color: var(--glc-green); }
 .dirCL-wchip .wfig {
     position: relative;
     padding: 24px 22px 14px;
-    min-height: 160px;
+    height: 160px;
     background: linear-gradient(150deg, #f3f9fb 0%, #edf6f0 100%);
     border-bottom: 1px solid var(--glc-border);
     display: flex;
@@ -3389,9 +3389,10 @@ a:hover { color: var(--glc-green); }
     justify-content: center;
 }
 .dirCL-wchip .wfig img {
-    width: 90%;
+    width: auto;
     max-width: 250px;
     height: auto;
+    max-height: 100%;
     display: block;
     animation: glc-rise 1.5s var(--d, .2s) cubic-bezier(.4,0,.2,1) both;
 }

@@ -184,11 +184,12 @@ Public form via `[glc_submit_form]` shortcode. Submissions land as `pending`. Ad
 | Volunteers | `glc_volunteers` |
 | Person-Hours | `glc_hours` |
 | Notable Finds | `glc_notable_finds` |
+| Wildlife Observed | `glc_wildlife_obs` / `wildlife_obs` | dual-key — see note below |
 | Instagram URL | `glc_instagram_url` |
 | Photo Repost Consent | `glc_photo_repost_ok` |
 | Photo IDs | `glc_photo_ids` |
 
-Note: `items_recycled` and `weight_kg` are stored under those exact keys (matching `cleanup_event`) so `glc_get_impact_stats()` can count them without special-casing.
+Note: `items_recycled`, `weight_kg`, and `wildlife_obs` are stored under those exact keys (no `glc_` prefix, matching `cleanup_event`) so `glc_get_impact_stats()` and `page-stats.php` can aggregate both CPTs without special-casing. Wildlife is also stored under `glc_wildlife_obs` (prefixed) for admin meta box display. `glc_cleanup_field()` in `shortcodes.php` has an explicit `wildlife_obs` case for `glc_submission` posts that reads the shared key directly.
 
 Note: Phone field was removed from the public submission form. GPS coordinates are now collected via lat/lon inputs + browser geolocation button (requires HTTPS). Person-hours are calculated automatically from duration × volunteers. "Access Point" label replaced with plain "Location". "Number of People" field moved from section 3 ("What You Collected") into section 2 ("The Cleanup") where it belongs logically alongside Duration.
 
@@ -474,7 +475,7 @@ Form section order:
 1. **About You** — name, email
 2. **The Cleanup** — date, duration, number of people, waterway, location, GPS
 3. **What You Collected** — garbage (bags, weight, notes), recycling (cans, bottles)
-4. **Notable Finds & Field Log** — notable finds textarea, Instagram URL
+4. **Notable Finds & Field Log** — notable finds textarea, wildlife observed textarea, Instagram URL
 5. **Photos** — upload + consent checkbox
 
 "Number of People" is in section 2 (not section 3) — it belongs with the outing details, not with what was collected. "Location" (not "Access Point") — the tooltip says "e.g. Riverside Park, Waterloo Ave bridge". Privacy note under submit button links to `/privacy-policy/`.
@@ -601,6 +602,61 @@ Samples background colour from four corners (median, robust to texture). Flood-f
 
 ---
 
+## Python Tool: `prepare_wildlife_asset.py`
+
+Removes backgrounds from wildlife illustration images and exports them as transparent PNGs sized and cropped for the GLC wildlife card asset library.
+
+```bash
+python prepare_wildlife_asset.py input.png output.png [--tolerance 28] [--width 600] [--pad 20]
+```
+
+**What it does:**
+1. Samples background colour from four corners (median)
+2. BFS flood-fills inward from all edges — only edge-reachable pixels are erased, so interior whites (e.g. egg highlights, reflections) are preserved
+3. Auto-crops to the subject's bounding box
+4. Adds padding around the crop (breathing room on the card)
+5. Resizes to target width preserving aspect ratio
+6. Saves as optimised transparent PNG
+
+**Options:**
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--tolerance` | `28` | Colour-distance threshold: 15–20 clean white, 25–30 off-white, 30–35 textured |
+| `--width` | `600` | Output width in pixels; `0` to skip resize |
+| `--pad` | `20` | Pixels of padding around subject after crop |
+
+**Requires:** Python 3, Pillow, NumPy (`pip install Pillow numpy`)
+
+**After generating the PNG — full workflow:**
+1. Copy output to `assets/images/name.png`
+2. Add keyword match in `page-stats.php` → `glc_stats_wildlife_img()`:
+   ```php
+   if ( strpos( $obs, 'nest' ) !== false ) return 'nest.png';
+   ```
+3. Run `repack.ps1`
+
+---
+
+## Python Tool: `resize_uploads.py`
+
+Batch-resizes images in a directory to a maximum dimension, in place. Useful for cleaning up oversized photos submitted via the community submission form.
+
+```bash
+python resize_uploads.py /path/to/wp-content/uploads
+python resize_uploads.py /path/to/wp-content/uploads --max 1200 --quality 85 --dry-run
+```
+
+Walks the directory recursively (JPG, PNG, WebP). Any image wider or taller than `--max` (default 1200) is resized in place, preserving aspect ratio. Images already within the limit are skipped.
+
+**Use `--dry-run` first** to see what would be changed without writing any files.
+
+**Note — no auto-crop:** this tool only resizes. For submitted photos with poor composition, crop manually in an image editor before running. The tool won't alter framing.
+
+**Requires:** Python 3, Pillow (`pip install Pillow`)
+
+---
+
 ## Current File Inventory
 
 | File | Status |
@@ -608,6 +664,8 @@ Samples background colour from four corners (median, robust to texture). Flood-f
 | `great-lake-cleaners-plugin.zip` | ✅ Installed and live on production |
 | `great-lake-cleaners-theme.zip` | ✅ Installed and live on production |
 | `tracker_to_csv.py` | ✅ Working — pulls from Google Sheets |
+| `prepare_wildlife_asset.py` | ✅ Background removal + crop/resize for wildlife card PNGs |
+| `resize_uploads.py` | ✅ Batch-resize oversized photos in wp-content/uploads |
 | `config.toml` | ✅ Configured |
 | `credentials.json` | ✅ In place (never commit to version control) |
 | `Great_Lake_Cleaners_Outing_Tracker.xlsx` | ✅ Local backup of Google Sheet |

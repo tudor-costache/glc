@@ -99,24 +99,20 @@ foreach ( $_subs as $_s ) {
 }
 $_unique_sites = count( array_unique( array_filter( $_site_names ) ) );
 
-// Corridors count: distinct known corridor names found in site names
-$_known_corridors = [ 'Speed River', 'Eramosa River', 'Hanlon Creek', 'Grand River', 'Guelph Lake' ];
-$_found_corridors = 0;
-foreach ( $_known_corridors as $_corridor ) {
-	foreach ( $_site_names as $_sn ) {
-		if ( stripos( $_sn, $_corridor ) !== false ) {
-			$_found_corridors++;
-			break;
-		}
-	}
+// Corridors count: mirrors glc_get_impact_stats() — distinct 'corridor' meta values (lowercased).
+$_corridors_map = [];
+foreach ( $_events as $_e ) {
+	$_c = trim( (string) get_post_meta( $_e->ID, 'corridor', true ) );
+	if ( $_c !== '' ) $_corridors_map[ strtolower( $_c ) ] = true;
 }
-$_total_corridors = max( 1, $_found_corridors );
+foreach ( $_subs as $_s ) {
+	$_c = trim( (string) get_post_meta( $_s->ID, 'glc_corridor', true ) );
+	if ( $_c !== '' ) $_corridors_map[ strtolower( $_c ) ] = true;
+}
+$_total_corridors = count( $_corridors_map );
 
-// Moose metaphor (1 moose ≈ 350 kg)
-$_MOOSE_KG    = 350;
-$_MAX_MOOSE   = 12;
-$_moose_count = max( 1, (int) round( $_total_debris / $_MOOSE_KG ) );
-$_moose_shown = min( $_moose_count, $_MAX_MOOSE );
+// Moose metaphor (1 moose ≈ 400 kg)
+$_moose_count = max( 1, (int) round( $_total_debris / 400 ) );
 $_moose_label = $_moose_count === 1 ? 'one moose' : number_format( $_moose_count ) . ' moose';
 
 // Recent haul: last 3 calendar months with data (1 bag ≈ 15 kg)
@@ -151,17 +147,17 @@ foreach ( $_steps as $_s ) {
 $_dot_count = (int) ceil( $_total_recyc / $_per_dot );
 $_dot_label = 'Every dot = ' . $_per_dot . ( $_per_dot === 1 ? ' item' : ' items' );
 
-// Wildlife sightings (cleanup_event only, newest first)
+// Wildlife sightings (cleanup_event + approved glc_submission), newest first
 $_wildlife_events = get_posts( [
-	'post_type'      => 'cleanup_event',
+	'post_type'      => [ 'cleanup_event', 'glc_submission' ],
 	'post_status'    => 'publish',
 	'posts_per_page' => -1,
 	'meta_query'     => [ [ 'key' => 'wildlife_obs', 'value' => '', 'compare' => '!=' ] ],
 ] );
 usort( $_wildlife_events, function( $a, $b ) {
 	return strcmp(
-		get_post_meta( $b->ID, 'cleanup_date', true ),
-		get_post_meta( $a->ID, 'cleanup_date', true )
+		glc_cleanup_field( $b, 'cleanup_date' ),
+		glc_cleanup_field( $a, 'cleanup_date' )
 	);
 } );
 
@@ -176,163 +172,21 @@ $_hours_display = ( $_total_hours == floor( $_total_hours ) )
 	: number_format( $_total_hours, 1 );
 
 // ── 2. SVG helper functions ──────────────────────────────────────────────────
-
-// Catmull-Rom → cubic bezier smooth path (port of stats-data.jsx smoothPath)
-function glc_stats_smooth_path( $pts ) {
-	if ( count( $pts ) < 2 ) return '';
-	$t = 0.16;
-	$n = count( $pts );
-	$d = sprintf( 'M%.2f %.2f', $pts[0][0], $pts[0][1] );
-	for ( $i = 0; $i < $n - 1; $i++ ) {
-		$p0  = ( $i > 0 ) ? $pts[ $i - 1 ] : $pts[ $i ];
-		$p1  = $pts[ $i ];
-		$p2  = $pts[ $i + 1 ];
-		$p3  = ( $i + 2 < $n ) ? $pts[ $i + 2 ] : $p2;
-		$c1x = $p1[0] + ( $p2[0] - $p0[0] ) * $t;
-		$c1y = $p1[1] + ( $p2[1] - $p0[1] ) * $t;
-		$c2x = $p2[0] - ( $p3[0] - $p1[0] ) * $t;
-		$c2y = $p2[1] - ( $p3[1] - $p1[1] ) * $t;
-		$d  .= sprintf( ' C%.2f %.2f %.2f %.2f %.2f %.2f', $c1x, $c1y, $c2x, $c2y, $p2[0], $p2[1] );
-	}
-	return $d;
-}
-
-/**
- * Render a multi-series cumulative area chart as inline SVG.
- *
- * @param array  $series    [ [ 'color', 'values', 'max', 'fill_opacity', 'key', 'gid_suffix' ], ... ]
- * @param int    $height    SVG logical height
- * @param array  $days      Day offsets (same index as values)
- * @param int    $max_day   Day offset of the last point
- * @param int    $first_ts  Unix timestamp of day 0 (for x-axis labels)
- * @return string SVG markup
- */
-function glc_stats_area_chart( $series, $height, $days, $max_day, $first_ts = 0 ) {
-	if ( empty( $days ) || $max_day <= 0 ) return '';
-	$W    = 1000;
-	$H    = $height;
-	$padL = 14; $padR = 14; $padT = 26; $padB = 34;
-	$plotH = $H - $padT - $padB;
-	$baseY = $H - $padB;
-
-	$X = function( $d ) use ( $padL, $padR, $W, $max_day ) {
-		return $padL + ( $d / $max_day ) * ( $W - $padL - $padR );
-	};
-
-	// Build each series
-	$built = [];
-	foreach ( $series as $idx => $s ) {
-		$pts = [];
-		foreach ( $s['values'] as $i => $v ) {
-			$d   = isset( $days[ $i ] ) ? $days[ $i ] : 0;
-			$pts[] = [ $X( $d ), $baseY - ( $v / $s['max'] ) * $plotH ];
-		}
-		$line = glc_stats_smooth_path( $pts );
-		$last = end( $pts );
-		$area = $line . sprintf( ' L%.2f %.2f L%.2f %.2f Z', $last[0], $baseY, $pts[0][0], $baseY );
-		$gid  = 'glcg-' . $idx . '-' . preg_replace( '/[^a-z0-9]/', '', $s['key'] );
-		$built[] = array_merge( $s, [
-			'pts'  => $pts,
-			'line' => $line,
-			'area' => $area,
-			'last' => $last,
-			'gid'  => $gid,
-		] );
-	}
-
-	// Horizontal grid lines at 25 / 50 / 75 / 100 %
-	$grid_y = [];
-	foreach ( [ 0.25, 0.5, 0.75, 1.0 ] as $f ) {
-		$grid_y[] = round( $baseY - $f * $plotH, 2 );
-	}
-
-	// X-axis tick positions: first date, each month start, "Now"
-	$ticks = [];
-	if ( $first_ts ) {
-		$ticks[] = [
-			'x'      => $X( 0 ),
-			'label'  => date( 'M j', $first_ts ),
-			'anchor' => 'start',
-		];
-		// month boundaries
-		$fY = (int) date( 'Y', $first_ts );
-		$fM = (int) date( 'n', $first_ts );
-		$last_ts = $first_ts + $max_day * 86400;
-		for ( $mo = 1; $mo <= 18; $mo++ ) {
-			$cy = $fY + (int) floor( ( $fM - 1 + $mo ) / 12 );
-			$cm = ( ( $fM - 1 + $mo ) % 12 ) + 1;
-			$ts = mktime( 0, 0, 0, $cm, 1, $cy );
-			if ( $ts >= $last_ts ) break;
-			$day_off = (int) round( ( $ts - $first_ts ) / 86400 );
-			if ( $day_off <= 2 || $day_off >= $max_day - 2 ) continue;
-			$ticks[] = [
-				'x'      => $X( $day_off ),
-				'label'  => date( 'M', $ts ),
-				'anchor' => 'middle',
-			];
-		}
-		$ticks[] = [
-			'x'      => $X( $max_day ),
-			'label'  => 'Now',
-			'anchor' => 'end',
-		];
-	}
-
-	ob_start();
-	?>
-	<svg viewBox="0 0 <?php echo $W; ?> <?php echo $H; ?>" width="100%" preserveAspectRatio="none"
-	     style="display:block;overflow:visible" role="img" aria-hidden="true">
-		<defs>
-			<?php foreach ( $built as $b ) : ?>
-			<linearGradient id="<?php echo esc_attr( $b['gid'] ); ?>" x1="0" y1="0" x2="0" y2="1">
-				<stop offset="0%"   stop-color="<?php echo esc_attr( $b['color'] ); ?>" stop-opacity="<?php echo esc_attr( $b['fill_opacity'] ); ?>"/>
-				<stop offset="100%" stop-color="<?php echo esc_attr( $b['color'] ); ?>" stop-opacity="0.02"/>
-			</linearGradient>
-			<?php endforeach; ?>
-		</defs>
-
-		<?php foreach ( $grid_y as $gy ) : ?>
-		<line x1="<?php echo $padL; ?>" x2="<?php echo $W - $padR; ?>"
-		      y1="<?php echo $gy; ?>" y2="<?php echo $gy; ?>"
-		      stroke="#1a4a6b" stroke-opacity="0.07" stroke-width="1"/>
-		<?php endforeach; ?>
-
-		<?php foreach ( $built as $b ) : ?>
-		<path d="<?php echo esc_attr( $b['area'] ); ?>"
-		      fill="url(#<?php echo esc_attr( $b['gid'] ); ?>)"
-		      class="glc-area-in"/>
-		<path d="<?php echo esc_attr( $b['line'] ); ?>"
-		      fill="none" stroke="<?php echo esc_attr( $b['color'] ); ?>"
-		      stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"
-		      pathLength="2600"
-		      class="glc-line-draw"/>
-		<circle cx="<?php echo round( $b['last'][0], 2 ); ?>"
-		        cy="<?php echo round( $b['last'][1], 2 ); ?>"
-		        r="5" fill="#fff"
-		        stroke="<?php echo esc_attr( $b['color'] ); ?>" stroke-width="3"
-		        class="glc-dot-in"/>
-		<?php endforeach; ?>
-
-		<?php foreach ( $ticks as $tk ) : ?>
-		<text x="<?php echo round( $tk['x'], 2 ); ?>" y="<?php echo $H - 10; ?>"
-		      text-anchor="<?php echo esc_attr( $tk['anchor'] ); ?>"
-		      font-family="'Lato',sans-serif" font-size="15" fill="#7d8893" font-weight="700">
-			<?php echo esc_html( $tk['label'] ); ?>
-		</text>
-		<?php endforeach; ?>
-	</svg>
-	<?php
-	return ob_get_clean();
-}
+// glc_stats_smooth_path() and glc_stats_area_chart() are defined in functions.php
+// and available globally. Only glc_stats_wildlife_img() lives here.
 
 // Image mapper for wildlife observations — returns filename relative to assets/images, or null.
 function glc_stats_wildlife_img( $obs ) {
 	$obs = strtolower( $obs );
+	if ( strpos( $obs, 'mink' ) !== false ) return 'mink.png';
 	if ( strpos( $obs, 'snapping' ) !== false ) return 'snapping-turtle.png';
 	if ( strpos( $obs, 'painted' )  !== false ) return 'painted-turtle.png';
+	if ( strpos( $obs, 'egg' )    !== false ) return 'nest.png';
+	if ( strpos( $obs, 'duck' )    !== false ) return 'duck.png';
 	if ( strpos( $obs, 'goose' )    !== false
 	  || strpos( $obs, 'geese' )    !== false ) return 'canada-goose.png';
 	if ( strpos( $obs, 'snake' )    !== false ) return 'snake.png';
+	if ( strpos( $obs, 'sandpiper' )    !== false ) return 'sandpiper.png';
 	return null;
 }
 
@@ -525,9 +379,9 @@ get_header();
 			<?php
 			$_wi = 0;
 			foreach ( $_wildlife_events as $_we ) :
-				$_wobs     = get_post_meta( $_we->ID, 'wildlife_obs', true );
-				$_wsite    = get_post_meta( $_we->ID, 'site_name',    true );
-				$_wdate    = get_post_meta( $_we->ID, 'cleanup_date', true );
+				$_wobs      = glc_cleanup_field( $_we, 'wildlife_obs' );
+				$_wsite     = glc_cleanup_field( $_we, 'site_name' );
+				$_wdate     = glc_cleanup_field( $_we, 'cleanup_date' );
 				$_wdate_fmt = $_wdate ? date( 'M j, Y', strtotime( $_wdate ) ) : '';
 				$_wimg     = glc_stats_wildlife_img( $_wobs );
 				$_wdelay   = number_format( 0.15 + $_wi * 0.12, 2 ) . 's';

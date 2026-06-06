@@ -84,11 +84,12 @@ Submissions land as `pending`. Admin reviews in WP Admin → Submissions. Photos
 | Volunteers | `glc_volunteers` |
 | Person-Hours | `glc_hours` |
 | Notable Finds | `glc_notable_finds` |
+| Wildlife Observed | `glc_wildlife_obs` / `wildlife_obs` | dual-key — see note below |
 | Instagram URL | `glc_instagram_url` |
 | Photo Repost Consent | `glc_photo_repost_ok` |
 | Photo IDs | `glc_photo_ids` |
 
-**Key:** `items_recycled` and `weight_kg` are stored without the `glc_` prefix (matching `cleanup_event`) so `glc_get_impact_stats()` in `functions.php` can aggregate both post types without special-casing. If footer stats and shortcode totals diverge, this is the first place to check.
+**Key:** `items_recycled`, `weight_kg`, and `wildlife_obs` are stored without the `glc_` prefix (matching `cleanup_event`) so `glc_get_impact_stats()` and `page-stats.php` can aggregate both post types without special-casing. Wildlife is also stored under `glc_wildlife_obs` (prefixed) for the admin meta box. If footer stats or wildlife cards diverge between CPTs, check these shared keys first.
 
 ### Submission Form — Thank-You / Receipt State
 
@@ -112,10 +113,10 @@ Email-only — no CPT, no admin review queue. Reports go directly to `info@great
 | `[glc_map]` | Leaflet map. Attrs: `height`, `post_id` (single-event mode), `limit` (markers per cluster), `cluster_radius` (km). Clustering is greedy: markers sorted by impact score (kg + bags×2), each joins nearest anchor within radius. Hero uses `limit="5" cluster_radius="10"`, archive uses `limit="7" cluster_radius="10"`. |
 | `[glc_archive]` | Paginated cleanup archive |
 | `[glc_submit_form]` | Community submission form |
-| `[glc_gallery]` | Photo gallery — year tabs + lightbox. Only images flagged `_glc_gallery=1` appear. |
+| `[glc_gallery]` | Photo gallery — year tabs + lightbox. Only images flagged `_glc_gallery=1` appear. Global meta query finds all flagged attachments regardless of `post_parent` — images inserted from the Media Library (which keep `post_parent=0`) are included. Within each year, photos sort by `sort_date` (cleanup date if known, upload date as fallback). |
 | `[glc_report_form]` | Waterway issue report |
-| `[glc_timeline]` | Dual Y-axis Chart.js line chart (debris + recycled). Superseded by inline SVG charts in `page-stats.php` but still usable. |
-| `[glc_impact_highlights]` | Stat cards + hours chart. Superseded by `page-stats.php` redesign but still usable. |
+| `[glc_timeline]` | SVG area chart (debris + recycled) — same renderer as `page-stats.php`. Outputs `.dirCL-chartwrap` + `.dirCL-legend`. No Chart.js. |
+| `[glc_impact_highlights]` | Stat cards (sites, tires, cleanups) + SVG hours chart — same renderer as `page-stats.php`. Chart wrapped in `.dirCL-chartwrap` + `.dirCL-legend`. No Chart.js. |
 | `[glc_references]` | Wrapping shortcode — hides an `<ol>` behind a gold-bordered slide-in panel. Usage: `[glc_references]<ol>...</ol>[/glc_references]`. Button label auto-counts `<li>` items. |
 | `[glc_join_crew]` | Email signup, AJAX, rate-limited (3/10 min per IP), honeypot + nonce. No CPT. |
 | `[glc_wildlife_log]` | Chronological wildlife sightings list. Superseded by `page-stats.php` wildlife cards but still usable. |
@@ -217,21 +218,34 @@ Fetches all `cleanup_event` + published `glc_submission` posts, merges, sorts by
 
 **`.glc-main` padding override:** `.page-template-page-stats .glc-main` has no side padding — sections provide their own. `.dirCL-wave` has `padding: 0 64px` to align with the content sections rather than spanning full column width.
 
-**SVG charts:** server-side PHP, no Chart.js. `glc_stats_smooth_path()` and `glc_stats_area_chart()` defined locally in `page-stats.php`. `pathLength="2600"` keeps stroke-dash animation consistent across varying path lengths.
+**SVG charts:** server-side PHP, no Chart.js. `glc_stats_smooth_path()` and `glc_stats_area_chart()` are defined in `functions.php` (globally available to templates and shortcodes) — `page-stats.php` only defines `glc_stats_wildlife_img()` locally. `pathLength="2600"` keeps stroke-dash animation consistent across varying path lengths.
+
+**`glc_stats_area_chart()` behaviour:** Each series always normalizes to a "nice" ceiling computed from its actual max (e.g. 400 kg → axis ceiling 500, 660 items → 800), so multi-series endpoint circles land at distinct heights rather than converging to the same point. The `$show_axes` parameter (6th arg, default `false`) controls Y-axis tick labels — keep it `false`; the `.dirCL-legend` provides the values and the chart stays clean. X-axis month labels are suppressed within 12 days of the start/end to prevent crowding (e.g. "Apr 1" won't appear when data starts "Mar 28").
 
 **Moose metaphor:** `count = max(1, round(debris_kg / 350))`. No `filter: drop-shadow` on `moose-scene.png` — transparent PNG + drop-shadow creates an artifact border.
 
 **Item dot pictograph:** self-scaling — `itemsPerDot` from `[2,5,10,20,25,50,…]` so grid stays ≤ 672 dots (28 cols × 24 rows). IntersectionObserver adds `.glc-dots-visible` when the block enters viewport; dots are hidden by default and animate in on that class.
 
-**Wildlife cards:** `glc_stats_wildlife_img()` maps observation text to image filename (`snapping-turtle.png`, `painted-turtle.png`, `canada-goose.png`, `snake.png`). Cards show a brand-tinted gradient stage (`.wfig`) with the illustration + `drop-shadow`, then `.wbody` below with observation and site/date. Stagger delay `0.15 + i × 0.12s` via inline `--d` CSS property. Cards without a matching image render text-only (no `.wfig`). Gold border + shadow on hover; title shifts to gold-deep. No translateY on hover.
+**Wildlife cards:** `glc_stats_wildlife_img()` maps observation text to an image filename — see `page-stats.php` for the current list. Cards show a brand-tinted gradient stage (`.wfig`) with the illustration + `drop-shadow`, then `.wbody` below with observation and site/date. Stagger delay `0.15 + i × 0.12s` via inline `--d` CSS property. Cards without a matching image render text-only (no `.wfig`). Gold border + shadow on hover; title shifts to gold-deep. No translateY on hover.
+
+**Wildlife data source:** `page-stats.php` queries both `cleanup_event` and `glc_submission` CPTs for the `wildlife_obs` meta key (same unprefixed key on both). Sorted via `glc_cleanup_field()` for CPT-agnostic date access.
+
+**Wildlife card height:** `.wfig` uses `height: 160px` (fixed, not `min-height`) — all cards are uniform regardless of image proportions. `.wfig img` uses `width: auto; max-width: 250px; height: auto; max-height: 100%`. The `width: auto` is required — CSS proportional scaling only kicks in when both width and height are `auto`; a fixed `width: 90%` with `max-height` would squish tall images instead of scaling them.
+
+**Adding a new wildlife image — full workflow:**
+1. Prepare the asset: `python prepare_wildlife_asset.py input.png theme-dev/great-lake-cleaners-theme/assets/images/name.png` (defaults: tolerance 28, 600px wide, 20px pad — see tool docs in theme CLAUDE.md)
+2. Add a keyword match in `page-stats.php:glc_stats_wildlife_img()` — e.g. `if ( strpos( $obs, 'nest' ) !== false ) return 'nest.png';`
+3. Run `repack.ps1`
 
 **Footer anchor links** (`#debris`, `#hours`) work because `.dirCL-sec` has `scroll-margin-top: 110px`.
 
 ### Photos Page (`/photos/`)
 
-Only attachments with `_glc_gallery = '1'` meta appear. Flagging workflow: Media Library → click photo → attachment modal → Gallery row → tick "Feature in photo gallery". Implemented via `attachment_fields_to_edit` / `attachment_fields_to_save` hooks.
+Only attachments with `_glc_gallery = '1'` meta appear. Flagging workflow: Media Library → click photo → attachment modal → Gallery row → tick "Feature in photo gallery" → click **Save**. Implemented via `attachment_fields_to_edit` / `attachment_fields_to_save` hooks.
 
-**Attachment lookup caveat:** `get_posts( post_parent = $post_id, post_type = attachment )` only reliably finds images uploaded while editing that post. Images added from the pre-existing Media Library may have `post_parent = 0` and will be missed.
+**Important — must click Save:** the flag is only persisted when you click the **Save** button in the attachment sidebar. Checking the box and then clicking **Select/Insert** (in the block editor media modal) does NOT save custom fields — that flow uses `wp_ajax_save_attachment` which bypasses `attachment_fields_to_save`. Always flag images from Media Library directly, not from within a post's Insert Media dialog.
+
+**Attachment lookup:** `[glc_gallery]` queries all `_glc_gallery=1` images globally (not filtered by `post_parent`), so images with any `post_parent` value are included.
 
 **Gallery thumbnail Option B (not yet done):** register `glc-thumb` image size with `crop: ['center', 'top']` in `functions.php`, use it in the gallery shortcode instead of `medium`, run "Regenerate Thumbnails". Worth doing when the gallery grows large enough that payload matters.
 

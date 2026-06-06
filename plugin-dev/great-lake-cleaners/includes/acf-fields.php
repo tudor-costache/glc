@@ -150,6 +150,14 @@ function glc_cleanup_meta_box_cb( $post ) {
         </div>
 
         <div class="glc-half">
+            <label for="glc_carts_removed">Shopping Carts Removed</label>
+            <input type="number" id="glc_carts_removed" name="glc_carts_removed"
+                   min="0" step="1"
+                   value="<?php echo $m('carts_removed'); ?>">
+            <p class="glc-field-note">Shopping carts recovered from waterway</p>
+        </div>
+
+        <div class="glc-half">
             <label for="glc_hazards_removed">Hazardous Waste Removed</label>
             <input type="number" id="glc_hazards_removed" name="glc_hazards_removed"
                    min="0" step="1"
@@ -226,7 +234,7 @@ add_action( 'save_post_cleanup_event', function( $post_id ) {
     $number_fields = [
         'gps_lat', 'gps_lon', 'volunteers', 'hours',
         'bags', 'weight_kg', 'items_recycled', 'recycled_weight_kg',
-        'tires_removed', 'hazards_removed',
+        'tires_removed', 'carts_removed', 'hazards_removed',
         'species_planted', 'meters_bank_cleared',
     ];
 

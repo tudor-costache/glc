@@ -62,6 +62,7 @@ function glc_cleanup_field( $post, $field, $default = '' ) {
             case 'weight_kg':      return get_post_meta( $id, 'weight_kg',       true ) ?: $default;
             case 'hours':          return get_post_meta( $id, 'glc_hours',       true ) ?: $default;
             case 'items_recycled': return get_post_meta( $id, 'items_recycled',  true ) ?: $default;
+            case 'wildlife_obs':   return get_post_meta( $id, 'wildlife_obs',    true ) ?: $default;
             default:               return get_post_meta( $id, 'glc_' . $field,   true ) ?: $default;
         }
     }
@@ -347,111 +348,106 @@ function glc_shortcode_archive( $atts ) {
 add_shortcode( 'glc_gallery', 'glc_shortcode_gallery' );
 function glc_shortcode_gallery( $atts ) {
 
-    // ── 1. Collect all source posts ──────────────────────────────────────────
+    // ── 1. Query ALL gallery-flagged images globally ──────────────────────────
+    // Using post_parent to scope queries misses images inserted from the Media
+    // Library into a post — those keep post_parent = 0. One global meta query
+    // finds everything the admin has explicitly flagged, then we resolve
+    // parent metadata (date, label, url) per attachment.
 
-    $event_posts = get_posts( [
-        'post_type'      => 'cleanup_event',
-        'post_status'    => 'publish',
+    $all_atts = get_posts( [
+        'post_type'      => 'attachment',
+        'post_status'    => 'inherit',
+        'post_mime_type' => 'image',
         'posts_per_page' => -1,
-    ] );
-
-    $sub_posts = get_posts( [
-        'post_type'      => 'glc_submission',
-        'post_status'    => 'publish',
-        'posts_per_page' => -1,
+        'orderby'        => 'menu_order date',
+        'order'          => 'ASC',
         'meta_query'     => [ [
-            'key'   => 'glc_photo_repost_ok',
+            'key'   => '_glc_gallery',
             'value' => '1',
         ] ],
     ] );
 
+    // Pre-load published glc_submission posts with repost consent into a lookup
+    // so we can skip submission photos where the submitter didn't consent.
+    $consented_sub_ids = [];
+    $sub_posts = get_posts( [
+        'post_type'      => 'glc_submission',
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
+        'fields'         => 'ids',
+        'meta_query'     => [ [ 'key' => 'glc_photo_repost_ok', 'value' => '1' ] ],
+    ] );
+    foreach ( $sub_posts as $id ) {
+        $consented_sub_ids[ $id ] = true;
+    }
+
     // ── 2. Build photo list grouped by year ──────────────────────────────────
 
     $by_year = [];  // [ year => [ [ src, thumb, title, date, url, alt ] ] ]
+    $seen    = [];  // dedup by attachment ID
 
-    // Helper: add attachments for a post
-    $add_attachments = function( $post_id, $date_str, $label, $post_url ) use ( &$by_year ) {
-        $year = $date_str ? intval( substr( $date_str, 0, 4 ) ) : intval( date( 'Y' ) );
-        if ( $year < 2000 || $year > 2100 ) $year = intval( date( 'Y' ) );
+    foreach ( $all_atts as $att ) {
+        if ( isset( $seen[ $att->ID ] ) ) continue;
 
-        $attachments = get_posts( [
-            'post_type'      => 'attachment',
-            'post_status'    => 'inherit',
-            'post_parent'    => $post_id,
-            'post_mime_type' => 'image',
-            'posts_per_page' => -1,
-            'orderby'        => 'menu_order',
-            'order'          => 'ASC',
-            'meta_query'     => [ [
-                'key'   => '_glc_gallery',
-                'value' => '1',
-            ] ],
-        ] );
+        $src   = wp_get_attachment_image_url( $att->ID, 'large' );
+        $thumb = wp_get_attachment_image_url( $att->ID, 'medium' );
+        if ( ! $src || ! $thumb ) continue;
 
-        foreach ( $attachments as $att ) {
-            $src   = wp_get_attachment_image_url( $att->ID, 'large' );
-            $thumb = wp_get_attachment_image_url( $att->ID, 'medium' );
-            if ( ! $src || ! $thumb ) continue;
+        $label = '';
+        $date  = '';
+        $url   = '';
 
-            $alt = get_post_meta( $att->ID, '_wp_attachment_image_alt', true );
-            if ( ! $alt ) $alt = $label;
-
-            $by_year[ $year ][] = [
-                'src'   => $src,
-                'thumb' => $thumb,
-                'alt'   => $alt,
-                'label' => $label,
-                'title' => $att->post_title,
-                'date'  => $date_str,
-                'url'   => $post_url,
-            ];
-        }
-    };
-
-    foreach ( $event_posts as $e ) {
-        $date  = glc_meta( $e->ID, 'cleanup_date', '' );
-        $label = glc_meta( $e->ID, 'site_name', get_the_title( $e->ID ) );
-        $add_attachments( $e->ID, $date, $label, get_permalink( $e->ID ) );
-    }
-
-    foreach ( $sub_posts as $s ) {
-        $date  = get_post_meta( $s->ID, 'glc_cleanup_date', true );
-        $label = get_post_meta( $s->ID, 'glc_site_name', true ) ?: get_the_title( $s->ID );
-        // Community submissions: pull from glc_photo_ids meta (may differ from post_parent)
-        $photo_ids = get_post_meta( $s->ID, 'glc_photo_ids', true );
-        if ( ! empty( $photo_ids ) ) {
-            $year = $date ? intval( substr( $date, 0, 4 ) ) : intval( date( 'Y' ) );
-            if ( $year < 2000 || $year > 2100 ) $year = intval( date( 'Y' ) );
-            foreach ( (array) $photo_ids as $att_id ) {
-                if ( get_post_meta( $att_id, '_glc_gallery', true ) !== '1' ) continue;
-                $src   = wp_get_attachment_image_url( $att_id, 'large' );
-                $thumb = wp_get_attachment_image_url( $att_id, 'medium' );
-                if ( ! $src || ! $thumb ) continue;
-                $alt = get_post_meta( $att_id, '_wp_attachment_image_alt', true ) ?: $label;
-                $by_year[ $year ][] = [
-                    'src'   => $src,
-                    'thumb' => $thumb,
-                    'alt'   => $alt,
-                    'label' => $label,
-                    'title' => get_the_title( $att_id ),
-                    'date'  => $date,
-                    'url'   => get_permalink( $s->ID ),
-                ];
+        if ( $att->post_parent ) {
+            $parent = get_post( $att->post_parent );
+            if ( $parent && $parent->post_status === 'publish' ) {
+                if ( $parent->post_type === 'cleanup_event' ) {
+                    $date  = get_post_meta( $parent->ID, 'cleanup_date', true );
+                    $label = get_post_meta( $parent->ID, 'site_name', true ) ?: get_the_title( $parent->ID );
+                    $url   = get_permalink( $parent->ID );
+                } elseif ( $parent->post_type === 'glc_submission' ) {
+                    if ( ! isset( $consented_sub_ids[ $parent->ID ] ) ) continue;
+                    $date  = get_post_meta( $parent->ID, 'glc_cleanup_date', true );
+                    $label = get_post_meta( $parent->ID, 'glc_site_name', true ) ?: get_the_title( $parent->ID );
+                    $url   = get_permalink( $parent->ID );
+                }
             }
-        } else {
-            // Fallback: also try post_parent attachments for submissions
-            $add_attachments( $s->ID, $date, $label, get_permalink( $s->ID ) );
         }
+
+        // Derive year: prefer parent cleanup date, fall back to upload date
+        $year = intval( date( 'Y', strtotime( $att->post_date ) ) );
+        if ( $date ) {
+            $yr = intval( substr( $date, 0, 4 ) );
+            if ( $yr >= 2000 && $yr <= 2100 ) $year = $yr;
+        }
+
+        if ( ! $label ) $label = $att->post_title;
+        $alt = get_post_meta( $att->ID, '_wp_attachment_image_alt', true ) ?: $label;
+
+        // sort_date: cleanup date when available, upload date as fallback so
+        // media-library images don't all sink to the bottom of the year tab.
+        $sort_date = $date ?: substr( $att->post_date, 0, 10 );
+
+        $by_year[ $year ][] = [
+            'src'       => $src,
+            'thumb'     => $thumb,
+            'alt'       => $alt,
+            'label'     => $label,
+            'title'     => $att->post_title,
+            'date'      => $date,
+            'sort_date' => $sort_date,
+            'url'       => $url,
+        ];
+        $seen[ $att->ID ] = true;
     }
 
     if ( empty( $by_year ) ) {
         return '<p class="glc-gallery-empty">No photos yet — check back after our next outing!</p>';
     }
 
-    // Sort years descending, photos within each year by cleanup date descending
+    // Sort years descending, photos within each year by sort_date descending
     krsort( $by_year );
     foreach ( $by_year as &$photos ) {
-        usort( $photos, fn( $a, $b ) => strcmp( $b['date'], $a['date'] ) );
+        usort( $photos, fn( $a, $b ) => strcmp( $b['sort_date'], $a['sort_date'] ) );
     }
     unset( $photos );
     $years = array_keys( $by_year );
@@ -655,6 +651,7 @@ function glc_shortcode_impact_highlights() {
 
     $site_names  = [];
     $total_tires = 0;
+    $total_carts = 0;
     $pts         = [];
 
     foreach ( $events as $e ) {
@@ -665,6 +662,7 @@ function glc_shortcode_impact_highlights() {
         if ( $site ) $site_names[] = $site;
 
         $total_tires   += (int) get_post_meta( $id, 'tires_removed', true );
+        $total_carts   += (int) get_post_meta( $id, 'carts_removed', true );
 
         if ( $date ) {
             $pts[] = [
@@ -694,16 +692,22 @@ function glc_shortcode_impact_highlights() {
 
     usort( $pts, fn( $a, $b ) => strcmp( $a['date'], $b['date'] ) );
 
-    $data_hrs = [];
-    $run_hrs  = 0.0;
+    $first_ts  = ! empty( $pts ) ? strtotime( $pts[0]['date'] ) : 0;
+    $data_days = [];
+    $data_hrs  = [];
+    $run_hrs   = 0.0;
     foreach ( $pts as $p ) {
+        $day_off     = (int) round( ( strtotime( $p['date'] ) - $first_ts ) / 86400 );
         $run_hrs    += $p['hours'];
-        $data_hrs[]  = [ 'x' => $p['date'], 'y' => round( $run_hrs, 1 ) ];
+        $data_days[] = $day_off;
+        $data_hrs[]  = round( $run_hrs, 1 );
     }
 
-    wp_enqueue_script( 'chartjs', GLC_PLUGIN_URL . 'assets/chart.min.js', [], '4.4.6', true );
-    wp_enqueue_script( 'chartjs-date-fns', GLC_PLUGIN_URL . 'assets/chartjs-adapter-date-fns.bundle.min.js', [ 'chartjs' ], '3.0.0', true );
-    $canvas_id = 'glc-hrs-' . wp_rand( 1000, 9999 );
+    $max_day     = ! empty( $data_days ) ? end( $data_days ) : 0;
+    $total_hours = ! empty( $data_hrs )  ? end( $data_hrs )  : 0;
+    $hours_display = ( $total_hours == floor( $total_hours ) )
+        ? number_format( (int) $total_hours )
+        : number_format( $total_hours, 1 );
 
     ob_start(); ?>
     <div class="glc-impact-highlights">
@@ -718,97 +722,40 @@ function glc_shortcode_impact_highlights() {
                 <span class="glc-ih-label">Tires Removed</span>
             </div>
             <div class="glc-ih-stat">
+                <span class="glc-ih-value"><?php echo esc_html( $total_carts ); ?></span>
+                <span class="glc-ih-label">Shopping Carts Removed</span>
+            </div>
+            <div class="glc-ih-stat">
                 <span class="glc-ih-value"><?php echo esc_html( $total_cleanups ); ?></span>
                 <span class="glc-ih-label">Total Cleanups</span>
             </div>
         </div>
 
-        <?php if ( ! empty( $data_hrs ) ) : ?>
-        <div class="glc-timeline-wrap">
-            <div class="glc-timeline-canvas-wrap">
-                <canvas id="<?php echo esc_attr( $canvas_id ); ?>"></canvas>
+        <?php if ( ! empty( $data_hrs ) && $max_day > 0 ) : ?>
+        <div class="dirCL-chartwrap">
+            <div class="dirCL-legend">
+                <div class="dirCL-leg">
+                    <span class="sw" style="background:#2e8b57"></span>
+                    Volunteer hours
+                    <span class="num" style="color:#1a5e35"><?php echo esc_html( $hours_display ); ?></span>
+                </div>
             </div>
+            <?php
+            echo glc_stats_area_chart(
+                [ [
+                    'key'          => 'hours',
+                    'color'        => '#2e8b57',
+                    'values'       => $data_hrs,
+                    'max'          => max( $total_hours * 1.1, 10 ),
+                    'fill_opacity' => '0.20',
+                ] ],
+                230,
+                $data_days,
+                $max_day,
+                $first_ts
+            );
+            ?>
         </div>
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var ctx = document.getElementById(<?php echo wp_json_encode( $canvas_id ); ?>);
-            var isMobile = window.innerWidth < 600;
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    datasets: [{
-                        label: 'Volunteer Hrs',
-                        data: <?php echo wp_json_encode( $data_hrs ); ?>,
-                        borderColor: '#1a4a6b',
-                        backgroundColor: 'rgba(26,74,107,0.07)',
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 6,
-                        pointBackgroundColor: '#1a4a6b',
-                        borderWidth: 2,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            onClick: null,
-                            labels: {
-                                font: { family: "'Lato', sans-serif", size: 13 },
-                                color: '#222222',
-                                usePointStyle: false,
-                                padding: 16,
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(c) { return '  ' + c.parsed.y + ' person-hours total'; }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                tooltipFormat: 'MMM d, yyyy',
-                                displayFormats: {
-                                    day:   'MMM d',
-                                    week:  'MMM d',
-                                    month: 'MMM yyyy',
-                                }
-                            },
-                            ticks: {
-                                font: { family: "'Lato', sans-serif", size: isMobile ? 10 : 11 },
-                                color: '#666666',
-                                maxRotation: 45,
-                                autoSkip: true,
-                                maxTicksLimit: isMobile ? 5 : 10,
-                            },
-                            grid: { color: 'rgba(0,0,0,0.06)' }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: !isMobile,
-                                text: 'Person-Hours',
-                                font: { family: "'Lato', sans-serif", size: 12, weight: 'bold' },
-                                color: '#1a4a6b',
-                            },
-                            ticks: {
-                                font: { family: "'Lato', sans-serif", size: isMobile ? 10 : 11 },
-                                color: '#1a4a6b',
-                            },
-                            grid: { color: 'rgba(0,0,0,0.06)' }
-                        }
-                    }
-                }
-            });
-        });
-        </script>
         <?php endif; ?>
 
     </div>
@@ -817,8 +764,8 @@ function glc_shortcode_impact_highlights() {
 }
 
 // ── [glc_timeline] ───────────────────────────────────────────────────────────
-// Cumulative debris removed (kg) and items recycled over time.
-// Dual Y-axis Chart.js line chart — includes cleanup_event + glc_submission data.
+// Cumulative debris removed (kg) and items recycled over time — SVG area chart.
+// Includes cleanup_event + glc_submission data. Matches the design of page-stats.php.
 
 add_shortcode( 'glc_timeline', 'glc_shortcode_timeline' );
 function glc_shortcode_timeline() {
@@ -834,11 +781,11 @@ function glc_shortcode_timeline() {
         'posts_per_page' => -1,
     ] );
 
-    $points = [];
+    $raw = [];
     foreach ( $events as $e ) {
         $date = get_post_meta( $e->ID, 'cleanup_date', true );
         if ( ! $date ) continue;
-        $points[] = [
+        $raw[] = [
             'date'     => $date,
             'weight'   => (float) get_post_meta( $e->ID, 'weight_kg',      true ),
             'recycled' => (int)   get_post_meta( $e->ID, 'items_recycled', true ),
@@ -847,168 +794,91 @@ function glc_shortcode_timeline() {
     foreach ( $subs as $s ) {
         $date = get_post_meta( $s->ID, 'glc_cleanup_date', true );
         if ( ! $date ) continue;
-        $points[] = [
+        $raw[] = [
             'date'     => $date,
             'weight'   => (float) get_post_meta( $s->ID, 'weight_kg',      true ),
             'recycled' => (int)   get_post_meta( $s->ID, 'items_recycled', true ),
         ];
     }
 
-    if ( empty( $points ) ) {
+    if ( empty( $raw ) ) {
         return '<p class="glc-timeline-empty">No cleanup data yet — check back after our next outing!</p>';
     }
 
-    // Sort ascending, then group same-date totals into single data points
-    usort( $points, fn( $a, $b ) => strcmp( $a['date'], $b['date'] ) );
+    usort( $raw, fn( $a, $b ) => strcmp( $a['date'], $b['date'] ) );
 
     $grouped = [];
-    foreach ( $points as $p ) {
-        $d = $p['date'];
-        if ( ! isset( $grouped[ $d ] ) ) $grouped[ $d ] = [ 'weight' => 0.0, 'recycled' => 0 ];
-        $grouped[ $d ]['weight']   += $p['weight'];
-        $grouped[ $d ]['recycled'] += $p['recycled'];
+    foreach ( $raw as $p ) {
+        $dk = $p['date'];
+        if ( ! isset( $grouped[ $dk ] ) ) $grouped[ $dk ] = [ 'weight' => 0.0, 'recycled' => 0 ];
+        $grouped[ $dk ]['weight']   += $p['weight'];
+        $grouped[ $dk ]['recycled'] += $p['recycled'];
     }
 
-    $data_kg  = [];
-    $data_rec = [];
-    $run_kg   = 0.0;
-    $run_rec  = 0;
+    $dates     = array_keys( $grouped );
+    $first_ts  = strtotime( $dates[0] );
+    $data_days = [];
+    $data_kg   = [];
+    $data_rec  = [];
+    $run_kg    = 0.0;
+    $run_rec   = 0;
 
     foreach ( $grouped as $date => $totals ) {
-        $run_kg  += $totals['weight'];
-        $run_rec += $totals['recycled'];
-        $data_kg[]  = [ 'x' => $date, 'y' => round( $run_kg, 1 ) ];
-        $data_rec[] = [ 'x' => $date, 'y' => $run_rec ];
+        $day_off     = (int) round( ( strtotime( $date ) - $first_ts ) / 86400 );
+        $run_kg     += $totals['weight'];
+        $run_rec    += $totals['recycled'];
+        $data_days[] = $day_off;
+        $data_kg[]   = round( $run_kg, 1 );
+        $data_rec[]  = $run_rec;
     }
 
-    wp_enqueue_script( 'chartjs', GLC_PLUGIN_URL . 'assets/chart.min.js', [], '4.4.6', true );
-    wp_enqueue_script( 'chartjs-date-fns', GLC_PLUGIN_URL . 'assets/chartjs-adapter-date-fns.bundle.min.js', [ 'chartjs' ], '3.0.0', true );
+    $max_day      = end( $data_days );
+    $total_debris = end( $data_kg );
+    $total_recyc  = end( $data_rec );
 
-    $canvas_id = 'glc-timeline-' . wp_rand( 1000, 9999 );
+    $debris_display = ( $total_debris == floor( $total_debris ) )
+        ? number_format( (int) $total_debris )
+        : number_format( $total_debris, 1 );
 
     ob_start(); ?>
-    <div class="glc-timeline-wrap">
-        <div class="glc-timeline-canvas-wrap">
-            <canvas id="<?php echo esc_attr( $canvas_id ); ?>"></canvas>
+    <div class="dirCL-chartwrap">
+        <div class="dirCL-legend">
+            <div class="dirCL-leg">
+                <span class="sw" style="background:#1a4a6b"></span>
+                Debris
+                <span class="num" style="color:#1a4a6b"><?php echo esc_html( $debris_display ); ?> kg</span>
+            </div>
+            <div class="dirCL-leg">
+                <span class="sw" style="background:#f5a623"></span>
+                Items recycled
+                <span class="num" style="color:#e08e12"><?php echo esc_html( number_format( $total_recyc ) ); ?></span>
+            </div>
         </div>
+        <?php
+        echo glc_stats_area_chart(
+            [
+                [
+                    'key'          => 'debris',
+                    'color'        => '#1a4a6b',
+                    'values'       => $data_kg,
+                    'max'          => max( $total_debris * 1.1, 10 ),
+                    'fill_opacity' => '0.18',
+                ],
+                [
+                    'key'          => 'recyc',
+                    'color'        => '#f5a623',
+                    'values'       => $data_rec,
+                    'max'          => max( $total_recyc * 1.1, 10 ),
+                    'fill_opacity' => '0.14',
+                ],
+            ],
+            300,
+            $data_days,
+            $max_day,
+            $first_ts
+        );
+        ?>
     </div>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var ctx = document.getElementById(<?php echo wp_json_encode( $canvas_id ); ?>);
-        var isMobile = window.innerWidth < 600;
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                datasets: [
-                    {
-                        label: 'Debris (kg)',
-                        data: <?php echo wp_json_encode( $data_kg ); ?>,
-                        yAxisID: 'yKg',
-                        borderColor: '#1a4a6b',
-                        backgroundColor: 'rgba(26,74,107,0.07)',
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 6,
-                        pointBackgroundColor: '#1a4a6b',
-                        borderWidth: 2,
-                    },
-                    {
-                        label: 'Recycling',
-                        data: <?php echo wp_json_encode( $data_rec ); ?>,
-                        yAxisID: 'yRec',
-                        borderColor: '#f5a623',
-                        backgroundColor: 'rgba(245,166,35,0.07)',
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 6,
-                        pointBackgroundColor: '#f5a623',
-                        borderWidth: 2,
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        onClick: null,
-                        labels: {
-                            font: { family: "'Lato', sans-serif", size: 13 },
-                            color: '#222222',
-                            usePointStyle: false,
-                            padding: 16,
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(c) {
-                                var v = c.parsed.y;
-                                return '  ' + (c.dataset.yAxisID === 'yKg' ? v + ' kg total' : v + ' items total');
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            tooltipFormat: 'MMM d, yyyy',
-                            displayFormats: {
-                                day:   'MMM d',
-                                week:  'MMM d',
-                                month: 'MMM yyyy',
-                            }
-                        },
-                        ticks: {
-                            font: { family: "'Lato', sans-serif", size: isMobile ? 10 : 11 },
-                            color: '#666666',
-                            maxRotation: 45,
-                            autoSkip: true,
-                            maxTicksLimit: isMobile ? 5 : 10,
-                        },
-                        grid: { color: 'rgba(0,0,0,0.06)' }
-                    },
-                    yKg: {
-                        type: 'linear',
-                        position: 'left',
-                        beginAtZero: true,
-                        title: {
-                            display: !isMobile,
-                            text: 'Debris (kg)',
-                            font: { family: "'Lato', sans-serif", size: 12, weight: 'bold' },
-                            color: '#1a4a6b',
-                        },
-                        ticks: {
-                            font: { family: "'Lato', sans-serif", size: isMobile ? 10 : 11 },
-                            color: '#1a4a6b',
-                        },
-                        grid: { color: 'rgba(0,0,0,0.06)' }
-                    },
-                    yRec: {
-                        type: 'linear',
-                        position: 'right',
-                        beginAtZero: true,
-                        title: {
-                            display: !isMobile,
-                            text: 'Items Recycled',
-                            font: { family: "'Lato', sans-serif", size: 12, weight: 'bold' },
-                            color: '#e6951a',
-                        },
-                        ticks: {
-                            font: { family: "'Lato', sans-serif", size: isMobile ? 10 : 11 },
-                            color: '#e6951a',
-                        },
-                        grid: { drawOnChartArea: false }
-                    }
-                }
-            }
-        });
-    });
-    </script>
     <?php
     return ob_get_clean();
 }

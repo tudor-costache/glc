@@ -152,3 +152,214 @@ add_filter( 'body_class', function( $classes ) {
     }
     return $classes;
 } );
+
+// ── SVG area chart helpers ────────────────────────────────────────────────────
+// Shared by page-stats.php, [glc_timeline], and [glc_impact_highlights].
+
+function glc_stats_smooth_path( $pts ) {
+    if ( count( $pts ) < 2 ) return '';
+    $t = 0.16;
+    $n = count( $pts );
+    $d = sprintf( 'M%.2f %.2f', $pts[0][0], $pts[0][1] );
+    for ( $i = 0; $i < $n - 1; $i++ ) {
+        $p0  = ( $i > 0 ) ? $pts[ $i - 1 ] : $pts[ $i ];
+        $p1  = $pts[ $i ];
+        $p2  = $pts[ $i + 1 ];
+        $p3  = ( $i + 2 < $n ) ? $pts[ $i + 2 ] : $p2;
+        $c1x = $p1[0] + ( $p2[0] - $p0[0] ) * $t;
+        $c1y = $p1[1] + ( $p2[1] - $p0[1] ) * $t;
+        $c2x = $p2[0] - ( $p3[0] - $p1[0] ) * $t;
+        $c2y = $p2[1] - ( $p3[1] - $p1[1] ) * $t;
+        $d  .= sprintf( ' C%.2f %.2f %.2f %.2f %.2f %.2f', $c1x, $c1y, $c2x, $c2y, $p2[0], $p2[1] );
+    }
+    return $d;
+}
+
+/**
+ * Render a multi-series cumulative area chart as inline SVG.
+ *
+ * Each series is independently scaled to a "nice" axis max so that the two
+ * endpoint circles land at different heights — making the different scales
+ * visually obvious rather than converging to the same point.
+ *
+ * @param array $series     [ [ 'key', 'color', 'values', 'max', 'fill_opacity' ], … ]
+ * @param int   $height     SVG logical height
+ * @param array $days       Day-offset array (same index as values)
+ * @param int   $max_day    Day offset of the last data point
+ * @param int   $first_ts   Unix timestamp of day 0 (for x-axis labels)
+ * @param bool  $show_axes  When true, render left/right Y-axis tick labels
+ */
+function glc_stats_area_chart( $series, $height, $days, $max_day, $first_ts = 0, $show_axes = false ) {
+    if ( empty( $days ) || $max_day <= 0 ) return '';
+
+    $W     = 1000;
+    $H     = $height;
+    $padL  = $show_axes ? 54 : 14;
+    $padR  = ( $show_axes && count( $series ) >= 2 ) ? 54 : 14;
+    $padT  = 26;
+    $padB  = 34;
+    $plotH = $H - $padT - $padB;
+    $baseY = $H - $padB;
+
+    // Returns a "nice" axis ceiling slightly above $v.
+    $nice_max_fn = function( $v ) {
+        if ( $v <= 0 ) return 10;
+        $e = floor( log10( $v ) );
+        $m = pow( 10, $e );
+        $f = $v / $m;
+        if ( $f < 1.2 ) return 1.5 * $m;
+        if ( $f < 1.8 ) return 2.0 * $m;
+        if ( $f < 2.3 ) return 2.5 * $m;
+        if ( $f < 2.8 ) return 3.0 * $m;
+        if ( $f < 3.8 ) return 4.0 * $m;
+        if ( $f < 4.8 ) return 5.0 * $m;
+        if ( $f < 5.8 ) return 6.0 * $m;
+        if ( $f < 7.8 ) return 8.0 * $m;
+        return 10.0 * $m;
+    };
+
+    // Returns a "nice" tick interval for a given axis ceiling.
+    $nice_step_fn = function( $nm ) {
+        $r = $nm / 4;
+        $e = floor( log10( max( $r, 1 ) ) );
+        $m = pow( 10, $e );
+        $n = $r / $m;
+        if ( $n < 1.5 ) return $m;
+        if ( $n < 3.5 ) return 2 * $m;
+        if ( $n < 7.5 ) return 5 * $m;
+        return 10 * $m;
+    };
+
+    $X = function( $d ) use ( $padL, $padR, $W, $max_day ) {
+        return $padL + ( $d / $max_day ) * ( $W - $padL - $padR );
+    };
+
+    // Build each series: always use a "nice" ceiling so multi-series endpoints
+    // land at distinct heights rather than converging to the same point.
+    $built = [];
+    foreach ( $series as $idx => $s ) {
+        $nm = ! empty( $s['values'] )
+            ? $nice_max_fn( (float) max( $s['values'] ) )
+            : (float) $s['max'];
+
+        $pts = [];
+        foreach ( $s['values'] as $i => $v ) {
+            $d     = isset( $days[ $i ] ) ? $days[ $i ] : 0;
+            $pts[] = [ $X( $d ), $baseY - ( $v / $nm ) * $plotH ];
+        }
+        $line = glc_stats_smooth_path( $pts );
+        $last = end( $pts );
+        $area = $line . sprintf( ' L%.2f %.2f L%.2f %.2f Z', $last[0], $baseY, $pts[0][0], $baseY );
+        $gid  = 'glcg-' . $idx . '-' . preg_replace( '/[^a-z0-9]/', '', $s['key'] );
+        $built[] = array_merge( $s, [
+            'pts'  => $pts, 'line' => $line, 'area' => $area,
+            'last' => $last, 'gid'  => $gid,  'nm'   => $nm,
+        ] );
+    }
+
+    // Compute grid lines and Y-axis label data.
+    $grid_ys      = [];
+    $left_labels  = [];
+    $right_labels = [];
+
+    if ( $show_axes && ! empty( $built ) ) {
+        $nm0  = $built[0]['nm'];
+        $step = $nice_step_fn( $nm0 );
+        for ( $v = $step; $v <= $nm0 + $step * 0.01; $v += $step ) {
+            $gy          = round( $baseY - ( $v / $nm0 ) * $plotH, 2 );
+            $grid_ys[]   = $gy;
+            $lv          = ( $v == floor( $v ) ) ? number_format( (int) $v ) : number_format( $v, 1 );
+            $left_labels[] = [ 'y' => $gy, 'text' => $lv, 'color' => $built[0]['color'] ];
+            if ( count( $built ) >= 2 ) {
+                $rv             = (int) round( ( $v / $nm0 ) * $built[1]['nm'] );
+                $right_labels[] = [ 'y' => $gy, 'text' => number_format( $rv ), 'color' => $built[1]['color'] ];
+            }
+        }
+    } else {
+        foreach ( [ 0.25, 0.5, 0.75, 1.0 ] as $f ) {
+            $grid_ys[] = round( $baseY - $f * $plotH, 2 );
+        }
+    }
+
+    // X-axis ticks: first date, each month boundary, "Now".
+    $ticks = [];
+    if ( $first_ts ) {
+        $ticks[] = [ 'x' => $X( 0 ), 'label' => date( 'M j', $first_ts ), 'anchor' => 'start' ];
+        $fY      = (int) date( 'Y', $first_ts );
+        $fM      = (int) date( 'n', $first_ts );
+        $last_ts = $first_ts + $max_day * 86400;
+        for ( $mo = 1; $mo <= 18; $mo++ ) {
+            $cy = $fY + (int) floor( ( $fM - 1 + $mo ) / 12 );
+            $cm = ( ( $fM - 1 + $mo ) % 12 ) + 1;
+            $ts = mktime( 0, 0, 0, $cm, 1, $cy );
+            if ( $ts >= $last_ts ) break;
+            $day_off = (int) round( ( $ts - $first_ts ) / 86400 );
+            if ( $day_off < 12 || $day_off > $max_day - 12 ) continue;
+            $ticks[] = [ 'x' => $X( $day_off ), 'label' => date( 'M', $ts ), 'anchor' => 'middle' ];
+        }
+        $ticks[] = [ 'x' => $X( $max_day ), 'label' => 'Now', 'anchor' => 'end' ];
+    }
+
+    ob_start();
+    ?>
+    <svg viewBox="0 0 <?php echo $W; ?> <?php echo $H; ?>" width="100%" preserveAspectRatio="none"
+         style="display:block;overflow:visible" role="img" aria-hidden="true">
+        <defs>
+            <?php foreach ( $built as $b ) : ?>
+            <linearGradient id="<?php echo esc_attr( $b['gid'] ); ?>" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="<?php echo esc_attr( $b['color'] ); ?>" stop-opacity="<?php echo esc_attr( $b['fill_opacity'] ); ?>"/>
+                <stop offset="100%" stop-color="<?php echo esc_attr( $b['color'] ); ?>" stop-opacity="0.02"/>
+            </linearGradient>
+            <?php endforeach; ?>
+        </defs>
+
+        <?php foreach ( $grid_ys as $gy ) : ?>
+        <line x1="<?php echo $padL; ?>" x2="<?php echo $W - $padR; ?>"
+              y1="<?php echo $gy; ?>" y2="<?php echo $gy; ?>"
+              stroke="#1a4a6b" stroke-opacity="0.07" stroke-width="1"/>
+        <?php endforeach; ?>
+
+        <?php foreach ( $built as $b ) : ?>
+        <path d="<?php echo esc_attr( $b['area'] ); ?>"
+              fill="url(#<?php echo esc_attr( $b['gid'] ); ?>)"
+              class="glc-area-in"/>
+        <path d="<?php echo esc_attr( $b['line'] ); ?>"
+              fill="none" stroke="<?php echo esc_attr( $b['color'] ); ?>"
+              stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"
+              pathLength="2600"
+              class="glc-line-draw"/>
+        <circle cx="<?php echo round( $b['last'][0], 2 ); ?>"
+                cy="<?php echo round( $b['last'][1], 2 ); ?>"
+                r="5" fill="#fff"
+                stroke="<?php echo esc_attr( $b['color'] ); ?>" stroke-width="3"
+                class="glc-dot-in"/>
+        <?php endforeach; ?>
+
+        <?php if ( $show_axes ) : ?>
+        <?php foreach ( $left_labels as $ll ) : ?>
+        <text x="<?php echo $padL - 6; ?>" y="<?php echo $ll['y'] + 4; ?>"
+              text-anchor="end" font-family="'Lato',sans-serif" font-size="13"
+              fill="<?php echo esc_attr( $ll['color'] ); ?>" opacity="0.65">
+            <?php echo esc_html( $ll['text'] ); ?>
+        </text>
+        <?php endforeach; ?>
+        <?php foreach ( $right_labels as $rl ) : ?>
+        <text x="<?php echo $W - $padR + 6; ?>" y="<?php echo $rl['y'] + 4; ?>"
+              text-anchor="start" font-family="'Lato',sans-serif" font-size="13"
+              fill="<?php echo esc_attr( $rl['color'] ); ?>" opacity="0.65">
+            <?php echo esc_html( $rl['text'] ); ?>
+        </text>
+        <?php endforeach; ?>
+        <?php endif; ?>
+
+        <?php foreach ( $ticks as $tk ) : ?>
+        <text x="<?php echo round( $tk['x'], 2 ); ?>" y="<?php echo $H - 10; ?>"
+              text-anchor="<?php echo esc_attr( $tk['anchor'] ); ?>"
+              font-family="'Lato',sans-serif" font-size="15" fill="#7d8893" font-weight="700">
+            <?php echo esc_html( $tk['label'] ); ?>
+        </text>
+        <?php endforeach; ?>
+    </svg>
+    <?php
+    return ob_get_clean();
+}

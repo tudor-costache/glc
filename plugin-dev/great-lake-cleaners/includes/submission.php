@@ -242,6 +242,10 @@ function glc_submission_meta_box_cb( $post ) {
             <textarea id="gsm_notable" name="glc_notable_finds" maxlength="1000"><?php echo esc_textarea( get_post_meta( $post->ID, 'glc_notable_finds', true ) ); ?></textarea>
         </div>
         <div class="glc-full">
+            <label for="gsm_wildlife">Wildlife Observed</label>
+            <textarea id="gsm_wildlife" name="glc_wildlife_obs" maxlength="500"><?php echo esc_textarea( get_post_meta( $post->ID, 'glc_wildlife_obs', true ) ); ?></textarea>
+        </div>
+        <div class="glc-full">
             <label for="gsm_insta">Instagram URL</label>
             <input type="url" id="gsm_insta" name="glc_instagram_url" maxlength="500"
                    placeholder="https://www.instagram.com/p/..."
@@ -318,6 +322,7 @@ add_action( 'save_post_glc_submission', function( $post_id ) {
         'glc_corridor'       => 'sanitize_text_field',
         'glc_garbage_notes'  => 'sanitize_text_field',
         'glc_notable_finds'  => 'sanitize_textarea_field',
+        'glc_wildlife_obs'   => 'sanitize_textarea_field',
         'glc_instagram_url'  => 'esc_url_raw',
     ];
     $number_fields = [
@@ -346,6 +351,8 @@ add_action( 'save_post_glc_submission', function( $post_id ) {
     if ( isset( $_POST['glc_weight_kg'] ) && $_POST['glc_weight_kg'] !== '' ) {
         update_post_meta( $post_id, 'weight_kg', (float) $_POST['glc_weight_kg'] );
     }
+    // Shared wildlife key — queried by page-stats.php across both CPTs
+    update_post_meta( $post_id, 'wildlife_obs', sanitize_textarea_field( $_POST['glc_wildlife_obs'] ?? '' ) );
 
     // Checkbox
     update_post_meta( $post_id, 'glc_photo_repost_ok', isset( $_POST['glc_photo_repost_ok'] ) ? '1' : '0' );
@@ -555,8 +562,12 @@ function glc_render_submit_form() {
                 </legend>
                 <div class="glc-field-row">
                     <div class="glc-field">
-                        <label for="glc_notable_finds"><?php esc_html_e( 'Notable or Unusual Finds', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( 'Large items, wildlife seen, anything worth sharing', 'great-lake-cleaners' ); ?></span></label>
+                        <label for="glc_notable_finds"><?php esc_html_e( 'Notable or Unusual Finds', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( 'Large items, anything out of the ordinary', 'great-lake-cleaners' ); ?></span></label>
                         <textarea id="glc_notable_finds" name="glc_notable_finds" rows="3" maxlength="1000"><?php echo esc_textarea( $_POST['glc_notable_finds'] ?? '' ); ?></textarea>
+                    </div>
+                    <div class="glc-field">
+                        <label for="glc_wildlife_obs"><?php esc_html_e( 'Wildlife Observed', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( 'Birds, turtles, fish, mammals — anything you spotted', 'great-lake-cleaners' ); ?></span></label>
+                        <textarea id="glc_wildlife_obs" name="glc_wildlife_obs" rows="3" maxlength="500"><?php echo esc_textarea( $_POST['glc_wildlife_obs'] ?? '' ); ?></textarea>
                     </div>
                     <div class="glc-field">
                         <label for="glc_instagram_url"><?php esc_html_e( 'Instagram Post URL', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( "If you posted about it — we'll link it from your cleanup entry", 'great-lake-cleaners' ); ?></span></label>
@@ -683,6 +694,7 @@ function glc_maybe_handle_submission() {
     $volunteers    = max( 1, absint(          $_POST['glc_volunteers']      ?? 1 ) );
     $hours_input   = (float)(                 $_POST['glc_hours']           ?? 0 );
     $notable       = sanitize_textarea_field( $_POST['glc_notable_finds']   ?? '' );
+    $wildlife_obs  = sanitize_textarea_field( $_POST['glc_wildlife_obs']    ?? '' );
     $instagram_url = esc_url_raw(             $_POST['glc_instagram_url']   ?? '' );
     $repost_ok     = isset( $_POST['glc_photo_repost_ok'] ) ? '1' : '0';
     $gps_lat       = isset( $_POST['glc_gps_lat'] ) && $_POST['glc_gps_lat'] !== '' ? (float) $_POST['glc_gps_lat'] : '';
@@ -721,6 +733,8 @@ function glc_maybe_handle_submission() {
         'glc_volunteers'      => $volunteers,
         'glc_hours'           => $person_hours,
         'glc_notable_finds'   => $notable,
+        'glc_wildlife_obs'    => $wildlife_obs,
+        'wildlife_obs'        => $wildlife_obs,  // shared key — queried by page-stats.php across both CPTs
         'glc_instagram_url'   => $instagram_url,
         'glc_photo_repost_ok' => $repost_ok,
         'glc_gps_lat'         => $gps_lat,
@@ -775,13 +789,15 @@ function glc_maybe_handle_submission() {
             "A new cleanup submission has arrived.\n\nSubmitter:  %s\nEmail:      %s\n"
             . "Waterway:   %s\nDate:       %s\nLocation:   %s\nDuration:   %d min\n"
             . "Bags:       %d\nWeight:     %.1f kg\nCans: %d  Bottles: %d\n"
-            . "Volunteers: %d  Person-hours: %.2f\nGPS:        %s, %s\nPhoto consent: %s\n\nReview:\n%s",
+            . "Volunteers: %d  Person-hours: %.2f\nGPS:        %s, %s\nPhoto consent: %s\n"
+            . "Wildlife:   %s\n\nReview:\n%s",
             $name, $email ?: '(none)',
             $waterway, $date, $site_name ?: '(not given)', $duration_min,
             $bags, $weight_kg, $cans, $bottles,
             $volunteers, $person_hours,
             $gps_lat !== '' ? $gps_lat : 'n/a', $gps_lon !== '' ? $gps_lon : 'n/a',
             $repost_ok === '1' ? 'Yes — may repost' : 'No',
+            $wildlife_obs ?: '(none)',
             admin_url( 'post.php?post=' . $post_id . '&action=edit' )
         )
     );
