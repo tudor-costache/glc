@@ -179,6 +179,7 @@ $_hours_display = ( $_total_hours == floor( $_total_hours ) )
 function glc_stats_wildlife_img( $obs ) {
 	$obs = strtolower( $obs );
 	if ( strpos( $obs, 'mink' ) !== false ) return 'mink.png';
+	if ( strpos( $obs, 'swallow' ) !== false ) return 'swallow.png';
 	if ( strpos( $obs, 'snapping' ) !== false ) return 'snapping-turtle.png';
 	if ( strpos( $obs, 'painted' )  !== false ) return 'painted-turtle.png';
 	if ( strpos( $obs, 'egg' )    !== false ) return 'nest.png';

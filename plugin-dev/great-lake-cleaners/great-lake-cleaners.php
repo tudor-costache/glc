@@ -3,14 +3,14 @@
  * Plugin Name: Great Lake Cleaners
  * Plugin URI:  https://greatlakecleaners.ca
  * Description: Cleanup event log, public archive, cumulative stats, and site map for Great Lake Cleaners. No external plugin dependencies.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      Great Lake Cleaners
  * License:     GPL-2.0+
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_VERSION',    '1.0.0' );
+define( 'GLC_VERSION',    '1.1.0' );
 define( 'GLC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'GLC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -22,6 +22,7 @@ require_once GLC_PLUGIN_DIR . 'includes/admin.php';
 require_once GLC_PLUGIN_DIR . 'includes/submission.php';
 require_once GLC_PLUGIN_DIR . 'includes/report.php';
 require_once GLC_PLUGIN_DIR . 'includes/crew-signup.php';
+require_once GLC_PLUGIN_DIR . 'includes/events.php';
 
 register_activation_hook( __FILE__, 'glc_activate' );
 function glc_activate() {

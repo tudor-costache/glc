@@ -87,6 +87,73 @@ add_action( 'pre_get_posts', function( $query ) {
     }
 } );
 
+// ── Event list table columns ──────────────────────────────────────────────────
+
+add_filter( 'manage_glc_event_posts_columns', function( $cols ) {
+    unset( $cols['date'] );
+    return array_merge( $cols, [
+        'event_date' => 'Event Date',
+        'event_time' => 'Time',
+        'site_name'  => 'Site',
+        'linked'     => 'Cleanup Report',
+        'rsvps'      => 'RSVPs',
+    ] );
+} );
+
+add_action( 'manage_glc_event_posts_custom_column', function( $col, $post_id ) {
+    switch ( $col ) {
+        case 'event_date':
+            $d = get_post_meta( $post_id, 'event_date', true );
+            echo $d ? esc_html( date( 'M j, Y', strtotime( $d ) ) ) : '—';
+            if ( $d && function_exists( 'glc_event_is_past' ) && glc_event_is_past( $post_id ) ) {
+                echo ' <span style="color:#999;">(past)</span>';
+            }
+            break;
+        case 'event_time':
+            echo function_exists( 'glc_event_time_range' )
+                ? esc_html( glc_event_time_range( $post_id ) ?: '—' )
+                : '—';
+            break;
+        case 'site_name':
+            echo esc_html( get_post_meta( $post_id, 'site_name', true ) ?: '—' );
+            break;
+        case 'linked':
+            $linked = (int) get_post_meta( $post_id, 'linked_cleanup_id', true );
+            if ( $linked && get_post_status( $linked ) ) {
+                echo '<a href="' . esc_url( get_edit_post_link( $linked ) ) . '">'
+                    . esc_html( get_the_title( $linked ) ) . '</a>';
+            } else {
+                echo '—';
+            }
+            break;
+        case 'rsvps':
+            $parties = (int) get_post_meta( $post_id, 'rsvp_parties', true );
+            $count   = (int) get_post_meta( $post_id, 'rsvp_count',   true );
+            echo $parties ? esc_html( $count . ' (' . $parties . ')' ) : '—';
+            break;
+    }
+}, 10, 2 );
+
+add_filter( 'manage_edit-glc_event_sortable_columns', function( $cols ) {
+    $cols['event_date'] = 'event_date';
+    return $cols;
+} );
+
+add_action( 'pre_get_posts', function( $query ) {
+    if ( ! is_admin() || ! $query->is_main_query() ) return;
+    if ( $query->get( 'post_type' ) !== 'glc_event' ) return;
+    if ( $query->get( 'orderby' ) === 'event_date' ) {
+        $query->set( 'meta_key', 'event_date' );
+        $query->set( 'orderby', 'meta_value' );
+    }
+    // Default order: newest event date first
+    if ( ! $query->get( 'orderby' ) ) {
+        $query->set( 'meta_key', 'event_date' );
+        $query->set( 'orderby', 'meta_value' );
+        $query->set( 'order', 'DESC' );
+    }
+} );
+
 // ── Gallery feature flag on attachments ──────────────────────────────────────
 // Adds a "Feature in photo gallery" checkbox to the attachment edit modal.
 // Only attachments with _glc_gallery = '1' appear in [glc_gallery].
@@ -115,13 +182,17 @@ add_filter( 'attachment_fields_to_save', function( $post, $attachment ) {
 
 add_action( 'admin_head', function() {
     $screen = get_current_screen();
-    if ( ! $screen || strpos( $screen->id, 'cleanup_event' ) === false ) return;
+    if ( ! $screen ) return;
+    if ( strpos( $screen->id, 'cleanup_event' ) === false && strpos( $screen->id, 'glc_event' ) === false ) return;
     ?>
     <style>
     .column-volunteers, .column-bags, .column-weight_kg, .column-tires, .column-carts, .column-hazards, .column-planted { width: 70px; text-align: center; }
     .column-cleanup_date { width: 110px; }
     .column-site_name { width: 220px; }
     .column-corridor { width: 140px; }
+    .column-event_date { width: 130px; }
+    .column-event_time { width: 140px; }
+    .column-rsvps { width: 80px; text-align: center; }
     </style>
     <?php
 } );

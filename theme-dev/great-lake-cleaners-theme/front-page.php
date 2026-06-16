@@ -201,6 +201,69 @@ get_header();
 
     <?php endif; ?>
 
+    <!-- ── Upcoming events (hidden entirely when nothing is scheduled) ─────── -->
+    <?php
+    $upcoming_events = function_exists( 'glc_get_upcoming_events' ) ? glc_get_upcoming_events( 3 ) : [];
+    if ( ! empty( $upcoming_events ) ) :
+    ?>
+    <div class="glc-wave-divider" aria-hidden="true">
+        <svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0,11 C150,3 300,19 450,11 C600,3 750,19 900,11 C1050,3 1200,19 1200,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M0,16 C150,8 300,24 450,16 C600,8 750,24 900,16 C1050,8 1200,24 1200,16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.45"/>
+        </svg>
+    </div>
+
+    <section class="glc-fp-spotlight glc-ev-strip" aria-labelledby="glc-events-heading">
+
+        <div class="glc-spot-header">
+            <h2 id="glc-events-heading" class="glc-spot-h2">Upcoming events</h2>
+        </div>
+
+        <div class="glc-ev-fp-grid">
+            <?php foreach ( $upcoming_events as $ev ) :
+                $ev_id   = $ev->ID;
+                $ev_date = glc_event_date( $ev_id );
+                $ev_time = glc_event_time_range( $ev_id );
+                $ev_site = get_post_meta( $ev_id, 'site_name', true );
+                $ev_ts   = $ev_date ? strtotime( $ev_date ) : 0;
+
+                $ev_label_parts = [ get_the_title( $ev_id ) ];
+                if ( $ev_date ) $ev_label_parts[] = date( 'l, F j, Y', $ev_ts );
+                if ( $ev_time ) $ev_label_parts[] = $ev_time;
+                if ( $ev_site ) $ev_label_parts[] = $ev_site;
+                $ev_label_parts[] = 'details and RSVP';
+            ?>
+            <a class="glc-ev-fp-card"
+               href="<?php echo esc_url( get_permalink( $ev_id ) ); ?>"
+               aria-label="<?php echo esc_attr( implode( ', ', $ev_label_parts ) ); ?>">
+                <?php if ( $ev_ts ) : ?>
+                <span class="glc-ev-fp-date" aria-hidden="true">
+                    <span class="glc-ev-fp-month"><?php echo esc_html( date( 'M', $ev_ts ) ); ?></span>
+                    <span class="glc-ev-fp-day"><?php echo esc_html( date( 'j', $ev_ts ) ); ?></span>
+                </span>
+                <?php endif; ?>
+                <span class="glc-ev-fp-body">
+                    <span class="glc-ev-fp-title"><?php echo esc_html( get_the_title( $ev_id ) ); ?></span>
+                    <?php if ( $ev_time || $ev_site ) : ?>
+                    <span class="glc-ev-fp-meta">
+                        <?php echo esc_html( implode( ' · ', array_filter( [ $ev_time, $ev_site ] ) ) ); ?>
+                    </span>
+                    <?php endif; ?>
+                    <span class="glc-ev-fp-rsvp">Details &amp; RSVP &rarr;</span>
+                </span>
+            </a>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="glc-spot-footer">
+            <a class="glc-spot-view-all" href="<?php echo esc_url( get_post_type_archive_link( 'glc_event' ) ); ?>">
+                View all events &rarr;
+            </a>
+        </div>
+
+    </section>
+    <?php endif; ?>
+
     <div class="glc-wave-divider" aria-hidden="true">
         <svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M0,11 C150,3 300,19 450,11 C600,3 750,19 900,11 C1050,3 1200,19 1200,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>

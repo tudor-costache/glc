@@ -6,7 +6,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.1.0' );
+define( 'GLC_THEME_VERSION', '1.2.1' );
 
 // ── Theme setup ───────────────────────────────────────────────────────────────
 add_action( 'after_setup_theme', function() {
@@ -60,6 +60,7 @@ add_action( 'wp_enqueue_scripts', function() {
         GLC_THEME_VERSION,
         true
     );
+
 } );
 
 // ── Nav fallback — renders basic links if no menu is assigned ─────────────────
@@ -72,6 +73,12 @@ function glc_nav_fallback() {
     if ( $archive ) {
         echo '<li><a href="' . esc_url( $archive ) . '">'
             . esc_html__( 'Cleanups', 'great-lake-cleaners' ) . '</a></li>';
+    }
+
+    $events = get_post_type_archive_link( 'glc_event' );
+    if ( $events ) {
+        echo '<li><a href="' . esc_url( $events ) . '">'
+            . esc_html__( 'Events', 'great-lake-cleaners' ) . '</a></li>';
     }
 
     $about = get_page_by_path( 'about' );
@@ -149,6 +156,12 @@ add_filter( 'body_class', function( $classes ) {
     }
     if ( is_post_type_archive( 'cleanup_event' ) ) {
         $classes[] = 'glc-archive-cleanup';
+    }
+    if ( is_singular( 'glc_event' ) ) {
+        $classes[] = 'glc-single-event-page';
+    }
+    if ( is_post_type_archive( 'glc_event' ) ) {
+        $classes[] = 'glc-archive-event';
     }
     return $classes;
 } );

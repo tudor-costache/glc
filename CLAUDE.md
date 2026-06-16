@@ -91,6 +91,32 @@ Submissions land as `pending`. Admin reviews in WP Admin → Submissions. Photos
 
 **Key:** `items_recycled`, `weight_kg`, and `wildlife_obs` are stored without the `glc_` prefix (matching `cleanup_event`) so `glc_get_impact_stats()` and `page-stats.php` can aggregate both post types without special-casing. Wildlife is also stored under `glc_wildlife_obs` (prefixed) for the admin meta box. If footer stats or wildlife cards diverge between CPTs, check these shared keys first.
 
+### Community Events Post Type: `glc_event`
+
+Upcoming community cleanups, announced publicly. **Distinct from `cleanup_event`** (which is a record of a *completed* cleanup). Registered in `includes/events.php` — CPT, meta box, helpers, and RSVP all live in that one file. Archive slug `events` → `/events/`.
+
+**⚠️ Never create a WP page with slug `events`** — it conflicts with the CPT archive rewrite.
+
+Fields via native "Event Details" meta box:
+
+| Field | Meta key | Notes |
+|---|---|---|
+| Event Date | `event_date` | YYYY-MM-DD — upcoming/past split strcmp's it; normalised on save |
+| Start Time | `event_start_time` | HH:MM 24h; display formatting via `glc_event_time_range()` |
+| End Time | `event_end_time` | optional |
+| Site Name | `site_name` | **shared key** with `cleanup_event` |
+| GPS Latitude / Longitude | `gps_lat` / `gps_lon` | **shared keys** — `[glc_map post_id=N]` works on events unchanged |
+| Meeting Point | `meeting_point` | textarea |
+| What to Bring / Notes | `what_to_bring` | textarea |
+| Linked Cleanup Report | `linked_cleanup_id` | post ID of the resulting `cleanup_event` — past events show "See the results →" |
+| RSVP totals | `rsvp_count` / `rsvp_parties` | aggregate counters bumped by the RSVP handler; read-only in the meta box |
+
+**Stats:** events never count toward public stats — `glc_get_impact_stats()` and `page-stats.php` query by post type.
+
+**Upcoming vs past:** an event is upcoming through the end of its calendar day, compared with `current_time('Y-m-d')` (site timezone), never `date()` (server may be UTC). Undated events count as past. Helpers: `glc_event_is_past()`, `glc_get_upcoming_events( $limit )` (date ASC, start-time tiebreak), `glc_get_past_events()` (date DESC).
+
+**RSVP (`[glc_event_rsvp post_id=N]`):** name + email + party size (clamped 1–20), AJAX action `glc_event_rsvp`, honeypot + nonce + rate limit (3/10 min per IP, same as join-crew). Email-only to `info@greatlakecleaners.ca` with `Reply-To` set to the attendee — no names/emails stored in the DB; only the aggregate headcount counters are bumped (after successful send). Server rejects RSVPs to past or unpublished events. The form uses its own `.glc-ev-rsvp-form` class + script — do not reuse the `.glc-join-form` selector.
+
 ### Submission Form — Thank-You / Receipt State
 
 After success, `[glc_submit_form]` shows a receipt line ("You submitted: 3 bags, 6.0 kg, Parkwood Gardens, April 3") built from `$_POST` data that remains available after the handler returns `'success'`. Each part is conditional — omitted if empty.
@@ -120,6 +146,7 @@ Email-only — no CPT, no admin review queue. Reports go directly to `info@great
 | `[glc_references]` | Wrapping shortcode — hides an `<ol>` behind a gold-bordered slide-in panel. Usage: `[glc_references]<ol>...</ol>[/glc_references]`. Button label auto-counts `<li>` items. |
 | `[glc_join_crew]` | Email signup, AJAX, rate-limited (3/10 min per IP), honeypot + nonce. No CPT. |
 | `[glc_wildlife_log]` | Chronological wildlife sightings list. Superseded by `page-stats.php` wildlife cards but still usable. |
+| `[glc_event_rsvp]` | Event RSVP form — see `glc_event` CPT section. Attr: `post_id` (defaults to current post). Returns empty for past/non-event posts. |
 
 ---
 
@@ -212,6 +239,14 @@ SVG viewBox `0 0 1200 80`. Three paths: `#5a9fc0` at 45% opacity (lightest, high
 
 Fetches all `cleanup_event` + published `glc_submission` posts, merges, sorts by date descending, paginates at 12. Map section has `id="cleanups-map"` and `scroll-margin-top: 110px` — the River Corridors footer stat links directly to it.
 
+### Events Pages (`/events/`) — `.glc-ev-*`
+
+- **`archive-glc_event.php`** — Upcoming cards (full list, page 1 only) then a compact Past Events list (paginated at 24, manual `array_slice` pagination like cleanups). Past rows show "See the results →" when `linked_cleanup_id` is set **and** that report is still published.
+- **`single-glc_event.php`** — past banner (replaces RSVP when the event is over) → header → content → meeting point / what-to-bring cards → "Where to Meet" map (`[glc_map post_id]`, `isolation: isolate` preserved) → RSVP section.
+- **Front page** — "Upcoming events" section (≤ 3 `.glc-ev-fp-card` cards) sits between Recent Cleanups and About. The section **and its own wave divider** are wrapped in one conditional — both vanish when nothing is scheduled, so no double divider appears.
+- **Navigation** — menus are admin-managed: add an "Events" custom link (`/events/`) to the primary menu after Cleanups. `glc_nav_fallback()` in `functions.php` includes Events automatically.
+- After deploying: deactivate/reactivate the plugin to flush rewrites, or `/events/` 404s.
+
 ### Stats Page (`/stats/`) — `.dirCL-*` redesign
 
 **Template:** `page-stats.php` — fully self-contained, no shortcodes. All CSS class names prefixed `.dirCL-*`.
@@ -265,6 +300,8 @@ Only attachments with `_glc_gallery = '1'` meta appear. Flagging workflow: Media
 | Report an Issue | `report-issue` | (default) | Blank — template handles layout |
 | Join our Crew | `join-crew` | Join our Crew | Blank — template handles layout |
 
+**Do not create a page with slug `events`** — it collides with the `glc_event` archive rewrite.
+
 ### Accessibility
 
 - **Focus styles:** Global `:focus-visible` (3px solid gold, 2px offset) at end of `style.css`. Form inputs use gold outline on `:focus` — the old `outline: none` was a WCAG 2.4.7 failure.
@@ -278,6 +315,13 @@ Only attachments with `_glc_gallery = '1'` meta appear. Flagging workflow: Media
 
 ## Next Steps
 
+- [ ] **Events rollout (~July 2026)** — The `glc_event` feature is fully built and packed in both zips (plugin 1.1.0, theme 1.2.0) but **not yet deployed to production**. Holding until closer to the first hosted community event. Rollout checklist:
+  1. Upload both zips to production (plugin: Plugins → Upload; theme: Appearance → Themes → Upload)
+  2. **Deactivate → reactivate the plugin** (rewrite flush — skipping this 404s `/events/`)
+  3. Appearance → Menus → primary: add Custom Link `/events/`, label "Events", after Cleanups
+  4. Create the first event (Events → Add New Event): date, start/end time, site, meeting point, GPS, what to bring
+  5. Verify: `/events/` archive, single page map + RSVP (test email arrives at info@ with Reply-To), front-page "Upcoming events" section appears, footer stats unchanged
+  6. After the cleanup happens: log the `cleanup_event` as usual, then set "Linked Cleanup Report" on the event so it shows "See the results →"
 - [ ] **Donate / support page** — E-transfer or PayPal link, honest note that tax receipts aren't available pre-incorporation. **Blocked on:** deciding on a dedicated e-transfer email or PayPal account separate from `info@`.
 - [ ] Consider physical badge ("Watershed Steward" patch) for top contributors at year-end — award based on cleanups logged (3+), not weight.
 - [ ] **Gallery thumbnail Option B** — register `glc-thumb` custom image size with `crop: ['center', 'top']`, update gallery shortcode, run "Regenerate Thumbnails". Do when gallery load time becomes a concern.
