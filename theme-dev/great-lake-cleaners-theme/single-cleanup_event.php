@@ -31,6 +31,7 @@ if ( have_posts() ) :
     $planted   = get_post_meta( $id, 'species_planted',     true );
     $bank      = get_post_meta( $id, 'meters_bank_cleared', true );
     $notes     = get_the_content(); // from post_content (tracker 'notes' column)
+    $wimg      = $wildlife ? glc_stats_wildlife_img( $wildlife ) : null;
 
     // Normalise date: accept YYYY-MM-DD or legacy display formats
     if ( $date && ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
@@ -94,7 +95,7 @@ if ( have_posts() ) :
             <div class="glc-sub-stat">
                 <span class="glc-sub-stat-icon"><img src="<?php echo esc_url( get_template_directory_uri() ); ?>/assets/images/icon-bag.svg" alt="" width="20" height="20" style="vertical-align:-0.2em;flex-shrink:0;width:1.3em;height:1.3em" aria-hidden="true"></span>
                 <span class="glc-sub-stat-val"><?php echo esc_html( $bags ); ?></span>
-                <span class="glc-sub-stat-lbl"><?php esc_html_e( 'Bags', 'great-lake-cleaners' ); ?></span>
+                <span class="glc-sub-stat-lbl"><?php echo 1 == (float) $bags ? esc_html__( 'Bag', 'great-lake-cleaners' ) : esc_html__( 'Bags', 'great-lake-cleaners' ); ?></span>
             </div>
             <?php endif; ?>
 
@@ -143,19 +144,32 @@ if ( have_posts() ) :
         </div>
         <?php endif; ?>
 
-        <!-- ── Notable finds ─────────────────────────────────────────────── -->
-        <?php if ( $notable ) : ?>
-        <div class="glc-single-sub-notable">
-            <h2><?php esc_html_e( 'Notable Finds', 'great-lake-cleaners' ); ?></h2>
-            <p><?php echo esc_html( $notable ); ?></p>
-        </div>
-        <?php endif; ?>
+        <!-- ── Notable finds / Wildlife observed ───────────────────────────── -->
+        <?php if ( $notable || $wildlife ) : ?>
+        <div class="glc-single-sub-findings">
 
-        <!-- ── Wildlife observed ─────────────────────────────────────────── -->
-        <?php if ( $wildlife ) : ?>
-        <div class="glc-single-sub-notable glc-single-event-wildlife">
-            <h2><?php esc_html_e( 'Wildlife Observed', 'great-lake-cleaners' ); ?></h2>
-            <p><?php echo esc_html( $wildlife ); ?></p>
+            <?php if ( $notable ) : ?>
+            <div class="glc-single-sub-notable">
+                <h2><?php esc_html_e( 'Notable Finds', 'great-lake-cleaners' ); ?></h2>
+                <p><?php echo esc_html( $notable ); ?></p>
+            </div>
+            <?php endif; ?>
+
+            <?php if ( $wildlife ) : ?>
+            <div class="glc-single-sub-notable glc-single-event-wildlife<?php echo $wimg ? ' has-img' : ''; ?>">
+                <?php if ( $wimg ) : ?>
+                <div class="glc-wildlife-thumb">
+                    <img src="<?php echo esc_url( get_template_directory_uri() . '/assets/images/' . $wimg ); ?>"
+                         alt="" draggable="false" />
+                </div>
+                <?php endif; ?>
+                <div class="glc-wildlife-text">
+                    <h2><?php esc_html_e( 'Wildlife Observed', 'great-lake-cleaners' ); ?></h2>
+                    <p><?php echo esc_html( $wildlife ); ?></p>
+                </div>
+            </div>
+            <?php endif; ?>
+
         </div>
         <?php endif; ?>
 

@@ -123,7 +123,7 @@ get_header();
                     <?php if ( $f_bags ) : ?>
                     <li>
                         <span class="glc-spot-val"><?php echo esc_html( $f_bags ); ?></span>
-                        <span class="glc-spot-lbl"><?php echo 1 === (int) $f_bags ? 'Bag' : 'Bags'; ?></span>
+                        <span class="glc-spot-lbl"><?php echo 1 == (float) $f_bags ? 'Bag' : 'Bags'; ?></span>
                     </li>
                     <?php endif; ?>
                     <?php if ( $f_weight ) : ?>

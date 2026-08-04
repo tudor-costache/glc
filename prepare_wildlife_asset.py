@@ -5,9 +5,20 @@ prepare_wildlife_asset.py
 Removes solid or near-white backgrounds from wildlife illustration images
 and outputs transparent PNGs ready for the GLC wildlife card asset library.
 
+Also generates an _s.png pin-crop variant sized for the /stats wildlife map
+(square crop focused on the head, defaulting to the right side of the image).
+
 Usage:
     python prepare_wildlife_asset.py input.png output.png
     python prepare_wildlife_asset.py input.png output.png --tolerance 30 --width 600 --pad 20
+
+    # Also generate a pin crop alongside the main asset:
+    python prepare_wildlife_asset.py input.jpg beaver.png --pin
+    python prepare_wildlife_asset.py input.jpg beaver.png --pin --pin-anchor left --pin-size 200
+
+    # Pin crop only — for already-processed transparent PNGs:
+    python prepare_wildlife_asset.py beaver.png beaver.png --pin-only
+    python prepare_wildlife_asset.py beaver.png beaver.png --pin-only --pin-anchor center
 
 Defaults are tuned for clean flat illustrations on white/near-white backgrounds.
 
@@ -16,6 +27,7 @@ Requires: Pillow, NumPy
 """
 
 import argparse
+import os
 import sys
 from collections import deque
 
@@ -121,6 +133,57 @@ def resize_to_width(img, target_width):
     return img.resize((target_width, new_h), Image.LANCZOS)
 
 
+def make_pin_crop(img, size, anchor, pad=8):
+    """
+    Square crop for the map pin, focused on the subject's head.
+
+    anchor='right'  — crop from the right edge (head of a right-facing animal)
+    anchor='left'   — crop from the left edge  (head of a left-facing animal)
+    anchor='center' — centred square crop
+
+    `pad` is breathing room on the nose side in output pixels. The crop box is
+    extended beyond the image boundary by the equivalent number of source pixels;
+    PIL fills out-of-bounds areas with transparent, giving the nose room to breathe.
+    """
+    img = img.convert("RGBA")
+    w, h = img.size
+    sq = min(w, h)
+    top = (h - sq) // 2
+
+    src_pad = round(pad * sq / size) if pad > 0 else 0
+
+    if anchor == 'right':
+        # Extend sq pixels left from (w + src_pad); rightmost src_pad pixels are transparent
+        left = w + src_pad - sq
+        box = (left, top, left + sq, top + sq)
+    elif anchor == 'left':
+        # Start src_pad pixels before the left edge; leftmost src_pad pixels are transparent
+        box = (-src_pad, top, sq - src_pad, top + sq)
+    else:  # center
+        left = (w - sq) // 2
+        box = (left, top, left + sq, top + sq)
+
+    return img.crop(box).resize((size, size), Image.LANCZOS)
+
+
+def pin_output_path(output_path):
+    stem, _ = os.path.splitext(output_path)
+    return f"{stem}_s.png"
+
+
+def save_pin(img, output_path, size, anchor, pad):
+    pin_path = pin_output_path(output_path)
+    print(f"Pin crop  anchor={anchor}, size={size}px, pad={pad}px")
+    pin_img = make_pin_crop(img, size, anchor, pad)
+    try:
+        pin_img.save(pin_path, "PNG", optimize=True)
+    except Exception as e:
+        sys.exit(f"Error saving pin crop: {e}")
+    pw, ph = pin_img.size
+    print(f"Saved     {pin_path}  ({pw}×{ph}px)")
+    return pin_path
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Remove background from a wildlife illustration and export as transparent PNG."
@@ -142,6 +205,44 @@ def main():
         "--pad", type=int, default=20,
         help="Padding in pixels to add around the subject after crop (default: 20)",
     )
+
+    # Pin crop options
+    pin_group = parser.add_mutually_exclusive_group()
+    pin_group.add_argument(
+        "--pin", action="store_true",
+        help=(
+            "Also generate an _s.png pin variant alongside the main output. "
+            "The crop is taken from the processed result."
+        ),
+    )
+    pin_group.add_argument(
+        "--pin-only", action="store_true",
+        help=(
+            "Skip background removal and resize — just autocrop the input and "
+            "export an _s.png pin crop. Use this for already-processed transparent PNGs."
+        ),
+    )
+    parser.add_argument(
+        "--pin-size", type=int, default=200,
+        help="Square output size for the pin crop in pixels (default: 200).",
+    )
+    parser.add_argument(
+        "--pin-anchor", choices=["right", "left", "center"], default="right",
+        help=(
+            "Which side of the image to crop for the pin. "
+            "right = head of a right-facing animal (default); "
+            "left = head of a left-facing animal; "
+            "center = centred square."
+        ),
+    )
+    parser.add_argument(
+        "--pin-pad", type=int, default=8,
+        help=(
+            "Breathing room on the nose side, in output pixels (default: 8 ≈ 2px at 48px display). "
+            "The crop box extends beyond the image boundary by the equivalent source pixels; "
+            "PIL fills the gap with transparent."
+        ),
+    )
     args = parser.parse_args()
 
     print(f"Loading   {args.input}")
@@ -154,6 +255,17 @@ def main():
 
     original_size = img.size
     print(f"          {original_size[0]}×{original_size[1]}px, mode={img.mode}")
+
+    if args.pin_only:
+        # Skip all processing — just autocrop around the subject and pin-crop
+        img = img.convert("RGBA")
+        print(f"Autocrop  (no background removal)")
+        img = autocrop(img, padding=0)
+        save_pin(img, args.output, args.pin_size, args.pin_anchor, args.pin_pad)
+        print()
+        print("Next: copy the _s.png to theme-dev/great-lake-cleaners-theme/assets/images/")
+        print("      The map pin will use it automatically.")
+        return
 
     print(f"Removing  background (tolerance={args.tolerance})")
     img = remove_background(img, args.tolerance)
@@ -173,9 +285,17 @@ def main():
 
     w, h = img.size
     print(f"Done.     {w}×{h}px transparent PNG → {args.output}")
+
+    if args.pin:
+        print()
+        save_pin(img, args.output, args.pin_size, args.pin_anchor, args.pin_pad)
+
     print()
-    print("Next: copy the PNG to theme-dev/great-lake-cleaners-theme/assets/images/")
+    print("Next: copy the PNG(s) to theme-dev/great-lake-cleaners-theme/assets/images/")
     print("      then add a keyword match in glc_stats_wildlife_img() in page-stats.php")
+    if args.pin or args.pin_only:
+        print("      The _s.png pin crop is used automatically on the wildlife map.")
+        print("      Re-run with --pin-anchor left|center or --pin-size N to adjust.")
 
 
 if __name__ == "__main__":

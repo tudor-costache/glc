@@ -5,6 +5,11 @@
 **Organization:** Great Lake Cleaners  
 **Tagline:** The lake starts here.  
 **Mission:** Regular cleanups of Guelph's local waterways — by foot and paddle — that flow into the Great Lakes system via the Grand River and Lake Erie.  
+**Email:** `info@greatlakecleaners.ca`  
+**Instagram:** https://instagram.com/greatlakecleaners  
+**Substack:** https://greatlakecleaners.substack.com/  
+
+Social links appear in the header and footer, and in the NGO JSON-LD `sameAs` array in `header.php` — **add new profiles to all three.**
 
 ---
 
@@ -43,7 +48,8 @@ Fields via native "Cleanup Details" meta box below the block editor.
 | Weight (kg) | `weight_kg` | |
 | Items Recycled | `items_recycled` | cans + bottles |
 | Recyclables Weight (kg) | `recycled_weight_kg` | stored for future use; not added to debris total |
-| Tires Removed | `tires_removed` | feeds `[glc_impact_highlights]` |
+| Tires Removed | `tires_removed` | feeds `[glc_impact_highlights]`; **shared key** with `glc_submission` |
+| Shopping Carts Removed | `carts_removed` | feeds `[glc_impact_highlights]`; **shared key** with `glc_submission` |
 | Hazardous Waste Removed | `hazards_removed` | stored but not currently surfaced |
 | Notable Finds | `notable_finds` | |
 | Native Species Planted | `species_planted` | |
@@ -81,6 +87,8 @@ Submissions land as `pending`. Admin reviews in WP Admin → Submissions. Photos
 | Bottles (#) | `glc_bottles` |
 | Items Recycled (total) | `items_recycled` |
 | Weight for stats | `weight_kg` |
+| Tires Removed | `glc_tires_removed` / `tires_removed` | dual-key — see note below |
+| Shopping Carts Removed | `glc_carts_removed` / `carts_removed` | dual-key — see note below |
 | Volunteers | `glc_volunteers` |
 | Person-Hours | `glc_hours` |
 | Notable Finds | `glc_notable_finds` |
@@ -89,7 +97,7 @@ Submissions land as `pending`. Admin reviews in WP Admin → Submissions. Photos
 | Photo Repost Consent | `glc_photo_repost_ok` |
 | Photo IDs | `glc_photo_ids` |
 
-**Key:** `items_recycled`, `weight_kg`, and `wildlife_obs` are stored without the `glc_` prefix (matching `cleanup_event`) so `glc_get_impact_stats()` and `page-stats.php` can aggregate both post types without special-casing. Wildlife is also stored under `glc_wildlife_obs` (prefixed) for the admin meta box. If footer stats or wildlife cards diverge between CPTs, check these shared keys first.
+**Key:** `items_recycled`, `weight_kg`, `tires_removed`, and `carts_removed` are stored without the `glc_` prefix (matching `cleanup_event`) so `glc_get_impact_stats()`, `[glc_impact_highlights]`, and the `/cleanups/` `?impact=` filter can aggregate both post types without special-casing. Wildlife, tires, and carts are also stored under their `glc_`-prefixed name for the admin meta box. If footer stats, wildlife cards, or impact-highlight totals diverge between CPTs, check these shared keys first.
 
 ### Community Events Post Type: `glc_event`
 
@@ -142,7 +150,7 @@ Email-only — no CPT, no admin review queue. Reports go directly to `info@great
 | `[glc_gallery]` | Photo gallery — year tabs + lightbox. Only images flagged `_glc_gallery=1` appear. Global meta query finds all flagged attachments regardless of `post_parent` — images inserted from the Media Library (which keep `post_parent=0`) are included. Within each year, photos sort by `sort_date` (cleanup date if known, upload date as fallback). |
 | `[glc_report_form]` | Waterway issue report |
 | `[glc_timeline]` | SVG area chart (debris + recycled) — same renderer as `page-stats.php`. Outputs `.dirCL-chartwrap` + `.dirCL-legend`. No Chart.js. |
-| `[glc_impact_highlights]` | Stat cards (sites, tires, cleanups) + SVG hours chart — same renderer as `page-stats.php`. Chart wrapped in `.dirCL-chartwrap` + `.dirCL-legend`. No Chart.js. |
+| `[glc_impact_highlights]` | Stat cards (unique sites, tires, shopping carts, total cleanups) + SVG hours chart — same renderer as `page-stats.php`. Chart wrapped in `.dirCL-chartwrap` + `.dirCL-legend`. No Chart.js. Tires/carts cards link to `/cleanups/?impact=tires` / `?impact=carts` (handled by `archive-cleanup_event.php`, filters to cleanups with that count > 0); sites/total cards link to plain `/cleanups/`. |
 | `[glc_references]` | Wrapping shortcode — hides an `<ol>` behind a gold-bordered slide-in panel. Usage: `[glc_references]<ol>...</ol>[/glc_references]`. Button label auto-counts `<li>` items. |
 | `[glc_join_crew]` | Email signup, AJAX, rate-limited (3/10 min per IP), honeypot + nonce. No CPT. |
 | `[glc_wildlife_log]` | Chronological wildlife sightings list. Superseded by `page-stats.php` wildlife cards but still usable. |
@@ -196,6 +204,10 @@ Email-only — no CPT, no admin review queue. Reports go directly to `info@great
 - Customizer logo setting must be cleared for file-based `glc-badge.png` to take effect.
 - **`html { overflow-anchor: none }` must be preserved** — without it, the browser compensates for the compact-header height change by adjusting `scrollY`, which drops below the compact threshold, reverting the header, causing a flash/oscillation loop.
 
+**Social icons:** Instagram + Substack, both inside `.glc-header-social` (a flex **row**) nested in `.glc-header-actions`. The wrapper is required — `.glc-header-actions` is `flex-direction: column`, so icons added to it directly stack vertically instead of sitting side by side. Both links use the `.glc-insta-link` class (named before Substack existed — it is the shared social-icon style, not Instagram-specific). `.glc-header-actions` is `display: none` below 768px, so neither icon shows on mobile — the footer pair covers social links there.
+
+**Icon weight matching:** the Instagram mark is stroke-drawn (`fill="none"`, `stroke-width: 1.8`) and inset to 20 of its 24 units; the Substack mark is a solid `fill` path spanning the full 24. Rendered raw, Substack reads noticeably larger and heavier. It is wrapped in `<g transform="translate(12,12) scale(0.85) translate(-12,-12)">` — scaling about the centre brings its height to ~20.4 to match. Keep the wrapper if the path is ever swapped. Both icons use `fill`/`stroke="currentColor"` so they inherit the white-70% default and gold hover.
+
 ### Compact Header on Scroll
 
 Collapses at 80px scroll, expands below 40px (hysteresis prevents oscillation). Mobile always shows compact styles — the JS still fires but has no visual effect.
@@ -217,7 +229,9 @@ Collapses at 80px scroll, expands below 40px (hysteresis prevents oscillation). 
 
 All five stats show a `+` superscript (minimums, not exact counts).
 
-**Instagram hover specificity:** Must be `.glc-footer-base a.glc-footer-insta:hover` to beat `.glc-footer-base a:hover`.
+**Social icons:** Instagram + Substack, both using the `.glc-footer-insta` class, inline in the `.glc-footer-base` bar after the Privacy Policy link. Separated by `.glc-footer-insta + .glc-footer-insta { margin-left: 8px }` — they sit adjacent, with no `·` divider between them (the `·` separators divide *sections*, not the icon pair).
+
+**Hover specificity:** Must be `.glc-footer-base a.glc-footer-insta:hover` to beat `.glc-footer-base a:hover`.
 
 **`.glc-footer-base a`** must be defined only once in `style.css`. A duplicate rule previously existed in the Privacy Policy section that silently overrode the color with `rgba(255,255,255,0.6)` and removed the underline — do not re-add a second rule.
 
@@ -261,16 +275,28 @@ Fetches all `cleanup_event` + published `glc_submission` posts, merges, sorts by
 
 **Item dot pictograph:** self-scaling — `itemsPerDot` from `[2,5,10,20,25,50,…]` so grid stays ≤ 672 dots (28 cols × 24 rows). IntersectionObserver adds `.glc-dots-visible` when the block enters viewport; dots are hidden by default and animate in on that class.
 
-**Wildlife cards:** `glc_stats_wildlife_img()` maps observation text to an image filename — see `page-stats.php` for the current list. Cards show a brand-tinted gradient stage (`.wfig`) with the illustration + `drop-shadow`, then `.wbody` below with observation and site/date. Stagger delay `0.15 + i × 0.12s` via inline `--d` CSS property. Cards without a matching image render text-only (no `.wfig`). Gold border + shadow on hover; title shifts to gold-deep. No translateY on hover.
+**Large items pictograph ("Tires & shopping carts, pulled from the water"):** sits between the Hours and Wildlife sections (own pair of wave dividers, both skipped together when `$_total_tires` and `$_total_carts` are both 0 — same "vanish together" pattern as the front-page Upcoming Events divider). One icon per unit — **not** scaled down like the item dot grid, since tire/cart counts are small. Built from `$_tire_items` / `$_cart_items` in `page-stats.php`, populated by walking `array_merge( $_events, $_subs )` and reading the shared `tires_removed` / `carts_removed` keys via `glc_cleanup_field()` (same aggregation `[glc_impact_highlights]` uses). Each icon is a real `<a>` linking to its source post, with `aria-label`/`title` built from site + date so a screen reader gets a distinct name per icon rather than N identical unlabeled links. Icons are `tire-icon.png` / `cart-icon.png` in `assets/images/` — plain cropped PNGs prepared with `prepare_wildlife_asset.py` (main output only; no `--pin` needed since these aren't map markers, just inline icons at `object-fit: contain` in a 40×40 box).
 
-**Wildlife data source:** `page-stats.php` queries both `cleanup_event` and `glc_submission` CPTs for the `wildlife_obs` meta key (same unprefixed key on both). Sorted via `glc_cleanup_field()` for CPT-agnostic date access.
+**Wildlife cards:** `glc_stats_wildlife_img()` maps observation text to an image filename — see `page-stats.php` for the current list. Cards show a brand-tinted gradient stage (`.wfig`) with the illustration + `drop-shadow`, then `.wbody` below with observation and site/date. Stagger delay `0.15 + i × 0.12s` via inline `--d` CSS property. **Sightings that don't match a known species are excluded entirely** (not rendered as a text-only card) — `page-stats.php` filters `$_wildlife_events`/`$_wildlife_all` down to `glc_stats_wildlife_img()` matches right after the initial query, before dedup, so unrecognised free text (typos, test data) never reaches the "Who we met along the way" section or its map. Gold border + shadow on hover; title shifts to gold-deep. No translateY on hover. (Single `cleanup_event`/`glc_submission` pages still show the raw Wildlife Observed text regardless of a match — this exclusion is `/stats`-only.)
+
+**Wildlife data source:** `page-stats.php` queries both `cleanup_event` and `glc_submission` CPTs for the `wildlife_obs` meta key (same unprefixed key on both). Sorted via `glc_cleanup_field()` for CPT-agnostic date access. Dedup key is the matched image filename (e.g. "Snapping Turtle" and "snapping turtle" share one slot) since every post reaching dedup already has a match.
 
 **Wildlife card height:** `.wfig` uses `height: 160px` (fixed, not `min-height`) — all cards are uniform regardless of image proportions. `.wfig img` uses `width: auto; max-width: 250px; height: auto; max-height: 100%`. The `width: auto` is required — CSS proportional scaling only kicks in when both width and height are `auto`; a fixed `width: 90%` with `max-height` would squish tall images instead of scaling them.
 
 **Adding a new wildlife image — full workflow:**
-1. Prepare the asset: `python prepare_wildlife_asset.py input.png theme-dev/great-lake-cleaners-theme/assets/images/name.png` (defaults: tolerance 28, 600px wide, 20px pad — see tool docs in theme CLAUDE.md)
-2. Add a keyword match in `page-stats.php:glc_stats_wildlife_img()` — e.g. `if ( strpos( $obs, 'nest' ) !== false ) return 'nest.png';`
-3. Run `repack.ps1`
+1. Prepare the asset: `python prepare_wildlife_asset.py input.png theme-dev/great-lake-cleaners-theme/assets/images/name.png --pin`
+   - Outputs `name.png` (600px wide card image) + `name_s.png` (200×200px map pin crop)
+   - Defaults: `--tolerance 28 --width 600 --pad 20 --pin-anchor right --pin-pad 8`
+   - `--pin-anchor left` for left-facing animals; `--pin-anchor center` for symmetric subjects (e.g. nest/eggs)
+   - `--pin-pad` = breathing room on the nose side in output pixels (default 8 ≈ 2px at 48px display); increase if the face feels cramped
+2. Re-crop an existing asset's pin only: `python prepare_wildlife_asset.py name.png name.png --pin-only`
+   - Skips bg removal and resize; autocrop + pin crop only. Add `--pin-anchor` / `--pin-pad` as needed.
+3. Add a keyword match in `page-stats.php:glc_stats_wildlife_img()` — e.g. `if ( strpos( $obs, 'nest' ) !== false ) return 'nest.png';`
+4. Run `repack.ps1`
+
+**Windows console quirk:** the script's final summary line prints `×`/`→`, which raises `UnicodeEncodeError` under the default Windows `cp1252` console — this happens *after* the PNG is already saved, so it's cosmetic, not a failed run. Set `PYTHONIOENCODING=utf-8` before the command to see the full output without the traceback.
+
+**Wildlife map pin lookup:** `page-stats.php` checks for `{stem}_s.png` via `file_exists()` and uses it when present; falls back to the card image. `_s.png` files are optional — the fallback looks reasonable; add a pin crop when the full card image crops badly at 48px.
 
 **Footer anchor links** (`#debris`, `#hours`) work because `.dirCL-sec` has `scroll-margin-top: 110px`.
 
@@ -306,7 +332,7 @@ Only attachments with `_glc_gallery = '1'` meta appear. Flagging workflow: Media
 
 - **Focus styles:** Global `:focus-visible` (3px solid gold, 2px offset) at end of `style.css`. Form inputs use gold outline on `:focus` — the old `outline: none` was a WCAG 2.4.7 failure.
 - **Community badge contrast:** `.glc-community-badge` and `.glc-fp-label` use `--glc-green-dark` (not `--glc-green`) for WCAG AA.
-- **Instagram header link:** `aria-label` on the `<a>`, SVG with `aria-hidden="true" focusable="false"`. `.glc-insta-link` has `min-width/height: 24px; padding: 2px` for 24×24 touch target.
+- **Social header links:** `aria-label` on each `<a>` (icon-only links have no accessible name otherwise), SVG with `aria-hidden="true" focusable="false"`. `.glc-insta-link` has `min-width/height: 24px; padding: 2px` for 24×24 touch target. Same `aria-label` pattern on the footer pair.
 - **Wave SVG:** The `.glc-wave-footer` outer div has `aria-hidden="true"`. The `<svg>` also carries `aria-hidden="true" focusable="false" role="presentation"` for older browsers that ignore parent `aria-hidden`.
 - **Footer stat label contrast:** `.glc-stat-lbl` is `rgba(255,255,255,0.78)` — confirmed ≈5.3:1 against navy.
 - **Recycled items suffix:** The `$ic` closure call for recycled items uses `'items'` as suffix so screen readers hear "33 items" not a bare number.

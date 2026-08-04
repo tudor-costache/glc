@@ -29,8 +29,8 @@
 
         if ( $glc_dfmt && $glc_bags ) {
             $glc_meta_desc = sprintf(
-                'Cleanup at %s on %s — %d %s collected, %.0f kg of debris removed from Guelph\'s waterways.',
-                $glc_site, $glc_dfmt, $glc_bags, 1 === $glc_bags ? 'bag' : 'bags', $glc_weight
+                'Cleanup at %s on %s — %d %s collected, %.0f kg of debris removed from %s\'s waterways.',
+                $glc_site, $glc_dfmt, $glc_bags, 1 === $glc_bags ? 'bag' : 'bags', $glc_weight, $glc_site
             );
         } elseif ( $glc_notable ) {
             $glc_meta_desc = sprintf( 'Cleanup at %s. Notable finds: %s', $glc_site, $glc_notable );
@@ -86,7 +86,7 @@
         'description' => 'Regular cleanups of Guelph\'s local waterways — by foot and paddle — that flow into the Great Lakes system via the Grand River and Lake Erie.',
         'email'      => 'info@greatlakecleaners.ca',
         'areaServed' => [ '@type' => 'City', 'name' => 'Guelph', 'containedInPlace' => [ '@type' => 'Province', 'name' => 'Ontario' ] ],
-        'sameAs'     => [ 'https://www.instagram.com/greatlakecleaners' ],
+        'sameAs'     => [ 'https://www.instagram.com/greatlakecleaners', 'https://greatlakecleaners.substack.com/' ],
     ];
     echo '<script type="application/ld+json">' . wp_json_encode( $glc_jsonld_org, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "</script>\n";
 
@@ -175,19 +175,33 @@
 
             <!-- Header actions -->
             <div class="glc-header-actions">
-                <a href="https://instagram.com/greatlakecleaners"
-                   class="glc-insta-link"
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   aria-label="<?php esc_attr_e( 'Follow us on Instagram (opens in new tab)', 'great-lake-cleaners' ); ?>">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                         aria-hidden="true" focusable="false">
-                        <rect x="2" y="2" width="20" height="20" rx="5"/>
-                        <circle cx="12" cy="12" r="5"/>
-                        <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/>
-                    </svg>
-                </a>
+                <div class="glc-header-social">
+                    <a href="https://instagram.com/greatlakecleaners"
+                       class="glc-insta-link"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       aria-label="<?php esc_attr_e( 'Follow us on Instagram (opens in new tab)', 'great-lake-cleaners' ); ?>">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                             aria-hidden="true" focusable="false">
+                            <rect x="2" y="2" width="20" height="20" rx="5"/>
+                            <circle cx="12" cy="12" r="5"/>
+                            <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/>
+                        </svg>
+                    </a>
+                    <a href="https://greatlakecleaners.substack.com/"
+                       class="glc-insta-link"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       aria-label="<?php esc_attr_e( 'Read our Substack (opens in new tab)', 'great-lake-cleaners' ); ?>">
+                        <svg width="24" height="24" viewBox="0 0 24 24"
+                             aria-hidden="true" focusable="false">
+                            <g transform="translate(12,12) scale(0.85) translate(-12,-12)">
+                                <path fill="currentColor" d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"/>
+                            </g>
+                        </svg>
+                    </a>
+                </div>
 
                 <?php
                 // "Submit a Cleanup" — links to a page with slug 'submit-cleanup'.

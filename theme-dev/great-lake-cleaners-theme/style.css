@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.2.1
+Version:     1.2.9
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -214,6 +214,12 @@ a:hover { color: var(--glc-green); }
     flex-direction: column;
     align-items: flex-end;
     gap: 9px;
+}
+
+.glc-header-social {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .glc-insta-link {
@@ -535,6 +541,21 @@ a:hover { color: var(--glc-green); }
 }
 .glc-stat:last-child { border-right: none; }
 
+a.glc-stat {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+a.glc-stat:hover,
+a.glc-stat:focus-visible {
+    background-color: rgba(255,255,255,0.06);
+}
+a.glc-stat:hover .glc-stat-lbl,
+a.glc-stat:focus-visible .glc-stat-lbl {
+    color: var(--glc-gold);
+}
+
 .glc-stat-val {
     font-family: var(--glc-font-display);
     font-weight: 900;
@@ -552,15 +573,6 @@ a:hover { color: var(--glc-green); }
     margin-top: 5px;
     font-weight: 700;
 }
-.glc-stat-lbl-link {
-    color: inherit;
-    text-decoration: none;
-    transition: color 0.15s;
-}
-.glc-stat-lbl-link:hover {
-    color: var(--glc-gold);
-}
-
 /* ── Front page content sections ──────────────────────────────────────────── */
 .glc-fp-sections {
     max-width: 1100px;
@@ -2025,6 +2037,19 @@ a:hover { color: var(--glc-green); }
     display: block;
 }
 
+/* Notable finds / Wildlife observed — side-by-side row when both are present;
+   flex-basis lets a lone card stretch to full width instead of half. */
+.glc-single-sub-findings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 28px;
+}
+.glc-single-sub-findings .glc-single-sub-notable {
+    flex: 1 1 300px;
+    margin-bottom: 0;
+}
+
 /* Notable finds */
 .glc-single-sub-notable {
     background: var(--glc-off-white);
@@ -2087,6 +2112,34 @@ a:hover { color: var(--glc-green); }
 /* Wildlife block — subtle teal left accent */
 .glc-single-event-wildlife {
     border-left: 3px solid var(--glc-green);
+}
+
+/* Wildlife block with a matched illustration — small card thumbnail
+   (same brand gradient stage as the stats page wildlife cards, scaled down) */
+.glc-single-event-wildlife.has-img {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.glc-single-event-wildlife.has-img .glc-wildlife-text { min-width: 0; }
+.glc-wildlife-thumb {
+    flex-shrink: 0;
+    width: 64px;
+    height: 64px;
+    border-radius: 10px;
+    background: linear-gradient(150deg, #f3f9fb 0%, #edf6f0 100%);
+    border: 1px solid var(--glc-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.glc-wildlife-thumb img {
+    width: auto;
+    max-width: 90%;
+    height: auto;
+    max-height: 90%;
+    display: block;
 }
 
 /* Restoration extras row */
@@ -2311,13 +2364,14 @@ a:hover { color: var(--glc-green); }
     line-height: 1.65;
 }
 
-/* Instagram icon inline in the footer base bar */
+/* Social icons inline in the footer base bar */
 .glc-footer-insta {
     display: inline-flex;
     align-items: center;
     vertical-align: middle;
     margin-left: 2px;
 }
+.glc-footer-insta + .glc-footer-insta { margin-left: 8px; }
 .glc-footer-base a.glc-footer-insta:hover { color: var(--glc-gold); }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -2742,6 +2796,21 @@ a:hover { color: var(--glc-green); }
     border-radius: 8px;
     padding: 20px 20px 18px;
     text-align: center;
+}
+a.glc-ih-stat {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+a.glc-ih-stat:hover,
+a.glc-ih-stat:focus-visible {
+    background: var(--glc-white);
+    border-color: var(--glc-navy);
+}
+a.glc-ih-stat:hover .glc-ih-value,
+a.glc-ih-stat:focus-visible .glc-ih-value {
+    color: var(--glc-gold);
 }
 .glc-ih-value {
     display: block;
@@ -3362,6 +3431,58 @@ a:hover { color: var(--glc-green); }
     animation: glc-pop .4s ease both;
 }
 
+/* Large items pictograph (tires & shopping carts) — each icon is a link to its source post */
+.dirCL-picto-row + .dirCL-picto-row {
+    margin-top: 26px;
+    padding-top: 22px;
+    border-top: 1px solid var(--glc-border);
+}
+.dirCL-picto-lbl {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    margin-bottom: 14px;
+}
+.dirCL-picto-lbl .n {
+    font-family: var(--glc-font-display);
+    font-weight: 900;
+    font-size: 1.7rem;
+    color: var(--glc-navy);
+}
+.dirCL-picto-lbl .t {
+    font-size: .92rem;
+    font-weight: 700;
+    color: var(--glc-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+.dirCL-picto-icons { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.dirCL-picto-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 4px;
+    border-radius: 8px;
+    box-sizing: border-box;
+    transition: transform .15s ease, background-color .15s ease;
+    animation: glc-pop .4s ease both;
+}
+.dirCL-picto-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+}
+.dirCL-picto-item:hover,
+.dirCL-picto-item:focus-visible {
+    background: var(--glc-off-white);
+    transform: scale(1.18);
+    outline: none;
+}
+
 /* Wildlife chips — illustration-led cards (silhouettes match the moose & brand palette) */
 .dirCL-wild { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .dirCL-wchip {
@@ -3419,6 +3540,21 @@ a:hover { color: var(--glc-green); }
     margin-bottom: 4px;
 }
 .dirCL-wchip .wsite { font-size: .84rem; color: var(--glc-muted); margin-top: 3px; }
+
+/* Wildlife sighting map */
+.dirCL-wl-mapwrap { isolation: isolate; margin-top: 32px; }
+.dirCL-wl-maplbl  { font-size: .82rem; font-weight: 700; color: var(--glc-muted); letter-spacing: .06em; text-transform: uppercase; margin: 0 0 12px; }
+.glc-wl-map       { height: 320px; width: 100%; border-radius: 12px; border: 1px solid var(--glc-border); }
+.glc-wl-pin {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 10px rgba(26,74,107,.30);
+    background: #f3f9fb;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+}
+.glc-wl-pin img { width: 88%; height: 88%; object-fit: contain; }
 
 /* ── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 760px) {

@@ -626,9 +626,8 @@ function glc_shortcode_gallery( $atts ) {
 }
 
 // ── [glc_impact_highlights] ──────────────────────────────────────────────────
-// Three stat cards (unique sites, tires, hazards) + cumulative person-hours chart.
-// Unique sites and person-hours include both cleanup_event and glc_submission data.
-// Tires and hazards are cleanup_event only (those fields don't exist on submissions).
+// Four stat cards (unique sites, tires, shopping carts, total cleanups) + cumulative
+// person-hours chart. All four cards draw on both cleanup_event and glc_submission data.
 
 add_shortcode( 'glc_impact_highlights', 'glc_shortcode_impact_highlights' );
 function glc_shortcode_impact_highlights() {
@@ -679,6 +678,9 @@ function glc_shortcode_impact_highlights() {
         $site = get_post_meta( $id, 'glc_site_name', true );
         if ( $site ) $site_names[] = $site;
 
+        $total_tires += (int) get_post_meta( $id, 'tires_removed', true );
+        $total_carts += (int) get_post_meta( $id, 'carts_removed', true );
+
         if ( $date ) {
             $pts[] = [
                 'date'  => $date,
@@ -709,26 +711,36 @@ function glc_shortcode_impact_highlights() {
         ? number_format( (int) $total_hours )
         : number_format( $total_hours, 1 );
 
+    // Cards link into /cleanups/ — tires/carts deep-link to the filtered view
+    // handled by archive-cleanup_event.php's ?impact= query arg.
+    $cleanups_page = get_page_by_path( 'cleanups' );
+    $cleanups_url  = $cleanups_page
+        ? get_permalink( $cleanups_page )
+        : get_post_type_archive_link( 'cleanup_event' );
+    $tires_url     = $cleanups_url ? add_query_arg( 'impact', 'tires', $cleanups_url ) : '';
+    $carts_url     = $cleanups_url ? add_query_arg( 'impact', 'carts', $cleanups_url ) : '';
+    $ih_tag        = $cleanups_url ? 'a' : 'div';
+
     ob_start(); ?>
     <div class="glc-impact-highlights">
 
         <div class="glc-ih-stats">
-            <div class="glc-ih-stat">
+            <<?php echo $ih_tag; ?> class="glc-ih-stat"<?php echo $cleanups_url ? ' href="' . esc_url( $cleanups_url ) . '"' : ''; ?>>
                 <span class="glc-ih-value"><?php echo esc_html( $unique_sites ); ?></span>
                 <span class="glc-ih-label">Unique Sites Cleaned</span>
-            </div>
-            <div class="glc-ih-stat">
+            </<?php echo $ih_tag; ?>>
+            <<?php echo $ih_tag; ?> class="glc-ih-stat"<?php echo $tires_url ? ' href="' . esc_url( $tires_url ) . '"' : ''; ?>>
                 <span class="glc-ih-value"><?php echo esc_html( $total_tires ); ?></span>
                 <span class="glc-ih-label">Tires Removed</span>
-            </div>
-            <div class="glc-ih-stat">
+            </<?php echo $ih_tag; ?>>
+            <<?php echo $ih_tag; ?> class="glc-ih-stat"<?php echo $carts_url ? ' href="' . esc_url( $carts_url ) . '"' : ''; ?>>
                 <span class="glc-ih-value"><?php echo esc_html( $total_carts ); ?></span>
                 <span class="glc-ih-label">Shopping Carts Removed</span>
-            </div>
-            <div class="glc-ih-stat">
+            </<?php echo $ih_tag; ?>>
+            <<?php echo $ih_tag; ?> class="glc-ih-stat"<?php echo $cleanups_url ? ' href="' . esc_url( $cleanups_url ) . '"' : ''; ?>>
                 <span class="glc-ih-value"><?php echo esc_html( $total_cleanups ); ?></span>
                 <span class="glc-ih-label">Total Cleanups</span>
-            </div>
+            </<?php echo $ih_tag; ?>>
         </div>
 
         <?php if ( ! empty( $data_hrs ) && $max_day > 0 ) : ?>

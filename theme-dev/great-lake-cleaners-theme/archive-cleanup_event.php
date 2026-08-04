@@ -8,6 +8,11 @@
 
 get_header();
 
+// ── Optional filter: ?impact=tires or ?impact=carts (from [glc_impact_highlights]) ──
+$impact_filter = isset( $_GET['impact'] ) && in_array( $_GET['impact'], [ 'tires', 'carts' ], true )
+    ? sanitize_key( $_GET['impact'] )
+    : '';
+
 // ── Fetch all cleanup_event posts ─────────────────────────────────────────────
 $event_posts = get_posts( [
     'post_type'      => 'cleanup_event',
@@ -28,6 +33,8 @@ foreach ( $event_posts as $e ) {
         'hours'    => get_post_meta( $e->ID, 'hours',          true ),
         'notable'  => get_post_meta( $e->ID, 'notable_finds',  true ),
         'insta'    => get_post_meta( $e->ID, 'instagram_url',  true ),
+        'tires'    => (int) get_post_meta( $e->ID, 'tires_removed', true ),
+        'carts'    => (int) get_post_meta( $e->ID, 'carts_removed', true ),
         'url'      => get_permalink( $e->ID ),
         'name'     => '',
     ];
@@ -54,9 +61,18 @@ foreach ( $sub_posts as $s ) {
         'hours'    => get_post_meta( $s->ID, 'glc_hours',          true ),
         'notable'  => get_post_meta( $s->ID, 'glc_notable_finds',  true ),
         'insta'    => get_post_meta( $s->ID, 'glc_instagram_url',  true ),
+        'tires'    => (int) get_post_meta( $s->ID, 'tires_removed', true ),
+        'carts'    => (int) get_post_meta( $s->ID, 'carts_removed', true ),
         'url'      => get_permalink( $s->ID ),
         'name'     => get_post_meta( $s->ID, 'glc_submitter_name', true ),
     ];
+}
+
+// ── Apply the impact filter, if any ───────────────────────────────────────────
+if ( $impact_filter ) {
+    $all_cleanups = array_values( array_filter( $all_cleanups, function( $c ) use ( $impact_filter ) {
+        return $c[ $impact_filter ] > 0;
+    } ) );
 }
 
 // ── Sort globally by date descending ─────────────────────────────────────────
@@ -86,6 +102,11 @@ $total_pages = max( 1, (int) ceil( $total / $per_page ) );
 $paged       = max( 1, (int) ( get_query_var( 'paged' ) ?: 1 ) );
 $offset      = ( $paged - 1 ) * $per_page;
 $page_items  = array_slice( $all_cleanups, $offset, $per_page );
+
+$impact_labels = [
+    'tires' => __( 'Cleanups with Tires Removed', 'great-lake-cleaners' ),
+    'carts' => __( 'Cleanups with Shopping Carts Removed', 'great-lake-cleaners' ),
+];
 ?>
 
 <div class="glc-fp-wrapper">
@@ -93,10 +114,17 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
 
     <header class="glc-archive-header">
         <span class="glc-fp-label"><?php esc_html_e( 'Our Work', 'great-lake-cleaners' ); ?></span>
+        <?php if ( $impact_filter ) : ?>
+        <h1 class="glc-archive-h1"><?php echo esc_html( $impact_labels[ $impact_filter ] ); ?></h1>
+        <p class="glc-archive-intro">
+            <a href="<?php echo esc_url( get_post_type_archive_link( 'cleanup_event' ) ); ?>">&larr; <?php esc_html_e( 'See all cleanups', 'great-lake-cleaners' ); ?></a>
+        </p>
+        <?php else : ?>
         <h1 class="glc-archive-h1"><?php esc_html_e( 'All Cleanups', 'great-lake-cleaners' ); ?></h1>
         <p class="glc-archive-intro">
             <?php esc_html_e( 'Every outing logged — on foot, by paddle, or both. Sorted most recent first.', 'great-lake-cleaners' ); ?>
         </p>
+        <?php endif; ?>
     </header>
 
     <?php if ( ! empty( $page_items ) ) : ?>
@@ -173,6 +201,12 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
                         echo $ic( 'icon-timer.svg', number_format( $c['hours'], 1 ), 'h' );
                     }
                 }
+                if ( 'tires' === $impact_filter && $c['tires'] ) {
+                    echo '<span class="glc-cs">' . esc_html( $c['tires'] ) . ' ' . ( 1 === (int) $c['tires'] ? 'tire' : 'tires' ) . '</span>';
+                }
+                if ( 'carts' === $impact_filter && $c['carts'] ) {
+                    echo '<span class="glc-cs">' . esc_html( $c['carts'] ) . ' ' . ( 1 === (int) $c['carts'] ? 'cart' : 'carts' ) . '</span>';
+                }
                 ?>
             </div>
 
@@ -194,11 +228,16 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
         <?php endforeach; ?>
     </div>
 
-    <?php if ( $total_pages > 1 ) : ?>
+    <?php if ( $total_pages > 1 ) :
+        $pagenum_link = function( $p ) use ( $impact_filter ) {
+            $link = get_pagenum_link( $p );
+            return $impact_filter ? add_query_arg( 'impact', $impact_filter, $link ) : $link;
+        };
+    ?>
     <nav class="glc-pagination" aria-label="<?php esc_attr_e( 'Cleanup pages', 'great-lake-cleaners' ); ?>">
         <div class="nav-links">
             <?php if ( $paged > 1 ) : ?>
-            <a class="page-numbers prev" href="<?php echo esc_url( get_pagenum_link( $paged - 1 ) ); ?>">
+            <a class="page-numbers prev" href="<?php echo esc_url( $pagenum_link( $paged - 1 ) ); ?>">
                 &larr; <?php esc_html_e( 'Newer cleanups', 'great-lake-cleaners' ); ?>
             </a>
             <?php endif; ?>
@@ -206,13 +245,13 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
                 <?php if ( $p === $paged ) : ?>
                 <span class="page-numbers current"><?php echo esc_html( $p ); ?></span>
                 <?php elseif ( abs( $p - $paged ) <= 2 || $p === 1 || $p === $total_pages ) : ?>
-                <a class="page-numbers" href="<?php echo esc_url( get_pagenum_link( $p ) ); ?>"><?php echo esc_html( $p ); ?></a>
+                <a class="page-numbers" href="<?php echo esc_url( $pagenum_link( $p ) ); ?>"><?php echo esc_html( $p ); ?></a>
                 <?php elseif ( abs( $p - $paged ) === 3 ) : ?>
                 <span class="page-numbers dots">&hellip;</span>
                 <?php endif; ?>
             <?php endfor; ?>
             <?php if ( $paged < $total_pages ) : ?>
-            <a class="page-numbers next" href="<?php echo esc_url( get_pagenum_link( $paged + 1 ) ); ?>">
+            <a class="page-numbers next" href="<?php echo esc_url( $pagenum_link( $paged + 1 ) ); ?>">
                 <?php esc_html_e( 'Older cleanups', 'great-lake-cleaners' ); ?> &rarr;
             </a>
             <?php endif; ?>
@@ -222,11 +261,17 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
 
     <?php else : ?>
     <p class="glc-archive-empty">
-        <?php esc_html_e( 'No cleanups logged yet — check back soon.', 'great-lake-cleaners' ); ?>
+        <?php if ( $impact_filter ) : ?>
+            <?php esc_html_e( 'No cleanups match this filter yet.', 'great-lake-cleaners' ); ?>
+        <?php else : ?>
+            <?php esc_html_e( 'No cleanups logged yet — check back soon.', 'great-lake-cleaners' ); ?>
+        <?php endif; ?>
     </p>
     <?php endif; ?>
 
     <!-- ── Where We've Made an Impact ───────────────────────────────────────── -->
+    <?php // Hidden when filtered — the map shows every cleanup location, not just the filtered subset. ?>
+    <?php if ( ! $impact_filter ) : ?>
     <div id="cleanups-map" class="glc-impact-section" aria-label="<?php esc_attr_e( 'Cleanup locations map', 'great-lake-cleaners' ); ?>">
         <span class="glc-fp-label"><?php esc_html_e( 'Where We\'ve Made an Impact', 'great-lake-cleaners' ); ?></span>
         <h2 class="glc-impact-heading"><?php esc_html_e( 'Every site tells a story', 'great-lake-cleaners' ); ?></h2>
@@ -238,6 +283,7 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
         <?php endif; ?>
 
     </div>
+    <?php endif; ?>
 
 </div>
 </div>

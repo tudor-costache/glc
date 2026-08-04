@@ -6,7 +6,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.2.1' );
+define( 'GLC_THEME_VERSION', '1.2.9' );
 
 // ── Theme setup ───────────────────────────────────────────────────────────────
 add_action( 'after_setup_theme', function() {
@@ -375,4 +375,31 @@ function glc_stats_area_chart( $series, $height, $days, $max_day, $first_ts = 0,
     </svg>
     <?php
     return ob_get_clean();
+}
+
+// Image mapper for wildlife observations — returns filename relative to
+// assets/images, or null. Shared by page-stats.php (wildlife cards + map
+// pins) and the single cleanup_event / glc_submission templates.
+function glc_stats_wildlife_img( $obs ) {
+	$obs = strtolower( $obs );
+	if ( strpos( $obs, 'beaver' ) !== false ) return 'beaver.png';
+	if ( strpos( $obs, 'heron' ) !== false ) return 'heron.png';
+	if ( strpos( $obs, 'toad' ) !== false ) return 'toad.png';
+	if ( strpos( $obs, 'frog' ) !== false ) return 'frog.png';
+	if ( strpos( $obs, 'cormorant' ) !== false ) return 'cormorant.png';
+	if ( strpos( $obs, 'redwinged' ) !== false ) return 'redwinged.png';
+	if ( strpos( $obs, 'mink' ) !== false ) return 'mink.png';
+	if ( strpos( $obs, 'swallow' ) !== false ) return 'swallow.png';
+	if ( strpos( $obs, 'snapping' ) !== false ) return 'snapping-turtle.png';
+	if ( strpos( $obs, 'painted' )  !== false ) return 'painted-turtle.png';
+	if ( strpos( $obs, 'minnows' ) !== false ) return 'minnows.png';
+	if ( strpos( $obs, 'egg' )    !== false ) return 'nest.png';
+	if ( strpos( $obs, 'merganser' )    !== false ) return 'merganser.png';
+	if ( strpos( $obs, 'duck' )    !== false ) return 'duck.png';
+	if ( strpos( $obs, 'goose' )    !== false
+	  || strpos( $obs, 'geese' )    !== false ) return 'canada-goose.png';
+	if ( strpos( $obs, 'snake' )    !== false ) return 'snake.png';
+	if ( strpos( $obs, 'leech' )    !== false ) return 'leech.png';
+	if ( strpos( $obs, 'sandpiper' )    !== false ) return 'sandpiper.png';
+	return null;
 }

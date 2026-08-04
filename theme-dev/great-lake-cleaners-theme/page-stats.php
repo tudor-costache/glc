@@ -147,6 +147,25 @@ foreach ( $_steps as $_s ) {
 $_dot_count = (int) ceil( $_total_recyc / $_per_dot );
 $_dot_label = 'Every dot = ' . $_per_dot . ( $_per_dot === 1 ? ' item' : ' items' );
 
+// Large items pictograph: one icon per tire / shopping cart, each linking to its source post
+$_tire_items = [];
+$_cart_items = [];
+foreach ( array_merge( $_events, $_subs ) as $_p ) {
+	$_p_tires = (int) glc_cleanup_field( $_p, 'tires_removed' );
+	$_p_carts = (int) glc_cleanup_field( $_p, 'carts_removed' );
+	if ( ! $_p_tires && ! $_p_carts ) continue;
+
+	$_p_url   = get_permalink( $_p->ID );
+	$_p_site  = glc_cleanup_field( $_p, 'site_name' );
+	$_p_date  = glc_cleanup_field( $_p, 'cleanup_date' );
+	$_p_label = trim( $_p_site . ( $_p_date ? ', ' . date( 'M j, Y', strtotime( $_p_date ) ) : '' ), ', ' );
+
+	for ( $_i = 0; $_i < $_p_tires; $_i++ ) $_tire_items[] = [ 'url' => $_p_url, 'label' => $_p_label ];
+	for ( $_i = 0; $_i < $_p_carts; $_i++ ) $_cart_items[] = [ 'url' => $_p_url, 'label' => $_p_label ];
+}
+$_total_tires = count( $_tire_items );
+$_total_carts = count( $_cart_items );
+
 // Wildlife sightings (cleanup_event + approved glc_submission), newest first
 $_wildlife_events = get_posts( [
 	'post_type'      => [ 'cleanup_event', 'glc_submission' ],
@@ -154,12 +173,34 @@ $_wildlife_events = get_posts( [
 	'posts_per_page' => -1,
 	'meta_query'     => [ [ 'key' => 'wildlife_obs', 'value' => '', 'compare' => '!=' ] ],
 ] );
+
+// Only observations that match a known illustrated species become a card/pin —
+// free text that doesn't match glc_stats_wildlife_img() (typos, unrecognised
+// species, test data) is excluded here rather than shown as a text-only entry.
+$_wildlife_events = array_filter( $_wildlife_events, function( $post ) {
+	return (bool) glc_stats_wildlife_img( glc_cleanup_field( $post, 'wildlife_obs' ) );
+} );
+
 usort( $_wildlife_events, function( $a, $b ) {
 	return strcmp(
 		glc_cleanup_field( $b, 'cleanup_date' ),
 		glc_cleanup_field( $a, 'cleanup_date' )
 	);
 } );
+$_wildlife_all = $_wildlife_events; // all matched sightings pre-dedup — used by the map to show every location
+
+// Deduplicate: keep only the latest sighting of each animal type (newest-first sort above).
+$_seen_wildlife = [];
+$_wildlife_events = array_filter( $_wildlife_events, function( $post ) use ( &$_seen_wildlife ) {
+	// Every remaining post has a matched image (filtered above), so the image
+	// filename alone is a safe dedup key — "Snapping Turtle" and "snapping turtle"
+	// both map to snapping-turtle.png and share one slot.
+	$img = glc_stats_wildlife_img( glc_cleanup_field( $post, 'wildlife_obs' ) );
+	if ( isset( $_seen_wildlife[ $img ] ) ) return false;
+	$_seen_wildlife[ $img ] = true;
+	return true;
+} );
+$_wildlife_events = array_values( $_wildlife_events );
 
 // Format debris display (no decimal if whole number)
 $_debris_display = ( $_total_debris == floor( $_total_debris ) )
@@ -172,28 +213,47 @@ $_hours_display = ( $_total_hours == floor( $_total_hours ) )
 	: number_format( $_total_hours, 1 );
 
 // ── 2. SVG helper functions ──────────────────────────────────────────────────
-// glc_stats_smooth_path() and glc_stats_area_chart() are defined in functions.php
-// and available globally. Only glc_stats_wildlife_img() lives here.
-
-// Image mapper for wildlife observations — returns filename relative to assets/images, or null.
-function glc_stats_wildlife_img( $obs ) {
-	$obs = strtolower( $obs );
-	if ( strpos( $obs, 'mink' ) !== false ) return 'mink.png';
-	if ( strpos( $obs, 'swallow' ) !== false ) return 'swallow.png';
-	if ( strpos( $obs, 'snapping' ) !== false ) return 'snapping-turtle.png';
-	if ( strpos( $obs, 'painted' )  !== false ) return 'painted-turtle.png';
-	if ( strpos( $obs, 'egg' )    !== false ) return 'nest.png';
-	if ( strpos( $obs, 'duck' )    !== false ) return 'duck.png';
-	if ( strpos( $obs, 'goose' )    !== false
-	  || strpos( $obs, 'geese' )    !== false ) return 'canada-goose.png';
-	if ( strpos( $obs, 'snake' )    !== false ) return 'snake.png';
-	if ( strpos( $obs, 'sandpiper' )    !== false ) return 'sandpiper.png';
-	return null;
-}
+// glc_stats_smooth_path(), glc_stats_area_chart(), and glc_stats_wildlife_img()
+// are defined in functions.php and available globally.
 
 // Asset paths
 $_idir   = esc_url( get_template_directory_uri() ) . '/assets/images';
 $_bag_url = $_idir . '/garbage-bag.png';
+
+// Wildlife map markers: all sightings with valid GPS (not deduplicated so every location appears)
+$_wl_markers = [];
+if ( ! empty( $_wildlife_all ) ) {
+	$__img_dir = get_template_directory() . '/assets/images/';
+	$__img_uri = get_template_directory_uri() . '/assets/images/';
+	foreach ( $_wildlife_all as $_wme ) {
+		$__lat = (float) glc_cleanup_field( $_wme, 'gps_lat' );
+		$__lon = (float) glc_cleanup_field( $_wme, 'gps_lon' );
+		if ( ! $__lat || ! $__lon ) continue;
+		$__obs  = glc_cleanup_field( $_wme, 'wildlife_obs' );
+		$__img  = glc_stats_wildlife_img( $__obs );
+		$__d    = glc_cleanup_field( $_wme, 'cleanup_date' );
+		$__iurl = null;
+		if ( $__img ) {
+			// Prefer _s.png pin crop if it exists, else fall back to the card image
+			$__stem  = pathinfo( $__img, PATHINFO_FILENAME );
+			$__pin   = $__stem . '_s.png';
+			$__iurl  = $__img_uri . ( file_exists( $__img_dir . $__pin ) ? $__pin : $__img );
+		}
+		$_wl_markers[] = [
+			'lat'  => $__lat,
+			'lon'  => $__lon,
+			'obs'  => $__obs,
+			'img'  => $__iurl,
+			'site' => (string) glc_cleanup_field( $_wme, 'site_name' ),
+			'date' => $__d ? date( 'M j, Y', strtotime( $__d ) ) : '',
+			'url'  => get_permalink( $_wme->ID ),
+		];
+	}
+}
+if ( ! empty( $_wl_markers ) && defined( 'GLC_PLUGIN_URL' ) ) {
+	wp_enqueue_style(  'leaflet', GLC_PLUGIN_URL . 'assets/leaflet.css', [], '1.9.4' );
+	wp_enqueue_script( 'leaflet', GLC_PLUGIN_URL . 'assets/leaflet.js',  [], '1.9.4', true );
+}
 
 get_header();
 ?>
@@ -370,6 +430,61 @@ get_header();
 		</svg>
 	</div>
 
+	<!-- ═══ LARGE ITEMS ═════════════════════════════════════════════════════ -->
+	<?php if ( $_total_tires > 0 || $_total_carts > 0 ) : ?>
+	<div class="dirCL-sec">
+		<h3 class="dirCL-sec-h">Tires &amp; shopping carts, <b>pulled from the water</b></h3>
+		<p class="dirCL-sec-note">The heaviest, most stubborn debris in our waterways — tap any icon to see that cleanup.</p>
+
+		<div class="dirCL-chartwrap">
+			<?php if ( $_total_tires > 0 ) : ?>
+			<div class="dirCL-picto-row">
+				<div class="dirCL-picto-lbl">
+					<span class="n"><?php echo esc_html( $_total_tires ); ?></span>
+					<span class="t">tire<?php echo $_total_tires !== 1 ? 's' : ''; ?> removed</span>
+				</div>
+				<div class="dirCL-picto-icons">
+					<?php foreach ( $_tire_items as $_ti_i => $_ti ) : ?>
+					<a href="<?php echo esc_url( $_ti['url'] ); ?>" class="dirCL-picto-item"
+					   style="animation-delay:<?php echo esc_attr( 300 + $_ti_i * 30 ); ?>ms"
+					   aria-label="<?php echo esc_attr( 'Tire removed' . ( $_ti['label'] ? ' — ' . $_ti['label'] : '' ) ); ?>"
+					   title="<?php echo esc_attr( $_ti['label'] ); ?>">
+						<img src="<?php echo esc_url( $_idir . '/tire-icon.png' ); ?>" alt="" draggable="false">
+					</a>
+					<?php endforeach; ?>
+				</div>
+			</div>
+			<?php endif; ?>
+
+			<?php if ( $_total_carts > 0 ) : ?>
+			<div class="dirCL-picto-row">
+				<div class="dirCL-picto-lbl">
+					<span class="n"><?php echo esc_html( $_total_carts ); ?></span>
+					<span class="t">shopping cart<?php echo $_total_carts !== 1 ? 's' : ''; ?> removed</span>
+				</div>
+				<div class="dirCL-picto-icons">
+					<?php foreach ( $_cart_items as $_ci_i => $_ci ) : ?>
+					<a href="<?php echo esc_url( $_ci['url'] ); ?>" class="dirCL-picto-item"
+					   style="animation-delay:<?php echo esc_attr( 300 + $_ci_i * 30 ); ?>ms"
+					   aria-label="<?php echo esc_attr( 'Shopping cart removed' . ( $_ci['label'] ? ' — ' . $_ci['label'] : '' ) ); ?>"
+					   title="<?php echo esc_attr( $_ci['label'] ); ?>">
+						<img src="<?php echo esc_url( $_idir . '/cart-icon.png' ); ?>" alt="" draggable="false">
+					</a>
+					<?php endforeach; ?>
+				</div>
+			</div>
+			<?php endif; ?>
+		</div>
+	</div>
+
+	<div class="dirCL-wave" aria-hidden="true">
+		<svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+			<path d="M0,11 C150,3 300,19 450,11 C600,3 750,19 900,11 C1050,3 1200,19 1200,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+			<path d="M0,16 C150,8 300,24 450,16 C600,8 750,24 900,16 C1050,8 1200,24 1200,16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.45"/>
+		</svg>
+	</div>
+	<?php endif; ?>
+
 	<!-- ═══ WILDLIFE ════════════════════════════════════════════════════════ -->
 	<?php if ( ! empty( $_wildlife_events ) ) : ?>
 	<div class="dirCL-sec" id="wildlife">
@@ -408,6 +523,51 @@ get_header();
 			</a>
 			<?php endforeach; ?>
 		</div>
+
+		<?php if ( ! empty( $_wl_markers ) ) : ?>
+		<div class="dirCL-wl-mapwrap">
+			<p class="dirCL-wl-maplbl">Where we spotted them</p>
+			<div id="glc-wl-map" class="glc-wl-map"
+			     role="application"
+			     aria-label="Wildlife sighting locations map"></div>
+		</div>
+		<script>
+		(function () {
+		    function eh(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+		    document.addEventListener('DOMContentLoaded', function () {
+		        if (typeof L === 'undefined') return;
+		        var markers = <?php echo wp_json_encode( $_wl_markers ); ?>;
+		        if (!markers.length) return;
+		        var map = L.map('glc-wl-map', { zoomControl: true }).setView([43.545, -80.248], 12);
+		        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+		            attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+		            subdomains: 'abcd',
+		            maxZoom: 19
+		        }).addTo(map);
+		        var pin = '<svg width="20" height="26" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg"><path d="M10 0C4.48 0 0 4.48 0 10c0 7.5 10 16 10 16s10-8.5 10-16C20 4.48 15.52 0 10 0z" fill="#1a4a6b"/><circle cx="10" cy="10" r="4" fill="#fff"/></svg>';
+		        markers.forEach(function (m) {
+		            var html, sz, anch, po;
+		            if (m.img) {
+		                html = '<div class="glc-wl-pin"><img src="' + m.img + '" alt=""></div>';
+		                sz   = [48, 48]; anch = [24, 24]; po = [0, -26];
+		            } else {
+		                html = pin;
+		                sz   = [20, 26]; anch = [10, 26]; po = [0, -28];
+		            }
+		            var icon = L.divIcon({ className: '', html: html, iconSize: sz, iconAnchor: anch, popupAnchor: po });
+		            var pop  = '<strong>' + eh(m.obs) + '</strong>';
+		            if (m.site) pop += '<br><span style="color:#555;font-size:.88em">' + eh(m.site) + '</span>';
+		            if (m.date) pop += '<br><span style="color:#888;font-size:.82em">' + eh(m.date) + '</span>';
+		            pop += '<br><a href="' + eh(m.url) + '" style="color:#1a4a6b;font-size:.85em">View report →</a>';
+		            L.marker([m.lat, m.lon], { icon: icon }).addTo(map).bindPopup(pop);
+		        });
+		        var ll = markers.map(function (m) { return [m.lat, m.lon]; });
+		        if (ll.length === 1) { map.setView(ll[0], 15); }
+		        else { map.fitBounds(ll, { padding: [50, 50] }); }
+		    });
+		})();
+		</script>
+		<?php endif; ?>
 	</div>
 	<?php endif; ?>
 

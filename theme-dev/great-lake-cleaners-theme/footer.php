@@ -38,52 +38,33 @@
     $stats_page = get_page_by_path( 'stats' );
     $stats_url  = $stats_page ? get_permalink( $stats_page ) : home_url( '/stats/' );
     ?>
-    <div class="glc-stat">
+    <?php
+    $cleanups_tag     = $cleanups_url ? 'a' : 'div';
+    $cleanups_attrs   = $cleanups_url ? ' href="' . esc_url( $cleanups_url ) . '"' : '';
+    $corridors_attrs  = $cleanups_url ? ' href="' . esc_url( $cleanups_url . '#cleanups-map' ) . '"' : '';
+    ?>
+    <<?php echo $cleanups_tag; ?> class="glc-stat"<?php echo $cleanups_attrs; ?>>
         <span class="glc-stat-val"><span class="glc-count" data-count="<?php echo intval( $s['cleanups'] ); ?>"><?php echo esc_html( $s['cleanups'] ); ?></span><sup>+</sup></span>
-        <span class="glc-stat-lbl">
-            <?php if ( $cleanups_url ) : ?>
-            <a href="<?php echo esc_url( $cleanups_url ); ?>" class="glc-stat-lbl-link">
-                <?php esc_html_e( 'Cleanups', 'great-lake-cleaners' ); ?>
-            </a>
-            <?php else : ?>
-            <?php esc_html_e( 'Cleanups', 'great-lake-cleaners' ); ?>
-            <?php endif; ?>
-        </span>
-    </div>
-    <div class="glc-stat">
+        <span class="glc-stat-lbl"><?php esc_html_e( 'Cleanups', 'great-lake-cleaners' ); ?></span>
+    </<?php echo $cleanups_tag; ?>>
+    <a href="<?php echo esc_url( $stats_url . '#debris' ); ?>" class="glc-stat">
         <span class="glc-stat-val"><span class="glc-count" data-count="<?php echo intval( $s['weight_kg'] ); ?>"><?php echo esc_html( number_format( $s['weight_kg'], 0 ) ); ?></span><sup>+ kg</sup></span>
-        <span class="glc-stat-lbl">
-            <a href="<?php echo esc_url( $stats_url . '#debris' ); ?>" class="glc-stat-lbl-link">
-                <?php esc_html_e( 'Debris Removed', 'great-lake-cleaners' ); ?>
-            </a>
-        </span>
-    </div>
-    <div class="glc-stat">
+        <span class="glc-stat-lbl"><?php esc_html_e( 'Debris Removed', 'great-lake-cleaners' ); ?></span>
+    </a>
+    <a href="<?php echo esc_url( $stats_url . '#hours' ); ?>" class="glc-stat">
         <span class="glc-stat-val"><span class="glc-count" data-count="<?php echo intval( $s['hours'] ); ?>"><?php echo esc_html( number_format( $s['hours'], 0 ) ); ?></span><sup>+</sup></span>
-        <span class="glc-stat-lbl">
-            <a href="<?php echo esc_url( $stats_url . '#hours' ); ?>" class="glc-stat-lbl-link">
-                <?php esc_html_e( 'Volunteer Hours', 'great-lake-cleaners' ); ?>
-            </a>
-        </span>
-    </div>
+        <span class="glc-stat-lbl"><?php esc_html_e( 'Volunteer Hours', 'great-lake-cleaners' ); ?></span>
+    </a>
     <?php if ( $s['recycled'] > 0 ) : ?>
-    <div class="glc-stat">
+    <a href="<?php echo esc_url( $stats_url . '#debris' ); ?>" class="glc-stat">
         <span class="glc-stat-val"><span class="glc-count" data-count="<?php echo intval( $s['recycled'] ); ?>"><?php echo esc_html( number_format( $s['recycled'] ) ); ?></span><sup>+</sup></span>
-        <span class="glc-stat-lbl">
-            <a href="<?php echo esc_url( $stats_url . '#debris' ); ?>" class="glc-stat-lbl-link">
-                <?php esc_html_e( 'Items Recycled', 'great-lake-cleaners' ); ?>
-            </a>
-        </span>
-    </div>
+        <span class="glc-stat-lbl"><?php esc_html_e( 'Items Recycled', 'great-lake-cleaners' ); ?></span>
+    </a>
     <?php endif; ?>
-    <div class="glc-stat">
+    <<?php echo $cleanups_tag; ?> class="glc-stat"<?php echo $corridors_attrs; ?>>
         <span class="glc-stat-val"><span class="glc-count" data-count="<?php echo intval( $s['corridors'] ); ?>"><?php echo esc_html( $s['corridors'] ); ?></span><sup>+</sup></span>
-        <span class="glc-stat-lbl">
-            <a href="<?php echo esc_url( $cleanups_url . '#cleanups-map' ); ?>" class="glc-stat-lbl-link">
-                <?php esc_html_e( 'River Corridors', 'great-lake-cleaners' ); ?>
-            </a>
-        </span>
-    </div>
+        <span class="glc-stat-lbl"><?php esc_html_e( 'River Corridors', 'great-lake-cleaners' ); ?></span>
+    </<?php echo $cleanups_tag; ?>>
 </div>
 
 <footer id="glc-site-footer" class="glc-site-footer" role="contentinfo">
@@ -122,6 +103,17 @@
                     <rect x="2" y="2" width="20" height="20" rx="5"/>
                     <circle cx="12" cy="12" r="5"/>
                     <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/>
+                </svg>
+            </a>
+            <a href="https://greatlakecleaners.substack.com/"
+               target="_blank" rel="noopener noreferrer"
+               aria-label="<?php esc_attr_e( 'Substack (opens in new tab)', 'great-lake-cleaners' ); ?>"
+               class="glc-footer-insta">
+                <svg width="16" height="16" viewBox="0 0 24 24"
+                     style="vertical-align: middle;" aria-hidden="true" focusable="false">
+                    <g transform="translate(12,12) scale(0.85) translate(-12,-12)">
+                        <path fill="currentColor" d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"/>
+                    </g>
                 </svg>
             </a>
         </p>
