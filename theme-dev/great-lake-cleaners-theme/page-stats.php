@@ -135,9 +135,9 @@ foreach ( $_recent_months as $_m ) {
 }
 
 // Item dot pictograph (self-scaling grid of 28 columns)
-$_MAX_DOTS = 28 * 24;
-$_steps    = [ 2, 5, 10, 20, 25, 50, 100, 200, 500 ];
-$_per_dot  = 2;
+$_MAX_DOTS = 28 * 20;
+$_steps    = [ 2, 3, 5, 8, 10, 15, 20, 25, 30, 50 ];
+$_per_dot  = 3;
 foreach ( $_steps as $_s ) {
 	if ( (int) ceil( $_total_recyc / $_s ) <= $_MAX_DOTS ) {
 		$_per_dot = $_s;
@@ -147,13 +147,15 @@ foreach ( $_steps as $_s ) {
 $_dot_count = (int) ceil( $_total_recyc / $_per_dot );
 $_dot_label = 'Every dot = ' . $_per_dot . ( $_per_dot === 1 ? ' item' : ' items' );
 
-// Large items pictograph: one icon per tire / shopping cart, each linking to its source post
+// Large items pictograph: one icon per tire / bike / shopping cart, each linking to its source post
 $_tire_items = [];
+$_bike_items = [];
 $_cart_items = [];
 foreach ( array_merge( $_events, $_subs ) as $_p ) {
 	$_p_tires = (int) glc_cleanup_field( $_p, 'tires_removed' );
+	$_p_bikes = (int) glc_cleanup_field( $_p, 'bikes_removed' );
 	$_p_carts = (int) glc_cleanup_field( $_p, 'carts_removed' );
-	if ( ! $_p_tires && ! $_p_carts ) continue;
+	if ( ! $_p_tires && ! $_p_bikes && ! $_p_carts ) continue;
 
 	$_p_url   = get_permalink( $_p->ID );
 	$_p_site  = glc_cleanup_field( $_p, 'site_name' );
@@ -161,9 +163,11 @@ foreach ( array_merge( $_events, $_subs ) as $_p ) {
 	$_p_label = trim( $_p_site . ( $_p_date ? ', ' . date( 'M j, Y', strtotime( $_p_date ) ) : '' ), ', ' );
 
 	for ( $_i = 0; $_i < $_p_tires; $_i++ ) $_tire_items[] = [ 'url' => $_p_url, 'label' => $_p_label ];
+	for ( $_i = 0; $_i < $_p_bikes; $_i++ ) $_bike_items[] = [ 'url' => $_p_url, 'label' => $_p_label ];
 	for ( $_i = 0; $_i < $_p_carts; $_i++ ) $_cart_items[] = [ 'url' => $_p_url, 'label' => $_p_label ];
 }
 $_total_tires = count( $_tire_items );
+$_total_bikes = count( $_bike_items );
 $_total_carts = count( $_cart_items );
 
 // Wildlife sightings (cleanup_event + approved glc_submission), newest first
@@ -431,9 +435,9 @@ get_header();
 	</div>
 
 	<!-- ═══ LARGE ITEMS ═════════════════════════════════════════════════════ -->
-	<?php if ( $_total_tires > 0 || $_total_carts > 0 ) : ?>
+	<?php if ( $_total_tires > 0 || $_total_bikes > 0 || $_total_carts > 0 ) : ?>
 	<div class="dirCL-sec">
-		<h3 class="dirCL-sec-h">Tires &amp; shopping carts, <b>pulled from the water</b></h3>
+		<h3 class="dirCL-sec-h">Tires, bikes &amp; shopping carts, <b>pulled from the water</b></h3>
 		<p class="dirCL-sec-note">The heaviest, most stubborn debris in our waterways — tap any icon to see that cleanup.</p>
 
 		<div class="dirCL-chartwrap">
@@ -441,7 +445,7 @@ get_header();
 			<div class="dirCL-picto-row">
 				<div class="dirCL-picto-lbl">
 					<span class="n"><?php echo esc_html( $_total_tires ); ?></span>
-					<span class="t">tire<?php echo $_total_tires !== 1 ? 's' : ''; ?> removed</span>
+					<span class="t">tire<?php echo $_total_tires !== 1 ? 's' : ''; ?></span>
 				</div>
 				<div class="dirCL-picto-icons">
 					<?php foreach ( $_tire_items as $_ti_i => $_ti ) : ?>
@@ -456,11 +460,30 @@ get_header();
 			</div>
 			<?php endif; ?>
 
+			<?php if ( $_total_bikes > 0 ) : ?>
+			<div class="dirCL-picto-row">
+				<div class="dirCL-picto-lbl">
+					<span class="n"><?php echo esc_html( $_total_bikes ); ?></span>
+					<span class="t">bike<?php echo $_total_bikes !== 1 ? 's' : ''; ?></span>
+				</div>
+				<div class="dirCL-picto-icons">
+					<?php foreach ( $_bike_items as $_bi_i => $_bi ) : ?>
+					<a href="<?php echo esc_url( $_bi['url'] ); ?>" class="dirCL-picto-item"
+					   style="animation-delay:<?php echo esc_attr( 300 + $_bi_i * 30 ); ?>ms"
+					   aria-label="<?php echo esc_attr( 'Bike removed' . ( $_bi['label'] ? ' — ' . $_bi['label'] : '' ) ); ?>"
+					   title="<?php echo esc_attr( $_bi['label'] ); ?>">
+						<img src="<?php echo esc_url( $_idir . '/bike-icon.png' ); ?>" alt="" draggable="false">
+					</a>
+					<?php endforeach; ?>
+				</div>
+			</div>
+			<?php endif; ?>
+
 			<?php if ( $_total_carts > 0 ) : ?>
 			<div class="dirCL-picto-row">
 				<div class="dirCL-picto-lbl">
 					<span class="n"><?php echo esc_html( $_total_carts ); ?></span>
-					<span class="t">shopping cart<?php echo $_total_carts !== 1 ? 's' : ''; ?> removed</span>
+					<span class="t">shopping cart<?php echo $_total_carts !== 1 ? 's' : ''; ?></span>
 				</div>
 				<div class="dirCL-picto-icons">
 					<?php foreach ( $_cart_items as $_ci_i => $_ci ) : ?>

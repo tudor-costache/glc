@@ -8,8 +8,8 @@
 
 get_header();
 
-// ── Optional filter: ?impact=tires or ?impact=carts (from [glc_impact_highlights]) ──
-$impact_filter = isset( $_GET['impact'] ) && in_array( $_GET['impact'], [ 'tires', 'carts' ], true )
+// ── Optional filter: ?impact=tires, ?impact=bikes, or ?impact=carts (from [glc_impact_highlights]) ──
+$impact_filter = isset( $_GET['impact'] ) && in_array( $_GET['impact'], [ 'tires', 'bikes', 'carts' ], true )
     ? sanitize_key( $_GET['impact'] )
     : '';
 
@@ -34,6 +34,7 @@ foreach ( $event_posts as $e ) {
         'notable'  => get_post_meta( $e->ID, 'notable_finds',  true ),
         'insta'    => get_post_meta( $e->ID, 'instagram_url',  true ),
         'tires'    => (int) get_post_meta( $e->ID, 'tires_removed', true ),
+        'bikes'    => (int) get_post_meta( $e->ID, 'bikes_removed', true ),
         'carts'    => (int) get_post_meta( $e->ID, 'carts_removed', true ),
         'url'      => get_permalink( $e->ID ),
         'name'     => '',
@@ -62,6 +63,7 @@ foreach ( $sub_posts as $s ) {
         'notable'  => get_post_meta( $s->ID, 'glc_notable_finds',  true ),
         'insta'    => get_post_meta( $s->ID, 'glc_instagram_url',  true ),
         'tires'    => (int) get_post_meta( $s->ID, 'tires_removed', true ),
+        'bikes'    => (int) get_post_meta( $s->ID, 'bikes_removed', true ),
         'carts'    => (int) get_post_meta( $s->ID, 'carts_removed', true ),
         'url'      => get_permalink( $s->ID ),
         'name'     => get_post_meta( $s->ID, 'glc_submitter_name', true ),
@@ -105,6 +107,7 @@ $page_items  = array_slice( $all_cleanups, $offset, $per_page );
 
 $impact_labels = [
     'tires' => __( 'Cleanups with Tires Removed', 'great-lake-cleaners' ),
+    'bikes' => __( 'Cleanups with Bikes Removed', 'great-lake-cleaners' ),
     'carts' => __( 'Cleanups with Shopping Carts Removed', 'great-lake-cleaners' ),
 ];
 ?>
@@ -203,6 +206,9 @@ $impact_labels = [
                 }
                 if ( 'tires' === $impact_filter && $c['tires'] ) {
                     echo '<span class="glc-cs">' . esc_html( $c['tires'] ) . ' ' . ( 1 === (int) $c['tires'] ? 'tire' : 'tires' ) . '</span>';
+                }
+                if ( 'bikes' === $impact_filter && $c['bikes'] ) {
+                    echo '<span class="glc-cs">' . esc_html( $c['bikes'] ) . ' ' . ( 1 === (int) $c['bikes'] ? 'bike' : 'bikes' ) . '</span>';
                 }
                 if ( 'carts' === $impact_filter && $c['carts'] ) {
                     echo '<span class="glc-cs">' . esc_html( $c['carts'] ) . ' ' . ( 1 === (int) $c['carts'] ? 'cart' : 'carts' ) . '</span>';

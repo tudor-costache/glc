@@ -9,7 +9,7 @@
  *   Outing:     date, waterway, site name, duration
  *   Garbage:    bags, weight_kg, notes
  *   Recycling:  cans, bottles
- *   Large items: tires_removed, carts_removed
+ *   Large items: tires_removed, bikes_removed, carts_removed
  *   Volunteers: count, hours
  *   Notable:    notable_finds, instagram_url
  *   Contact:    submitter_name, email, phone
@@ -225,6 +225,11 @@ function glc_submission_meta_box_cb( $post ) {
                    value="<?php echo $m('glc_tires_removed'); ?>">
         </div>
         <div>
+            <label for="gsm_bikes">Bikes Removed</label>
+            <input type="number" id="gsm_bikes" name="glc_bikes_removed" min="0" max="999" step="1"
+                   value="<?php echo $m('glc_bikes_removed'); ?>">
+        </div>
+        <div>
             <label for="gsm_carts">Shopping Carts Removed</label>
             <input type="number" id="gsm_carts" name="glc_carts_removed" min="0" max="999" step="1"
                    value="<?php echo $m('glc_carts_removed'); ?>">
@@ -339,7 +344,7 @@ add_action( 'save_post_glc_submission', function( $post_id ) {
     $number_fields = [
         'glc_duration_min', 'glc_volunteers', 'glc_hours',
         'glc_bags', 'glc_weight_kg', 'glc_cans', 'glc_bottles',
-        'glc_tires_removed', 'glc_carts_removed',
+        'glc_tires_removed', 'glc_bikes_removed', 'glc_carts_removed',
         'glc_gps_lat', 'glc_gps_lon',
     ];
 
@@ -365,9 +370,10 @@ add_action( 'save_post_glc_submission', function( $post_id ) {
     }
     // Shared wildlife key — queried by page-stats.php across both CPTs
     update_post_meta( $post_id, 'wildlife_obs', sanitize_textarea_field( $_POST['glc_wildlife_obs'] ?? '' ) );
-    // Shared tires/carts keys — matching cleanup_event's field names, queried by
+    // Shared tires/bikes/carts keys — matching cleanup_event's field names, queried by
     // [glc_impact_highlights] and the /cleanups/ ?impact= filter across both CPTs
     update_post_meta( $post_id, 'tires_removed', absint( $_POST['glc_tires_removed'] ?? 0 ) );
+    update_post_meta( $post_id, 'bikes_removed', absint( $_POST['glc_bikes_removed'] ?? 0 ) );
     update_post_meta( $post_id, 'carts_removed', absint( $_POST['glc_carts_removed'] ?? 0 ) );
 
     // Checkbox
@@ -570,12 +576,16 @@ function glc_render_submit_form() {
 
                 <div class="glc-sub-group glc-sub-group--last">
                     <p class="glc-section-subhead"><?php esc_html_e( 'Large Items', 'great-lake-cleaners' ); ?></p>
-                    <div class="glc-field-row">
-                        <div class="glc-field glc-field--half">
+                    <div class="glc-field-row glc-field-row--3col">
+                        <div class="glc-field glc-field--third">
                             <label for="glc_tires_removed"><?php esc_html_e( 'Tires Removed (#)', 'great-lake-cleaners' ); ?></label>
                             <input type="number" id="glc_tires_removed" name="glc_tires_removed" min="0" max="999" step="1" placeholder="0" value="<?php echo $v('glc_tires_removed'); ?>">
                         </div>
-                        <div class="glc-field glc-field--half">
+                        <div class="glc-field glc-field--third">
+                            <label for="glc_bikes_removed"><?php esc_html_e( 'Bikes Removed (#)', 'great-lake-cleaners' ); ?></label>
+                            <input type="number" id="glc_bikes_removed" name="glc_bikes_removed" min="0" max="999" step="1" placeholder="0" value="<?php echo $v('glc_bikes_removed'); ?>">
+                        </div>
+                        <div class="glc-field glc-field--third">
                             <label for="glc_carts_removed"><?php esc_html_e( 'Shopping Carts Removed (#)', 'great-lake-cleaners' ); ?></label>
                             <input type="number" id="glc_carts_removed" name="glc_carts_removed" min="0" max="999" step="1" placeholder="0" value="<?php echo $v('glc_carts_removed'); ?>">
                         </div>
@@ -722,6 +732,7 @@ function glc_maybe_handle_submission() {
     $cans          = absint(                  $_POST['glc_cans']            ?? 0 );
     $bottles       = absint(                  $_POST['glc_bottles']         ?? 0 );
     $tires_removed = absint(                  $_POST['glc_tires_removed']   ?? 0 );
+    $bikes_removed = absint(                  $_POST['glc_bikes_removed']   ?? 0 );
     $carts_removed = absint(                  $_POST['glc_carts_removed']   ?? 0 );
     $volunteers    = max( 1, absint(          $_POST['glc_volunteers']      ?? 1 ) );
     $hours_input   = (float)(                 $_POST['glc_hours']           ?? 0 );
@@ -760,12 +771,14 @@ function glc_maybe_handle_submission() {
         'glc_cans'            => $cans,
         'glc_bottles'         => $bottles,
         'glc_tires_removed'   => $tires_removed,
+        'glc_bikes_removed'   => $bikes_removed,
         'glc_carts_removed'   => $carts_removed,
         // Keys matching cleanup_event CPT — counted by glc_get_impact_stats()
         // and [glc_impact_highlights] without special-casing the post type
         'items_recycled'      => $cans + $bottles,
         'weight_kg'           => $weight_kg,
         'tires_removed'       => $tires_removed,
+        'bikes_removed'       => $bikes_removed,
         'carts_removed'       => $carts_removed,
         'glc_volunteers'      => $volunteers,
         'glc_hours'           => $person_hours,
@@ -826,13 +839,13 @@ function glc_maybe_handle_submission() {
             "A new cleanup submission has arrived.\n\nSubmitter:  %s\nEmail:      %s\n"
             . "Waterway:   %s\nDate:       %s\nLocation:   %s\nDuration:   %d min\n"
             . "Bags:       %d\nWeight:     %.1f kg\nCans: %d  Bottles: %d\n"
-            . "Tires: %d  Shopping carts: %d\n"
+            . "Tires: %d  Bikes: %d  Shopping carts: %d\n"
             . "Volunteers: %d  Person-hours: %.2f\nGPS:        %s, %s\nPhoto consent: %s\n"
             . "Wildlife:   %s\n\nReview:\n%s",
             $name, $email ?: '(none)',
             $waterway, $date, $site_name ?: '(not given)', $duration_min,
             $bags, $weight_kg, $cans, $bottles,
-            $tires_removed, $carts_removed,
+            $tires_removed, $bikes_removed, $carts_removed,
             $volunteers, $person_hours,
             $gps_lat !== '' ? $gps_lat : 'n/a', $gps_lon !== '' ? $gps_lon : 'n/a',
             $repost_ok === '1' ? 'Yes — may repost' : 'No',

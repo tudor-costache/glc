@@ -146,7 +146,15 @@ function glc_cleanup_meta_box_cb( $post ) {
             <input type="number" id="glc_tires_removed" name="glc_tires_removed"
                    min="0" step="1"
                    value="<?php echo $m('tires_removed'); ?>">
-            <p class="glc-field-note">Car, truck, bicycle tires</p>
+            <p class="glc-field-note">Car and truck tires — bicycle tires go under Bikes Removed</p>
+        </div>
+
+        <div class="glc-half">
+            <label for="glc_bikes_removed">Bikes Removed</label>
+            <input type="number" id="glc_bikes_removed" name="glc_bikes_removed"
+                   min="0" step="1"
+                   value="<?php echo $m('bikes_removed'); ?>">
+            <p class="glc-field-note">Whole bicycles recovered from the waterway</p>
         </div>
 
         <div class="glc-half">
@@ -234,7 +242,7 @@ add_action( 'save_post_cleanup_event', function( $post_id ) {
     $number_fields = [
         'gps_lat', 'gps_lon', 'volunteers', 'hours',
         'bags', 'weight_kg', 'items_recycled', 'recycled_weight_kg',
-        'tires_removed', 'carts_removed', 'hazards_removed',
+        'tires_removed', 'bikes_removed', 'carts_removed', 'hazards_removed',
         'species_planted', 'meters_bank_cleared',
     ];
 

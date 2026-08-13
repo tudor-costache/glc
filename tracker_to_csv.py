@@ -49,6 +49,7 @@ COL_GPS_LON      = 12
 COL_INSTAGRAM    = 13
 COL_CORRIDOR     = 14
 COL_TIRES        = 15
+COL_BIKES        = 16
 
 DEFAULT_XLSX   = "Great_Lake_Cleaners_Outing_Tracker.xlsx"
 DEFAULT_CONFIG = "config.toml"
@@ -190,6 +191,7 @@ def _parse_rows(all_rows: list, source: str) -> list:
             "instagram":    _str(_cell(row, COL_INSTAGRAM)),
             "corridor":     _str(_cell(row, COL_CORRIDOR)),
             "tires":        _int(_cell(row, COL_TIRES)),
+            "bikes":        _int(_cell(row, COL_BIKES)),
         })
 
     return outings
@@ -225,6 +227,7 @@ def merge_to_events(outings: list) -> list:
             notable_str = (notable_str + "; Recyclables: " + ", ".join(recycle_parts)).lstrip("; ")
 
         tires        = sum(o["tires"]       for o in group)
+        bikes        = sum(o["bikes"]       for o in group)
         recycled_kg  = sum(o["recycled_kg"] for o in group)
         gps_lat  = next((o["gps_lat"]  for o in group if o["gps_lat"]),  "")
         gps_lon  = next((o["gps_lon"]  for o in group if o["gps_lon"]),  "")
@@ -242,6 +245,7 @@ def merge_to_events(outings: list) -> list:
             "weight_kg":           garbage_kg,
             "items_recycled":      items_recycled,
             "tires_removed":       tires or "",
+            "bikes_removed":       bikes or "",
             "recycled_weight_kg":  recycled_kg or "",
             "species_planted":     "",
             "meters_bank_cleared": "",
@@ -261,7 +265,7 @@ def merge_to_events(outings: list) -> list:
 CSV_COLUMNS = [
     "date", "site_name", "corridor", "gps_lat", "gps_lon",
     "volunteers", "hours", "bags", "weight_kg",
-    "items_recycled", "tires_removed", "recycled_weight_kg", "species_planted", "meters_bank_cleared",
+    "items_recycled", "tires_removed", "bikes_removed", "recycled_weight_kg", "species_planted", "meters_bank_cleared",
     "notable_finds", "wildlife_obs", "notes",
     "photo_folder", "best_photo", "instagram_url",
 ]

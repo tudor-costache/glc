@@ -124,7 +124,8 @@ Same date + same location → one event, totals summed. Same date + different lo
 | 12 | M | Longitude | GPS — negative for Ontario |
 | 13 | N | Instagram Post URL | Link to field log |
 | 14 | O | Corridor | Matches known corridor names for badge display |
-| 15 | P | Tires (#) | Count of tires removed — feeds [glc_impact_highlights] tire total |
+| 15 | P | Tires (#) | Car/truck tires only — feeds [glc_impact_highlights] tire total. Bicycle tires used to be counted here; split out to Bikes 2026-08 |
+| 16 | Q | Bikes (#) | Count of whole bicycles removed — feeds [glc_impact_highlights] bike total. New column added 2026-08; add it to the Google Sheet after column P |
 
 **Volunteer hours** = duration × volunteers. 70 min × 2 people = 2.33h.  
 **GPS:** enter once per new location. Blank = no map pin.  

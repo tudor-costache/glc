@@ -6,7 +6,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.2.9' );
+define( 'GLC_THEME_VERSION', '1.3.4' );
 
 // ── Theme setup ───────────────────────────────────────────────────────────────
 add_action( 'after_setup_theme', function() {
@@ -386,6 +386,8 @@ function glc_stats_wildlife_img( $obs ) {
 	if ( strpos( $obs, 'heron' ) !== false ) return 'heron.png';
 	if ( strpos( $obs, 'toad' ) !== false ) return 'toad.png';
 	if ( strpos( $obs, 'frog' ) !== false ) return 'frog.png';
+	if ( strpos( $obs, 'butterfly' ) !== false ) return 'butterfly.png';
+	if ( strpos( $obs, 'dragonfly' ) !== false ) return 'dragonfly.png';
 	if ( strpos( $obs, 'cormorant' ) !== false ) return 'cormorant.png';
 	if ( strpos( $obs, 'redwinged' ) !== false ) return 'redwinged.png';
 	if ( strpos( $obs, 'mink' ) !== false ) return 'mink.png';

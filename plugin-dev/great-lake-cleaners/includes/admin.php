@@ -19,6 +19,7 @@ add_filter( 'manage_cleanup_event_posts_columns', function( $cols ) {
         'bags'         => 'Bags',
         'weight_kg'    => 'kg',
         'tires'        => 'Tires',
+        'bikes'        => 'Bikes',
         'carts'        => 'Carts',
         'hazards'      => 'Haz. Waste',
         'planted'      => 'Plants',
@@ -50,6 +51,10 @@ add_action( 'manage_cleanup_event_posts_custom_column', function( $col, $post_id
         case 'tires':
             $t = get_post_meta( $post_id, 'tires_removed', true );
             echo $t ? esc_html( $t ) : '—';
+            break;
+        case 'bikes':
+            $bk = get_post_meta( $post_id, 'bikes_removed', true );
+            echo $bk ? esc_html( $bk ) : '—';
             break;
         case 'carts':
             $c = get_post_meta( $post_id, 'carts_removed', true );
@@ -186,7 +191,7 @@ add_action( 'admin_head', function() {
     if ( strpos( $screen->id, 'cleanup_event' ) === false && strpos( $screen->id, 'glc_event' ) === false ) return;
     ?>
     <style>
-    .column-volunteers, .column-bags, .column-weight_kg, .column-tires, .column-carts, .column-hazards, .column-planted { width: 70px; text-align: center; }
+    .column-volunteers, .column-bags, .column-weight_kg, .column-tires, .column-bikes, .column-carts, .column-hazards, .column-planted { width: 70px; text-align: center; }
     .column-cleanup_date { width: 110px; }
     .column-site_name { width: 220px; }
     .column-corridor { width: 140px; }

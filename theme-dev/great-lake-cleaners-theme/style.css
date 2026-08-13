@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.2.9
+Version:     1.3.4
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -2781,52 +2781,113 @@ a.glc-stat:focus-visible .glc-stat-lbl {
 /* ── [glc_impact_highlights] effort + hazard stat cards + hours chart ────── */
 .glc-impact-highlights { margin: 32px 0; }
 
-.glc-ih-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 24px;
+/* Top: hours chart alongside two stacked "headline" cards (sites, cleanups) —
+   the chart takes the wide column, cards fill the narrow one at matching height. */
+.glc-ih-top {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(200px, 1fr);
+    gap: 20px;
+    align-items: stretch;
+    margin-bottom: 16px;
 }
-.glc-ih-stat {
-    flex: 1;
-    min-width: 140px;
+.glc-ih-chart { margin-bottom: 0; }
+.glc-ih-headline {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.glc-ih-headline .glc-ih-card { flex: 1; }
+
+/* Bottom: the three "removed from the water" cards, side by side. */
+.glc-ih-removed {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+@media (max-width: 760px) {
+    .glc-ih-top { grid-template-columns: 1fr; }
+    .glc-ih-headline { flex-direction: row; }
+}
+@media (max-width: 460px) {
+    .glc-ih-headline { flex-direction: column; }
+    .glc-ih-removed { grid-template-columns: 1fr; }
+}
+
+/* Card — icon-left, label+value-right. Same compact shape as the /stats wildlife
+   cards and the single-event "Wildlife Observed" block (see .glc-wildlife-thumb),
+   so this shortcode doesn't carry its own oversized, sprawling visual language. */
+.glc-ih-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
     background: var(--glc-off-white);
     border: 1px solid var(--glc-border);
-    border-left: 4px solid var(--glc-navy);
-    border-radius: 8px;
-    padding: 20px 20px 18px;
-    text-align: center;
+    border-left: 3px solid var(--glc-navy);
+    border-radius: 10px;
+    padding: 14px 18px;
 }
-a.glc-ih-stat {
-    display: block;
+/* Headline cards (sites, cleanups) get the chart's green rather than navy — ties
+   them visually to the hours chart above and separates them from the material
+   cards below, which keep the default navy accent. */
+.glc-ih-headline .glc-ih-card {
+    border-left-color: var(--glc-green);
+}
+a.glc-ih-card {
     color: inherit;
     text-decoration: none;
     transition: background-color 0.15s, border-color 0.15s;
 }
-a.glc-ih-stat:hover,
-a.glc-ih-stat:focus-visible {
+a.glc-ih-card:hover,
+a.glc-ih-card:focus-visible {
     background: var(--glc-white);
-    border-color: var(--glc-navy);
+    border-top-color: var(--glc-navy);
+    border-right-color: var(--glc-navy);
+    border-bottom-color: var(--glc-navy);
 }
-a.glc-ih-stat:hover .glc-ih-value,
-a.glc-ih-stat:focus-visible .glc-ih-value {
+a.glc-ih-card:hover .glc-ih-value,
+a.glc-ih-card:focus-visible .glc-ih-value {
     color: var(--glc-gold);
 }
-.glc-ih-value {
+.glc-ih-icon-box {
+    flex-shrink: 0;
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    background: linear-gradient(150deg, #f3f9fb 0%, #edf6f0 100%);
+    border: 1px solid var(--glc-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.glc-ih-icon-box img {
+    width: auto;
+    max-width: 70%;
+    height: auto;
+    max-height: 70%;
     display: block;
-    font-family: var(--glc-font-display);
-    font-size: 2.6rem;
-    font-weight: 800;
-    color: var(--glc-navy);
-    line-height: 1;
+}
+.glc-ih-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 .glc-ih-label {
-    display: block;
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
+    font-family: var(--glc-font-display);
+    font-weight: 800;
+    font-size: 0.72rem;
+    font-variant: small-caps;
+    letter-spacing: 0.06em;
     color: var(--glc-muted);
-    margin-top: 8px;
+}
+.glc-ih-value {
+    font-family: var(--glc-font-display);
+    font-weight: 900;
+    font-size: 1.7rem;
+    color: var(--glc-navy);
+    line-height: 1.1;
 }
 
 /* ── [glc_timeline] cumulative impact chart ──────────────────────────────── */
@@ -3431,17 +3492,23 @@ a.glc-ih-stat:focus-visible .glc-ih-value {
     animation: glc-pop .4s ease both;
 }
 
-/* Large items pictograph (tires & shopping carts) — each icon is a link to its source post */
+/* Large items pictograph (tires, bikes & shopping carts) — each icon is a link to its source post.
+   Laid out like a horizontal bar chart: fixed-width label gutter on the left, icons as the "bar" on the right. */
+.dirCL-picto-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    column-gap: 20px;
+    row-gap: 8px;
+}
 .dirCL-picto-row + .dirCL-picto-row {
-    margin-top: 26px;
-    padding-top: 22px;
-    border-top: 1px solid var(--glc-border);
+    margin-top: 14px;
 }
 .dirCL-picto-lbl {
     display: flex;
     align-items: baseline;
     gap: 7px;
-    margin-bottom: 14px;
+    flex: 0 0 200px;
 }
 .dirCL-picto-lbl .n {
     font-family: var(--glc-font-display);
@@ -3456,7 +3523,11 @@ a.glc-ih-stat:focus-visible .glc-ih-value {
     text-transform: uppercase;
     letter-spacing: .04em;
 }
-.dirCL-picto-icons { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.dirCL-picto-icons { display: flex; flex-wrap: wrap; gap: 4px 6px; flex: 1 1 auto; min-width: 0; }
+@media (max-width: 560px) {
+    .dirCL-picto-row { flex-direction: column; align-items: flex-start; }
+    .dirCL-picto-lbl { flex-basis: auto; margin-bottom: 4px; }
+}
 .dirCL-picto-item {
     display: inline-flex;
     align-items: center;

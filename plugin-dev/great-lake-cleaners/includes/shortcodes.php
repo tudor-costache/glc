@@ -626,8 +626,13 @@ function glc_shortcode_gallery( $atts ) {
 }
 
 // ── [glc_impact_highlights] ──────────────────────────────────────────────────
-// Four stat cards (unique sites, tires, shopping carts, total cleanups) + cumulative
-// person-hours chart. All four cards draw on both cleanup_event and glc_submission data.
+// Layout groups five icon cards by meaning rather than one flat grid: the hours chart sits
+// beside two "headline" cards (unique sites, total cleanups), then a second row below holds
+// the three "removed from the water" cards (tires, bikes, shopping carts). All five cards
+// draw on both cleanup_event and glc_submission data. Cards use the same compact icon-left /
+// label+value-right shape as the /stats wildlife cards, rather than a tall icon-over-number
+// stack. Card icons are theme-hosted PNGs reused from the /stats large-items pictograph
+// (tire/bike/cart) plus sites-icon.png and garbage-bag.png.
 
 add_shortcode( 'glc_impact_highlights', 'glc_shortcode_impact_highlights' );
 function glc_shortcode_impact_highlights() {
@@ -650,6 +655,7 @@ function glc_shortcode_impact_highlights() {
 
     $site_names  = [];
     $total_tires = 0;
+    $total_bikes = 0;
     $total_carts = 0;
     $pts         = [];
 
@@ -661,6 +667,7 @@ function glc_shortcode_impact_highlights() {
         if ( $site ) $site_names[] = $site;
 
         $total_tires   += (int) get_post_meta( $id, 'tires_removed', true );
+        $total_bikes   += (int) get_post_meta( $id, 'bikes_removed', true );
         $total_carts   += (int) get_post_meta( $id, 'carts_removed', true );
 
         if ( $date ) {
@@ -679,6 +686,7 @@ function glc_shortcode_impact_highlights() {
         if ( $site ) $site_names[] = $site;
 
         $total_tires += (int) get_post_meta( $id, 'tires_removed', true );
+        $total_bikes += (int) get_post_meta( $id, 'bikes_removed', true );
         $total_carts += (int) get_post_meta( $id, 'carts_removed', true );
 
         if ( $date ) {
@@ -718,57 +726,76 @@ function glc_shortcode_impact_highlights() {
         ? get_permalink( $cleanups_page )
         : get_post_type_archive_link( 'cleanup_event' );
     $tires_url     = $cleanups_url ? add_query_arg( 'impact', 'tires', $cleanups_url ) : '';
+    $bikes_url     = $cleanups_url ? add_query_arg( 'impact', 'bikes', $cleanups_url ) : '';
     $carts_url     = $cleanups_url ? add_query_arg( 'impact', 'carts', $cleanups_url ) : '';
     $ih_tag        = $cleanups_url ? 'a' : 'div';
 
-    ob_start(); ?>
+    // Icons reuse the same asset files as the /stats large-items pictograph and moose section —
+    // theme-hosted, so the plugin reaches into the theme's assets dir (same pattern submission.php
+    // uses for the submit-form thank-you image).
+    $ih_idir = esc_url( get_stylesheet_directory_uri() ) . '/assets/images';
+
+    ob_start();
+    // Card markup helper — icon-left, label+value-right, same compact shape as the
+    // /stats wildlife cards and the single-event "Wildlife Observed" block, so this
+    // shortcode doesn't sprawl into its own oversized visual language.
+    $ih_card = function ( $icon, $label, $value, $url ) use ( $ih_tag, $ih_idir ) {
+        ob_start(); ?>
+        <<?php echo $ih_tag; ?> class="glc-ih-card"<?php echo $url ? ' href="' . esc_url( $url ) . '"' : ''; ?>>
+            <span class="glc-ih-icon-box"><img src="<?php echo esc_url( $ih_idir . '/' . $icon ); ?>" alt="" aria-hidden="true"></span>
+            <span class="glc-ih-text">
+                <span class="glc-ih-label"><?php echo esc_html( $label ); ?></span>
+                <span class="glc-ih-value"><?php echo esc_html( $value ); ?></span>
+            </span>
+        </<?php echo $ih_tag; ?>>
+        <?php return ob_get_clean();
+    };
+    ?>
     <div class="glc-impact-highlights">
 
-        <div class="glc-ih-stats">
-            <<?php echo $ih_tag; ?> class="glc-ih-stat"<?php echo $cleanups_url ? ' href="' . esc_url( $cleanups_url ) . '"' : ''; ?>>
-                <span class="glc-ih-value"><?php echo esc_html( $unique_sites ); ?></span>
-                <span class="glc-ih-label">Unique Sites Cleaned</span>
-            </<?php echo $ih_tag; ?>>
-            <<?php echo $ih_tag; ?> class="glc-ih-stat"<?php echo $tires_url ? ' href="' . esc_url( $tires_url ) . '"' : ''; ?>>
-                <span class="glc-ih-value"><?php echo esc_html( $total_tires ); ?></span>
-                <span class="glc-ih-label">Tires Removed</span>
-            </<?php echo $ih_tag; ?>>
-            <<?php echo $ih_tag; ?> class="glc-ih-stat"<?php echo $carts_url ? ' href="' . esc_url( $carts_url ) . '"' : ''; ?>>
-                <span class="glc-ih-value"><?php echo esc_html( $total_carts ); ?></span>
-                <span class="glc-ih-label">Shopping Carts Removed</span>
-            </<?php echo $ih_tag; ?>>
-            <<?php echo $ih_tag; ?> class="glc-ih-stat"<?php echo $cleanups_url ? ' href="' . esc_url( $cleanups_url ) . '"' : ''; ?>>
-                <span class="glc-ih-value"><?php echo esc_html( $total_cleanups ); ?></span>
-                <span class="glc-ih-label">Total Cleanups</span>
-            </<?php echo $ih_tag; ?>>
+        <div class="glc-ih-top">
+            <?php if ( ! empty( $data_hrs ) && $max_day > 0 ) : ?>
+            <div class="dirCL-chartwrap glc-ih-chart">
+                <div class="dirCL-legend">
+                    <div class="dirCL-leg">
+                        <span class="sw" style="background:#2e8b57"></span>
+                        Volunteer hours
+                        <span class="num" style="color:#1a5e35"><?php echo esc_html( $hours_display ); ?></span>
+                    </div>
+                </div>
+                <?php
+                echo glc_stats_area_chart(
+                    [ [
+                        'key'          => 'hours',
+                        'color'        => '#2e8b57',
+                        'values'       => $data_hrs,
+                        'max'          => max( $total_hours * 1.1, 10 ),
+                        'fill_opacity' => '0.20',
+                    ] ],
+                    230,
+                    $data_days,
+                    $max_day,
+                    $first_ts
+                );
+                ?>
+            </div>
+            <?php endif; ?>
+
+            <div class="glc-ih-headline">
+                <?php
+                echo $ih_card( 'sites-icon.png', 'Sites Cleaned', $unique_sites, $cleanups_url );
+                echo $ih_card( 'garbage-bag.png', 'Total Cleanups', $total_cleanups, $cleanups_url );
+                ?>
+            </div>
         </div>
 
-        <?php if ( ! empty( $data_hrs ) && $max_day > 0 ) : ?>
-        <div class="dirCL-chartwrap">
-            <div class="dirCL-legend">
-                <div class="dirCL-leg">
-                    <span class="sw" style="background:#2e8b57"></span>
-                    Volunteer hours
-                    <span class="num" style="color:#1a5e35"><?php echo esc_html( $hours_display ); ?></span>
-                </div>
-            </div>
+        <div class="glc-ih-removed">
             <?php
-            echo glc_stats_area_chart(
-                [ [
-                    'key'          => 'hours',
-                    'color'        => '#2e8b57',
-                    'values'       => $data_hrs,
-                    'max'          => max( $total_hours * 1.1, 10 ),
-                    'fill_opacity' => '0.20',
-                ] ],
-                230,
-                $data_days,
-                $max_day,
-                $first_ts
-            );
+            echo $ih_card( 'tire-icon.png', 'Tires Removed', $total_tires, $tires_url );
+            echo $ih_card( 'bike-icon.png', 'Bikes Removed', $total_bikes, $bikes_url );
+            echo $ih_card( 'cart-icon.png', 'Carts Removed', $total_carts, $carts_url );
             ?>
         </div>
-        <?php endif; ?>
 
     </div>
     <?php
