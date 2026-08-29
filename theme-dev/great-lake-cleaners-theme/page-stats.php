@@ -82,6 +82,20 @@ if ( ! empty( $_dates ) ) {
 	$_max_day = end( $_data_days );
 }
 
+// Timeframe label for the hero lede — "in the last N months", switching to
+// years once we've been active 12+ months. Based on the first cleanup date.
+$_timeframe_label = '';
+if ( $_first_ts ) {
+	$_days_active   = ( current_time( 'timestamp' ) - $_first_ts ) / DAY_IN_SECONDS;
+	$_months_active = max( 1, (int) round( $_days_active / 30.44 ) );
+	if ( $_months_active >= 12 ) {
+		$_years_active    = max( 1, (int) round( $_months_active / 12 ) );
+		$_timeframe_label = ( $_years_active === 1 ) ? 'in the last year' : 'in the last ' . $_years_active . ' years';
+	} else {
+		$_timeframe_label = ( $_months_active === 1 ) ? 'in the last month' : 'in the last ' . $_months_active . ' months';
+	}
+}
+
 // Totals
 $_total_debris = empty( $_data_debris ) ? 0 : end( $_data_debris );
 $_total_recyc  = empty( $_data_recyc )  ? 0 : end( $_data_recyc );
@@ -259,6 +273,18 @@ if ( ! empty( $_wl_markers ) && defined( 'GLC_PLUGIN_URL' ) ) {
 	wp_enqueue_script( 'leaflet', GLC_PLUGIN_URL . 'assets/leaflet.js',  [], '1.9.4', true );
 }
 
+// River corridor lines under the wildlife pins — same static asset as the
+// /cleanups/#cleanups-map overlay, no cumulative-impact pins here (this
+// map is about sightings, not debris totals), just the lines for context.
+$_corridor_lines_url = '';
+if ( ! empty( $_wl_markers ) && defined( 'GLC_PLUGIN_DIR' ) && defined( 'GLC_PLUGIN_URL' ) ) {
+	$__geojson_path = GLC_PLUGIN_DIR . 'assets/corridors.geojson';
+	if ( file_exists( $__geojson_path ) ) {
+		// mtime query string -- see shortcodes.php's glc_shortcode_map() for why.
+		$_corridor_lines_url = GLC_PLUGIN_URL . 'assets/corridors.geojson?v=' . filemtime( $__geojson_path );
+	}
+}
+
 get_header();
 ?>
 
@@ -288,8 +314,8 @@ get_header();
 				</div>
 				<p class="dirCL-lede">
 					<b class="lede-h">of plastics and debris hauled out from local waterways</b>
-					by hand and by paddle. We intercept debris upstream, before it fragments into
-					<b class="mp">microplastics</b> and enters our lakes. Help keep our waters clean:
+					<?php echo $_timeframe_label ? esc_html( $_timeframe_label ) . ' ' : ''; ?>by hand and by paddle. We intercept debris upstream, before it fragments into
+					<b class="mp">microplastics</b> or leaches chemicals into our lakes. Help keep our waters clean:
 				</p>
 				<div class="dirCL-hero-cta">
 					<a class="glc-btn-primary" href="<?php echo esc_url( home_url( '/join-crew/' ) ); ?>">Join the Crew</a>
@@ -323,7 +349,7 @@ get_header();
 	<!-- ═══ DEBRIS & RECYCLING ══════════════════════════════════════════════ -->
 	<div class="dirCL-sec" id="debris">
 		<h3 class="dirCL-sec-h">Debris &amp; Recycling <b>diverted</b> over time</h3>
-		<p class="dirCL-sec-note">Everything we collect by hand and by paddle helps reduce the microplastic load in our Great Lakes.</p>
+		<p class="dirCL-sec-note">Everything we collect on shore or on the water helps reduce downstream pollution in our Great Lakes.  Debris (kg) is landfill, tires and metal. Recyclables are counted as items, not weight, and are diverted to the blue bin program.</p>
 
 		<div class="dirCL-chartwrap">
 			<!-- Legend -->
@@ -398,7 +424,7 @@ get_header();
 		<h3 class="dirCL-sec-h"><?php echo esc_html( $_hours_display ); ?> hours <b>on the water</b></h3>
 		<p class="dirCL-sec-note">
 			We cleaned <?php echo esc_html( $_unique_sites ); ?> unique site<?php echo $_unique_sites !== 1 ? 's' : ''; ?>
-			and <?php echo esc_html( $_total_corridors ); ?> river corridor<?php echo $_total_corridors !== 1 ? 's' : ''; ?>.
+			and <?php echo esc_html( $_total_corridors ); ?> river corridor<?php echo $_total_corridors !== 1 ? 's' : ''; ?> since March 28, 2026.
 		</p>
 
 		<div class="dirCL-chartwrap">
@@ -561,12 +587,29 @@ get_header();
 		        if (typeof L === 'undefined') return;
 		        var markers = <?php echo wp_json_encode( $_wl_markers ); ?>;
 		        if (!markers.length) return;
+		        var corridorLinesUrl = <?php echo wp_json_encode( $_corridor_lines_url ); ?>;
 		        var map = L.map('glc-wl-map', { zoomControl: true }).setView([43.545, -80.248], 12);
-		        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+		        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_29e5_1_17f74f1d3418f4c313616f46', {
 		            attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
 		            subdomains: 'abcd',
 		            maxZoom: 19
 		        }).addTo(map);
+		        // River corridor lines, for context under the wildlife pins — same
+		        // static asset the archive map uses; fetched separately since it's
+		        // too large to inline (see /cleanups/#cleanups-map for the full setup).
+		        if (corridorLinesUrl) {
+		            fetch(corridorLinesUrl)
+		                .then(function (r) { return r.json(); })
+		                .then(function (geo) {
+		                    L.geoJSON(geo, {
+		                        style: { color: '#5a9fc0', weight: 3, opacity: 0.55 }
+		                    }).addTo(map).bringToBack();
+		                    map.attributionControl.addAttribution(
+		                        'River corridors: <a href="https://geohub.lio.gov.on.ca/datasets/mnrf::ontario-hydro-network-ohn-watercourse" target="_blank" rel="noopener">Ontario Hydro Network</a>, MNRF, Open Government Licence – Ontario'
+		                    );
+		                })
+		                .catch(function () { /* corridor lines are decorative context — fail silently */ });
+		        }
 		        var pin = '<svg width="20" height="26" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg"><path d="M10 0C4.48 0 0 4.48 0 10c0 7.5 10 16 10 16s10-8.5 10-16C20 4.48 15.52 0 10 0z" fill="#1a4a6b"/><circle cx="10" cy="10" r="4" fill="#fff"/></svg>';
 		        markers.forEach(function (m) {
 		            var html, sz, anch, po;
@@ -586,7 +629,12 @@ get_header();
 		        });
 		        var ll = markers.map(function (m) { return [m.lat, m.lon]; });
 		        if (ll.length === 1) { map.setView(ll[0], 15); }
-		        else { map.fitBounds(ll, { padding: [50, 50] }); }
+		        else {
+		            map.fitBounds(ll, { padding: [50, 50] });
+		            // fitBounds floors to the nearest zoom guaranteed to fit; one level
+		            // tighter reads better — the taller .glc-wl-map box gives it room.
+		            map.setZoom(map.getZoom() + 1);
+		        }
 		    });
 		})();
 		</script>

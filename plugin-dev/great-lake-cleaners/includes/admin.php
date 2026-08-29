@@ -159,27 +159,70 @@ add_action( 'pre_get_posts', function( $query ) {
     }
 } );
 
-// ── Gallery feature flag on attachments ──────────────────────────────────────
-// Adds a "Feature in photo gallery" checkbox to the attachment edit modal.
-// Only attachments with _glc_gallery = '1' appear in [glc_gallery].
+// ── Gallery feature flags on attachments ─────────────────────────────────────
+// Adds a "Feature in ... gallery" checkbox to the attachment edit modal.
+// Images  -> _glc_gallery       = '1'  feeds [glc_gallery]       (/photos/)
+// Videos  -> _glc_video_gallery = '1'  feeds [glc_video_gallery] (/videos/)
+//
+// Each checkbox is scoped to its own mime family so a video never shows the
+// photo checkbox (and vice versa) — the two flags are separate meta keys and a
+// clip flagged for one gallery must never leak into the other.
+
+/**
+ * Which gallery flag, if any, applies to an attachment's mime type.
+ *
+ * @param  int $att_id Attachment post ID.
+ * @return array|null  [ field, meta_key, label, help ] or null when the file is
+ *                     neither an image nor a video.
+ */
+function glc_gallery_flag_for_attachment( $att_id ) {
+    $mime = (string) get_post_mime_type( $att_id );
+
+    if ( strpos( $mime, 'image/' ) === 0 ) {
+        return [
+            'field' => 'glc_gallery',
+            'key'   => '_glc_gallery',
+            'label' => __( 'Feature in photo gallery', 'great-lake-cleaners' ),
+            'help'  => __( 'Show this photo on the Photos page.', 'great-lake-cleaners' ),
+        ];
+    }
+
+    if ( strpos( $mime, 'video/' ) === 0 ) {
+        return [
+            'field' => 'glc_video_gallery',
+            'key'   => '_glc_video_gallery',
+            'label' => __( 'Feature in video gallery', 'great-lake-cleaners' ),
+            'help'  => __( 'Show this clip on the Videos page.', 'great-lake-cleaners' ),
+        ];
+    }
+
+    return null;
+}
 
 add_filter( 'attachment_fields_to_edit', function( $fields, $post ) {
-    $checked = get_post_meta( $post->ID, '_glc_gallery', true ) === '1';
-    $fields['glc_gallery'] = [
+    $flag = glc_gallery_flag_for_attachment( $post->ID );
+    if ( ! $flag ) return $fields;
+
+    $checked = get_post_meta( $post->ID, $flag['key'], true ) === '1';
+
+    $fields[ $flag['field'] ] = [
         'label' => __( 'Gallery', 'great-lake-cleaners' ),
         'input' => 'html',
         'html'  => '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">'
-                 . '<input type="checkbox" name="attachments[' . esc_attr( $post->ID ) . '][glc_gallery]" value="1"'
+                 . '<input type="checkbox" name="attachments[' . esc_attr( $post->ID ) . '][' . esc_attr( $flag['field'] ) . ']" value="1"'
                  . ( $checked ? ' checked' : '' ) . '>'
-                 . esc_html__( 'Feature in photo gallery', 'great-lake-cleaners' )
+                 . esc_html( $flag['label'] )
                  . '</label>',
-        'helps' => esc_html__( 'Show this photo on the Photos page.', 'great-lake-cleaners' ),
+        'helps' => esc_html( $flag['help'] ),
     ];
     return $fields;
 }, 10, 2 );
 
 add_filter( 'attachment_fields_to_save', function( $post, $attachment ) {
-    update_post_meta( $post['ID'], '_glc_gallery', ! empty( $attachment['glc_gallery'] ) ? '1' : '0' );
+    $flag = glc_gallery_flag_for_attachment( $post['ID'] );
+    if ( ! $flag ) return $post;
+
+    update_post_meta( $post['ID'], $flag['key'], ! empty( $attachment[ $flag['field'] ] ) ? '1' : '0' );
     return $post;
 }, 10, 2 );
 

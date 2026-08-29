@@ -13,6 +13,12 @@ $impact_filter = isset( $_GET['impact'] ) && in_array( $_GET['impact'], [ 'tires
     ? sanitize_key( $_GET['impact'] )
     : '';
 
+// ── Optional filter: ?corridor=speed-river (from a gold corridor pin on the impact map) ──
+$corridor_filter = isset( $_GET['corridor'] ) && array_key_exists( sanitize_key( $_GET['corridor'] ), glc_corridor_table() )
+    ? sanitize_key( $_GET['corridor'] )
+    : '';
+$any_filter = $impact_filter || $corridor_filter;
+
 // ── Fetch all cleanup_event posts ─────────────────────────────────────────────
 $event_posts = get_posts( [
     'post_type'      => 'cleanup_event',
@@ -36,6 +42,7 @@ foreach ( $event_posts as $e ) {
         'tires'    => (int) get_post_meta( $e->ID, 'tires_removed', true ),
         'bikes'    => (int) get_post_meta( $e->ID, 'bikes_removed', true ),
         'carts'    => (int) get_post_meta( $e->ID, 'carts_removed', true ),
+        'corridor' => glc_corridor_slug( get_post_meta( $e->ID, 'corridor', true ) ),
         'url'      => get_permalink( $e->ID ),
         'name'     => '',
     ];
@@ -65,15 +72,21 @@ foreach ( $sub_posts as $s ) {
         'tires'    => (int) get_post_meta( $s->ID, 'tires_removed', true ),
         'bikes'    => (int) get_post_meta( $s->ID, 'bikes_removed', true ),
         'carts'    => (int) get_post_meta( $s->ID, 'carts_removed', true ),
+        'corridor' => glc_corridor_slug( get_post_meta( $s->ID, 'glc_corridor', true ) ),
         'url'      => get_permalink( $s->ID ),
         'name'     => get_post_meta( $s->ID, 'glc_submitter_name', true ),
     ];
 }
 
-// ── Apply the impact filter, if any ───────────────────────────────────────────
+// ── Apply the impact and/or corridor filter, if any ───────────────────────────
 if ( $impact_filter ) {
     $all_cleanups = array_values( array_filter( $all_cleanups, function( $c ) use ( $impact_filter ) {
         return $c[ $impact_filter ] > 0;
+    } ) );
+}
+if ( $corridor_filter ) {
+    $all_cleanups = array_values( array_filter( $all_cleanups, function( $c ) use ( $corridor_filter ) {
+        return $c['corridor'] === $corridor_filter;
     } ) );
 }
 
@@ -117,7 +130,12 @@ $impact_labels = [
 
     <header class="glc-archive-header">
         <span class="glc-fp-label"><?php esc_html_e( 'Our Work', 'great-lake-cleaners' ); ?></span>
-        <?php if ( $impact_filter ) : ?>
+        <?php if ( $corridor_filter ) : ?>
+        <h1 class="glc-archive-h1"><?php echo esc_html( glc_corridor_table()[ $corridor_filter ] ); ?> <?php esc_html_e( 'Cleanups', 'great-lake-cleaners' ); ?></h1>
+        <p class="glc-archive-intro">
+            <a href="<?php echo esc_url( get_post_type_archive_link( 'cleanup_event' ) ); ?>">&larr; <?php esc_html_e( 'See all cleanups', 'great-lake-cleaners' ); ?></a>
+        </p>
+        <?php elseif ( $impact_filter ) : ?>
         <h1 class="glc-archive-h1"><?php echo esc_html( $impact_labels[ $impact_filter ] ); ?></h1>
         <p class="glc-archive-intro">
             <a href="<?php echo esc_url( get_post_type_archive_link( 'cleanup_event' ) ); ?>">&larr; <?php esc_html_e( 'See all cleanups', 'great-lake-cleaners' ); ?></a>
@@ -235,9 +253,11 @@ $impact_labels = [
     </div>
 
     <?php if ( $total_pages > 1 ) :
-        $pagenum_link = function( $p ) use ( $impact_filter ) {
+        $pagenum_link = function( $p ) use ( $impact_filter, $corridor_filter ) {
             $link = get_pagenum_link( $p );
-            return $impact_filter ? add_query_arg( 'impact', $impact_filter, $link ) : $link;
+            if ( $impact_filter )   $link = add_query_arg( 'impact', $impact_filter, $link );
+            if ( $corridor_filter ) $link = add_query_arg( 'corridor', $corridor_filter, $link );
+            return $link;
         };
     ?>
     <nav class="glc-pagination" aria-label="<?php esc_attr_e( 'Cleanup pages', 'great-lake-cleaners' ); ?>">
@@ -267,7 +287,7 @@ $impact_labels = [
 
     <?php else : ?>
     <p class="glc-archive-empty">
-        <?php if ( $impact_filter ) : ?>
+        <?php if ( $any_filter ) : ?>
             <?php esc_html_e( 'No cleanups match this filter yet.', 'great-lake-cleaners' ); ?>
         <?php else : ?>
             <?php esc_html_e( 'No cleanups logged yet — check back soon.', 'great-lake-cleaners' ); ?>
@@ -276,20 +296,18 @@ $impact_labels = [
     <?php endif; ?>
 
     <!-- ── Where We've Made an Impact ───────────────────────────────────────── -->
-    <?php // Hidden when filtered — the map shows every cleanup location, not just the filtered subset. ?>
-    <?php if ( ! $impact_filter ) : ?>
+    <?php // Always shown, even filtered/paginated -- the corridor pins summarize every
+    // corridor regardless of the current filter, so it's a "jump elsewhere" point
+    // no matter how deep into a filtered/paginated view someone is. ?>
     <div id="cleanups-map" class="glc-impact-section" aria-label="<?php esc_attr_e( 'Cleanup locations map', 'great-lake-cleaners' ); ?>">
         <span class="glc-fp-label"><?php esc_html_e( 'Where We\'ve Made an Impact', 'great-lake-cleaners' ); ?></span>
         <h2 class="glc-impact-heading"><?php esc_html_e( 'Every site tells a story', 'great-lake-cleaners' ); ?></h2>
 
-        <?php if ( ! empty( $all_cleanups ) ) : ?>
         <div class="glc-archive-map">
-            <?php echo do_shortcode( '[glc_map height="400px" limit="7" cluster_radius="10"]' ); ?>
+            <?php echo do_shortcode( '[glc_map height="400px" limit="7" cluster_radius="10" corridors="1" markers="0"]' ); ?>
         </div>
-        <?php endif; ?>
 
     </div>
-    <?php endif; ?>
 
 </div>
 </div>

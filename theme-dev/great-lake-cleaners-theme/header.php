@@ -87,6 +87,11 @@
         'email'      => 'info@greatlakecleaners.ca',
         'areaServed' => [ '@type' => 'City', 'name' => 'Guelph', 'containedInPlace' => [ '@type' => 'Province', 'name' => 'Ontario' ] ],
         'sameAs'     => [ 'https://www.instagram.com/greatlakecleaners', 'https://greatlakecleaners.substack.com/' ],
+        'potentialAction' => [
+            '@type'  => 'DonateAction',
+            'name'   => 'Support the cigarette butt dispenser fundraiser',
+            'target' => GLC_DONATE_URL,
+        ],
     ];
     echo '<script type="application/ld+json">' . wp_json_encode( $glc_jsonld_org, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "</script>\n";
 
@@ -199,6 +204,18 @@
                             <g transform="translate(12,12) scale(0.85) translate(-12,-12)">
                                 <path fill="currentColor" d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"/>
                             </g>
+                        </svg>
+                    </a>
+                    <a href="<?php echo esc_url( GLC_DONATE_URL ); ?>"
+                       class="glc-insta-link"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       title="<?php esc_attr_e( 'Chip in for cigarette butt dispensers', 'great-lake-cleaners' ); ?>"
+                       aria-label="<?php esc_attr_e( 'Support our fundraiser on PayPal (opens in new tab)', 'great-lake-cleaners' ); ?>">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                             stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M20.84 5.61a5.1 5.1 0 0 0-7.22 0L12 7.22l-1.62-1.61a5.1 5.1 0 1 0-7.22 7.21L12 21.5l8.84-8.68a5.1 5.1 0 0 0 0-7.21z"/>
                         </svg>
                     </a>
                 </div>

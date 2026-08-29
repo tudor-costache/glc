@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.3.4
+Version:     1.4.5
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -83,6 +83,23 @@ body {
 }
 
 img { max-width: 100%; height: auto; display: block; }
+
+/* ── Video blocks ─────────────────────────────────────────────────────────── */
+/* Core sets `.wp-block-video video { width: 100% }`, so a portrait phone clip
+   (9:16) fills the 1140px column and runs ~1800px tall. Cap the height at 75%
+   of the viewport (800px ceiling on tall monitors) and let the width follow the
+   aspect ratio instead. Scoped under .glc-main so it beats
+   core's rule regardless of whether block styles load inline (after the theme
+   stylesheet) or in the bundled wp-block-library sheet. */
+.glc-main .wp-block-video { text-align: center; }
+.glc-main .wp-block-video video {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: min(800px, 75vh);
+    margin-left: auto;
+    margin-right: auto;
+}
 
 a { color: var(--glc-navy); }
 a:hover { color: var(--glc-green); }
@@ -343,9 +360,16 @@ a:hover { color: var(--glc-green); }
     box-shadow: 0 6px 16px rgba(0,0,0,0.28);
 }
 
-.glc-nav-menu li:hover > .sub-menu,
 .glc-nav-menu li.glc-submenu-open > .sub-menu {
     display: block;
+}
+
+/* Hover-reveal only on devices that actually hover — stops the iOS/tablet
+   "first tap opens the dropdown, second tap follows the link" two-step. */
+@media (hover: hover) {
+    .glc-nav-menu li:hover > .sub-menu {
+        display: block;
+    }
 }
 
 .glc-nav-menu .sub-menu a {
@@ -367,7 +391,7 @@ a:hover { color: var(--glc-green); }
 ══════════════════════════════════════════════════════════════════════════════ */
 /* ── Hero section (first fp-section on front page) ───────────────────────── */
 
-/* Green italic in the hero headline */
+/* Green accent word ("riverbank") in the hero headline; rest inherits navy */
 .glc-hero-em { font-style: normal; color: var(--glc-green); }
 
 /* CTA row sits below the body text */
@@ -1974,6 +1998,20 @@ a.glc-stat:focus-visible .glc-stat-lbl {
     margin: 0.6em 0;
 }
 
+/* Media & Text block: core CSS pads the text column 8% on both sides for
+   gutter/breathing room. When media sits on the right, the text column is
+   left-most and that left padding indents it against the paragraph text
+   above — wrong here since the block isn't used as a blockquote. */
+.wp-block-media-text.has-media-on-the-right .wp-block-media-text__content {
+    padding-left: 0;
+}
+@media (max-width: 600px) {
+    .wp-block-media-text.has-media-on-the-right.is-stacked-on-mobile .wp-block-media-text__content {
+        padding-left: 0;
+        padding-right: 0;
+    }
+}
+
 /* Stat row */
 .glc-single-sub-stats {
     display: flex;
@@ -2202,10 +2240,10 @@ a.glc-stat:focus-visible .glc-stat-lbl {
         border-left-color: var(--glc-gold);
     }
 
-    /* Mobile sub-menu: static, indented, no hover trigger */
-    .glc-nav-menu li:hover > .sub-menu { display: none; }
-    .glc-nav-menu li.glc-submenu-open > .sub-menu { display: block; }
+    /* Mobile sub-menu: always expanded as a static, indented nested list —
+       no toggle, no two-tap. The parent link navigates like any other row. */
     .glc-nav-menu .sub-menu {
+        display: block;
         position: static;
         box-shadow: none;
         border-top: none;
@@ -2218,6 +2256,8 @@ a.glc-stat:focus-visible .glc-stat-lbl {
         padding: 9px 24px 9px 36px;
         font-size: 0.88rem;
     }
+    /* Drop the ▾ affordance — nothing collapses on mobile */
+    .glc-nav-menu .menu-item-has-children > a::after { content: none; }
 
     /* On mobile, stack hero map below text */
     .glc-fp-map  { order: 2; }
@@ -2375,16 +2415,21 @@ a.glc-stat:focus-visible .glc-stat-lbl {
 .glc-footer-base a.glc-footer-insta:hover { color: var(--glc-gold); }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   Photo Gallery  [glc_gallery] shortcode + page-photos.php
+   Media Galleries
+   [glc_gallery] + page-photos.php  and  [glc_video_gallery] + page-videos.php
+   Both pages share this wrapper, the year tabs, the grid, and the lightbox
+   shell; the video-only overlays live in the Video Gallery block below.
    ══════════════════════════════════════════════════════════════════════════════ */
 
 /* Page wrapper */
-.glc-photos-wrap {
+.glc-photos-wrap,
+.glc-videos-wrap {
     padding: 56px 32px 48px;
     max-width: 1140px;
     margin: 0 auto;
 }
-.glc-photos-heading {
+.glc-photos-heading,
+.glc-videos-heading {
     font-family: var(--glc-font-display);
     font-size: 2rem;
     color: var(--glc-navy);
@@ -2604,7 +2649,8 @@ a.glc-stat:focus-visible .glc-stat-lbl {
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
-    .glc-photos-wrap {
+    .glc-photos-wrap,
+    .glc-videos-wrap {
         padding: 40px 16px 32px;
     }
     .glc-gallery-grid {
@@ -2615,6 +2661,128 @@ a.glc-stat:focus-visible .glc-stat-lbl {
     .glc-lb-next { right: 6px; }
     .glc-lb-prev,
     .glc-lb-next { width: 40px; height: 40px; font-size: 1.6rem; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Video Gallery  [glc_video_gallery] shortcode + page-videos.php
+   Inherits .glc-gallery-wrap / -tabs / -grid / -thumb-btn and the .glc-lb-*
+   lightbox shell from the block above. Only the tile medium and the play and
+   duration overlays are new.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Tile medium — the clip's own first frame, or a poster image when one is set.
+   Photos crop from the top (faces sit high in a landscape shot), but clips are
+   framed centre and vertical phone video needs the middle of the frame kept.
+   pointer-events: none so the whole tile stays one click target: the button. */
+.glc-video-thumb-btn video,
+.glc-video-thumb-btn img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    background: var(--glc-navy);
+    pointer-events: none;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+}
+.glc-video-thumb-btn:hover video,
+.glc-video-thumb-btn:hover img {
+    transform: scale(1.04);
+    opacity: 0.88;
+}
+
+/* Play badge — centred over the tile */
+.glc-vid-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(26, 74, 107, 0.72);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.25s ease;
+}
+.glc-video-thumb-btn:hover .glc-vid-play,
+.glc-video-thumb-btn:focus .glc-vid-play {
+    background: var(--glc-gold);
+    color: var(--glc-navy);
+    transform: translate(-50%, -50%) scale(1.08);
+}
+/* Optical centring — a triangle's visual mass sits left of its bounding box */
+.glc-vid-play svg { margin-left: 2px; }
+
+/* Duration pill — top right, so it never collides with the bottom caption */
+.glc-vid-dur {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(10, 20, 30, 0.75);
+    color: #fff;
+    font-family: var(--glc-font-body);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+    pointer-events: none;
+}
+
+/* Lightbox player — same envelope as .glc-lb-img. Width stays auto so a
+   vertical clip scales by height instead of being stretched to the wrapper. */
+.glc-lb-video {
+    width: auto;
+    max-width: 100%;
+    max-height: calc(90vh - 60px);
+    border-radius: 6px;
+    display: block;
+    background: #000;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+
+@media (max-width: 700px) {
+    /* Native video controls are taller on mobile — leave room for the meta bar */
+    .glc-lb-video { max-height: calc(90vh - 84px); }
+    .glc-vid-play { width: 44px; height: 44px; }
+    .glc-vid-play svg { width: 22px; height: 22px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   See Us In Action  page-see-us-in-action.php
+   Combined recent-media wall: reuses .glc-photos-wrap and the whole gallery /
+   lightbox shell from the blocks above. New here is only the per-medium section
+   header carrying the "All photos / All videos" link (.glc-spot-view-all, the
+   same link style as the front-page spotlight footers).
+   ══════════════════════════════════════════════════════════════════════════════ */
+.glc-media-sec + .glc-media-sec {
+    margin-top: 52px;
+}
+.glc-media-sec-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px 24px;
+    flex-wrap: wrap;
+    border-bottom: 2px solid var(--glc-border);
+    padding-bottom: 10px;
+}
+.glc-media-sec-title {
+    font-family: var(--glc-font-display);
+    font-weight: 900;
+    font-size: 1.3rem;
+    color: var(--glc-navy);
+    margin: 0;
+}
+/* The capped wall never renders year tabs, so its single grid sits right under
+   the section header — trim the .glc-gallery-wrap top margin that would
+   otherwise leave a gap where the tab strip normally is. */
+.glc-media-wrap .glc-gallery-wrap {
+    margin-top: 16px;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -3615,7 +3783,7 @@ a.glc-ih-card:focus-visible .glc-ih-value {
 /* Wildlife sighting map */
 .dirCL-wl-mapwrap { isolation: isolate; margin-top: 32px; }
 .dirCL-wl-maplbl  { font-size: .82rem; font-weight: 700; color: var(--glc-muted); letter-spacing: .06em; text-transform: uppercase; margin: 0 0 12px; }
-.glc-wl-map       { height: 320px; width: 100%; border-radius: 12px; border: 1px solid var(--glc-border); }
+.glc-wl-map       { height: 380px; width: 100%; border-radius: 12px; border: 1px solid var(--glc-border); }
 .glc-wl-pin {
     width: 48px; height: 48px;
     border-radius: 50%;

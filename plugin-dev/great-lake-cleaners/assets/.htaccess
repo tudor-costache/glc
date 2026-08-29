@@ -1,0 +1,30 @@
+# corridors.geojson is a large, rarely-changing static asset fetched by
+# both the /cleanups/ archive map and the /stats/ wildlife map (and
+# potentially the front-page hero map). Without these, whether it's
+# cached or gzipped depends entirely on host defaults, which usually
+# don't cover an uncommon extension like .geojson.
+#
+# Cache lifetime is long (1 month) because the fetch URL is versioned
+# with the file's mtime (?v=<timestamp>) wherever it's used — any update
+# to the file changes its URL, so a long cache here never serves stale
+# data, it just avoids re-downloading unchanged data.
+
+<IfModule mod_mime.c>
+    AddType application/geo+json .geojson
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/geo+json application/json
+</IfModule>
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType application/geo+json "access plus 1 month"
+    ExpiresByType application/json     "access plus 1 month"
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(geojson|json)$">
+        Header set Cache-Control "public, max-age=2592000"
+    </FilesMatch>
+</IfModule>

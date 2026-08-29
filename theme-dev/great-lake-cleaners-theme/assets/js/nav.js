@@ -19,35 +19,37 @@
         }
     } );
 
-    // ── Sub-menu: mobile click toggle, desktop keyboard support ──────────────
-    var parents = menu.querySelectorAll( '.menu-item-has-children' );
+    // ── Sub-menu: desktop hover / keyboard disclosure ───────────────────────
+    // Mobile (hamburger visible): CSS renders each sub-menu as a static, always
+    // -expanded nested list, so the parent link is just a link — no tap
+    // interception, no popup semantics.
+    // Desktop: mouse hover reveals the sub-menu (CSS); keyboard users toggle it
+    // with Enter / Space / Escape, and it closes when focus leaves the item.
+    var parents  = menu.querySelectorAll( '.menu-item-has-children' );
+    var onMobile = function() {
+        return window.getComputedStyle( toggle ).display !== 'none';
+    };
 
     parents.forEach( function( item ) {
         var link    = item.querySelector( ':scope > a' );
         var submenu = item.querySelector( ':scope > .sub-menu' );
         if ( ! link || ! submenu ) return;
 
-        // Set ARIA attributes
         var id = 'glc-sub-' + Math.random().toString(36).slice(2);
         submenu.id = id;
-        link.setAttribute( 'aria-haspopup', 'true' );
-        link.setAttribute( 'aria-expanded', 'false' );
         link.setAttribute( 'aria-controls', id );
+        // Popup semantics only apply where the sub-menu is actually hidden
+        // until triggered — i.e. desktop. On mobile it's a visible nested list.
+        if ( ! onMobile() ) {
+            link.setAttribute( 'aria-haspopup', 'true' );
+            link.setAttribute( 'aria-expanded', 'false' );
+        }
 
-        link.addEventListener( 'click', function( e ) {
-            // Only intercept on mobile (hamburger visible = menu is flex column)
-            if ( window.getComputedStyle( toggle ).display === 'none' ) return;
-            // Two-tap: first tap opens submenu; second tap navigates
-            if ( item.classList.contains( 'glc-submenu-open' ) ) return;
-            e.preventDefault();
-            item.classList.add( 'glc-submenu-open' );
-            link.setAttribute( 'aria-expanded', 'true' );
-        } );
-
-        // Keyboard: open on Enter/Space when focused on desktop
+        // Keyboard (desktop only): Enter/Space opens the submenu instead of
+        // following the link; Escape closes it.
         link.addEventListener( 'keydown', function( e ) {
+            if ( onMobile() ) return;
             if ( e.key === 'Enter' || e.key === ' ' ) {
-                if ( window.getComputedStyle( toggle ).display !== 'none' ) return;
                 e.preventDefault();
                 var open = item.classList.toggle( 'glc-submenu-open' );
                 link.setAttribute( 'aria-expanded', String( open ) );
@@ -63,7 +65,9 @@
         item.addEventListener( 'focusout', function( e ) {
             if ( ! item.contains( e.relatedTarget ) ) {
                 item.classList.remove( 'glc-submenu-open' );
-                link.setAttribute( 'aria-expanded', 'false' );
+                if ( link.hasAttribute( 'aria-expanded' ) ) {
+                    link.setAttribute( 'aria-expanded', 'false' );
+                }
             }
         } );
     } );
@@ -72,7 +76,9 @@
         parents.forEach( function( item ) {
             item.classList.remove( 'glc-submenu-open' );
             var link = item.querySelector( ':scope > a' );
-            if ( link ) link.setAttribute( 'aria-expanded', 'false' );
+            if ( link && link.hasAttribute( 'aria-expanded' ) ) {
+                link.setAttribute( 'aria-expanded', 'false' );
+            }
         } );
     }
 

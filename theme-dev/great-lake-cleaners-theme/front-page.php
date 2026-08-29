@@ -25,7 +25,7 @@ get_header();
         <div class="glc-fp-text">
             <span class="glc-fp-label">The Lake Starts Here</span>
             <h1 class="glc-fp-h2" id="glc-hero-heading">
-                What gets left on the riverbank <em class="glc-hero-em">flows into the lake.</em>
+                What gets left on the <em class="glc-hero-em">riverbank</em> flows into the lake.
             </h1>
             <div class="glc-fp-body">
                 <p>We are cleaning local rivers and shores by foot and paddle because
@@ -52,7 +52,7 @@ get_header();
         </div>
 
         <div class="glc-fp-visual glc-fp-map" role="region" aria-label="<?php esc_attr_e( 'Cleanup locations map', 'great-lake-cleaners' ); ?>">
-            <?php echo do_shortcode( '[glc_map height="340px" limit="5" cluster_radius="10"]' ); ?>
+            <?php echo do_shortcode( '[glc_map height="340px" limit="5" cluster_radius="10" corridors="1" corridor_pins="0"]' ); ?>
         </div>
 
     </section>

@@ -116,6 +116,18 @@
                     </g>
                 </svg>
             </a>
+            <a href="<?php echo esc_url( GLC_DONATE_URL ); ?>"
+               target="_blank" rel="noopener noreferrer"
+               title="<?php esc_attr_e( 'Chip in for cigarette butt dispensers', 'great-lake-cleaners' ); ?>"
+               aria-label="<?php esc_attr_e( 'Support our fundraiser on PayPal (opens in new tab)', 'great-lake-cleaners' ); ?>"
+               class="glc-footer-insta">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                     stroke-linejoin="round" style="vertical-align: middle;"
+                     aria-hidden="true" focusable="false">
+                    <path d="M20.84 5.61a5.1 5.1 0 0 0-7.22 0L12 7.22l-1.62-1.61a5.1 5.1 0 1 0-7.22 7.21L12 21.5l8.84-8.68a5.1 5.1 0 0 0 0-7.21z"/>
+                </svg>
+            </a>
         </p>
     </div>
 </footer>

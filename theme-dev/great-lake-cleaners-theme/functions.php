@@ -6,7 +6,11 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.3.4' );
+define( 'GLC_THEME_VERSION', '1.4.5' );
+
+// PayPal Pool fundraiser — cigarette butt dispensers at trail heads.
+// Used by the header + footer donate icons and the NGO JSON-LD DonateAction.
+define( 'GLC_DONATE_URL', 'https://www.paypal.com/pools/c/9rTJrg2a4B' );
 
 // ── Theme setup ───────────────────────────────────────────────────────────────
 add_action( 'after_setup_theme', function() {
@@ -81,6 +85,12 @@ function glc_nav_fallback() {
             . esc_html__( 'Events', 'great-lake-cleaners' ) . '</a></li>';
     }
 
+    $media = get_page_by_path( 'see-us-in-action' );
+    if ( $media ) {
+        echo '<li><a href="' . esc_url( get_permalink( $media ) ) . '">'
+            . esc_html__( 'Crew at Work', 'great-lake-cleaners' ) . '</a></li>';
+    }
+
     $about = get_page_by_path( 'about' );
     if ( $about ) {
         echo '<li><a href="' . esc_url( get_permalink( $about ) ) . '">'
@@ -102,7 +112,7 @@ function glc_nav_fallback() {
  *   float  $weight_kg  Total debris weight
  *   float  $hours      Total volunteer person-hours
  *   int    $recycled   Total items recycled (0 if none logged)
- *   int    $corridors  Distinct corridor values across all cleanup_event posts
+ *   int    $corridors  Distinct corridor values across cleanup_event + glc_submission posts
  * }
  */
 function glc_get_impact_stats(): array {
@@ -139,6 +149,10 @@ function glc_get_impact_stats(): array {
         $weight   += (float) get_post_meta( $id, 'weight_kg',      true );
         $hours    += (float) get_post_meta( $id, 'glc_hours',      true );
         $recycled += (int)   get_post_meta( $id, 'items_recycled', true );
+        $c = trim( (string) get_post_meta( $id, 'glc_corridor', true ) );
+        if ( $c !== '' ) {
+            $corridors[ strtolower( $c ) ] = true;
+        }
     }
 
     return [
