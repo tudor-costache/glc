@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.4.5
+Version:     1.4.9
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -509,6 +509,95 @@ a:hover { color: var(--glc-green); }
 }
 .glc-btn-outline:hover { background: var(--glc-gold); color: var(--glc-navy); }
 
+/* ── Hero CTA row + upcoming-event chip ──────────────────────────────────── */
+/* Both slots render at equal width so the row keeps its shape whether the
+   second slot shows the event chip or the "Submit a Cleanup" button. */
+.glc-cta-row--hero > * {
+    flex: 1 1 0;
+    max-width: 15rem;   /* cap the equal-fill so the short-content slots read as buttons, not banners */
+    justify-content: center;
+}
+.glc-cta-row--hero .glc-btn-primary,
+.glc-cta-row--hero .glc-btn-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-left: 20px;
+    padding-right: 20px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Event chip — replaces the "Submit a Cleanup" CTA whenever an upcoming
+   event exists; the whole chip links to that event's detail / RSVP page. */
+.glc-hero-event {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    background: var(--glc-white);
+    border: 2px solid var(--glc-gold);
+    border-radius: 7px;
+    padding: 4px 14px 4px 4px;
+    box-shadow: 0 1px 4px rgba(26,74,107,0.12);
+    text-decoration: none;
+    min-width: 0;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.glc-hero-event:hover {
+    border-color: var(--glc-gold-deep);
+    box-shadow: 0 3px 10px rgba(26,74,107,0.2);
+    color: inherit;
+}
+.glc-hero-event-date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    background: var(--glc-navy);
+    border-radius: 6px;
+    line-height: 1.1;
+}
+.glc-hero-event-month {
+    font-family: var(--glc-font-display);
+    font-size: 0.54rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: var(--glc-gold);
+}
+.glc-hero-event-day {
+    font-family: var(--glc-font-display);
+    font-size: 1rem;
+    font-weight: 900;
+    color: var(--glc-white);
+}
+.glc-hero-event-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.glc-hero-event-title {
+    font-family: var(--glc-font-display);
+    font-weight: 800;
+    font-size: 0.82rem;
+    color: var(--glc-navy);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+.glc-hero-event-rsvp {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--glc-green);
+    font-variant: small-caps;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
 /* ── Header wave pseudo-element ───────────────────────────────────────────── */
 .glc-site-header::after {
     content: '';
@@ -627,6 +716,9 @@ a.glc-stat:focus-visible .glc-stat-lbl {
     margin: 0 auto;
     text-align: center;
 }
+/* Hero only: text column wider than the map so both CTAs stay on one line
+   (the event chip / "Submit a Cleanup" swap must not resize the row). */
+.glc-fp-section.glc-fp-hero { grid-template-columns: 1.15fr 0.85fr; }
 
 .glc-fp-label {
     display: none;
@@ -1048,7 +1140,12 @@ a.glc-stat:focus-visible .glc-stat-lbl {
 @media (max-width: 768px) {
     .glc-fp-label { display: inline-block; }
     .glc-fp-section,
-    .glc-fp-section.glc-fp-reverse { grid-template-columns: 1fr; direction: ltr; }
+    .glc-fp-section.glc-fp-reverse,
+    .glc-fp-section.glc-fp-hero { grid-template-columns: 1fr; direction: ltr; }
+    /* With an upcoming event, the chip is the sole hero CTA on mobile — the row
+       can't fit it plus "See Our Cleanups" without squishing both. The no-event
+       state keeps its default two buttons. */
+    .glc-cta-row--has-event .glc-btn-primary { display: none; }
     .glc-fp-recent-grid { grid-template-columns: 1fr; }
     .glc-fp-recent-grid--slim { grid-template-columns: 1fr; }
     .glc-corridor-cards { grid-template-columns: 1fr; }
@@ -2757,7 +2854,9 @@ a.glc-stat:focus-visible .glc-stat-lbl {
    Combined recent-media wall: reuses .glc-photos-wrap and the whole gallery /
    lightbox shell from the blocks above. New here is only the per-medium section
    header carrying the "All photos / All videos" link (.glc-spot-view-all, the
-   same link style as the front-page spotlight footers).
+   same link style as the front-page spotlight footers). The rule under each
+   header row is the shared .glc-wave-divider (see the front page), not a plain
+   border — the markup is inlined in the template.
    ══════════════════════════════════════════════════════════════════════════════ */
 .glc-media-sec + .glc-media-sec {
     margin-top: 52px;
@@ -2768,8 +2867,9 @@ a.glc-stat:focus-visible .glc-stat-lbl {
     justify-content: space-between;
     gap: 16px 24px;
     flex-wrap: wrap;
-    border-bottom: 2px solid var(--glc-border);
-    padding-bottom: 10px;
+}
+.glc-media-sec .glc-wave-divider {
+    margin: 12px 0 0;
 }
 .glc-media-sec-title {
     font-family: var(--glc-font-display);
@@ -3814,76 +3914,8 @@ a.glc-ih-card:focus-visible .glc-ih-value {
 
 /* ── Events (glc_event) ─────────────────────────────────────────────────────── */
 
-/* Front-page upcoming events strip */
-.glc-ev-fp-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
-    margin-bottom: 20px;
-}
-.glc-ev-fp-card {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    background: var(--glc-off-white);
-    border: 1px solid var(--glc-border);
-    border-radius: 10px;
-    padding: 16px 18px;
-    text-decoration: none;
-    box-shadow: 0 2px 8px rgba(26,74,107,0.07);
-    transition: border-color 0.15s, box-shadow 0.15s;
-}
-.glc-ev-fp-card:hover {
-    border-color: var(--glc-gold);
-    box-shadow: 0 4px 14px rgba(26,74,107,0.13);
-}
-.glc-ev-fp-date {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 58px;
-    padding: 8px 6px;
-    background: var(--glc-navy);
-    border-radius: 8px;
-    line-height: 1.1;
-}
-.glc-ev-fp-month {
-    font-size: 0.68rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--glc-gold);
-}
-.glc-ev-fp-day {
-    font-family: var(--glc-font-display);
-    font-weight: 900;
-    font-size: 1.5rem;
-    color: #fff;
-}
-.glc-ev-fp-body {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-}
-.glc-ev-fp-title {
-    font-family: var(--glc-font-display);
-    font-weight: 800;
-    color: var(--glc-navy);
-    font-size: 1.02rem;
-    line-height: 1.2;
-    transition: color .18s ease;
-}
-.glc-ev-fp-card:hover .glc-ev-fp-title { color: var(--glc-gold-deep); }
-.glc-ev-fp-meta { font-size: 0.82rem; color: var(--glc-muted); }
-.glc-ev-fp-rsvp {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--glc-green-dark);
-    margin-top: 2px;
-}
+/* The front-page "Upcoming events" strip was folded into the hero CTA row —
+   its chip now lives under .glc-hero-event in the HERO section above. */
 
 /* Events archive — upcoming cards extend .glc-fp-cleanup-card */
 .glc-ev-card-site {
@@ -4040,7 +4072,6 @@ a.glc-ih-card:focus-visible .glc-ih-value {
 .glc-ev-rsvp-msg--err { color: var(--glc-red); }
 
 @media (max-width: 768px) {
-    .glc-ev-fp-grid { grid-template-columns: 1fr; }
     .glc-ev-results-link { margin-left: 0; flex-basis: 100%; align-self: flex-start; width: max-content; }
 }
 

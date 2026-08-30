@@ -20,7 +20,7 @@ get_header();
         <span class="glc-fp-label"><?php esc_html_e( 'Get Involved', 'great-lake-cleaners' ); ?></span>
         <h1 class="glc-submit-page-h1"><?php esc_html_e( 'Submit a Cleanup', 'great-lake-cleaners' ); ?></h1>
         <p class="glc-submit-page-intro">
-            <?php esc_html_e( 'Did a cleanup on a local waterway? We want to count it. Every bag removed from an Ontario riverbank is one fewer that reaches the Great Lakes.', 'great-lake-cleaners' ); ?>
+            <?php esc_html_e( 'Did a cleanup on a local waterway? We want to count it. Every bag removed from an Ontario riverbank is one fewer that reaches the Great Lakes. Review <a href="https://greatlakecleaners.ca/cleanup-best-practices/">our Tips</a> to ensure you have a safe and engaging experience.', 'great-lake-cleaners' ); ?>
         </p>
     </header>
 

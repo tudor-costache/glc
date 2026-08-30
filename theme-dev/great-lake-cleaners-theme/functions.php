@@ -6,7 +6,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.4.5' );
+define( 'GLC_THEME_VERSION', '1.4.9' );
 
 // PayPal Pool fundraiser — cigarette butt dispensers at trail heads.
 // Used by the header + footer donate icons and the NGO JSON-LD DonateAction.

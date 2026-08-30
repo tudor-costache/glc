@@ -20,7 +20,7 @@ get_header();
 <div class="glc-fp-sections">
 
     <!-- ── 0. Hero ─────────────────────────────────────────────────────────── -->
-    <section class="glc-fp-section" aria-labelledby="glc-hero-heading">
+    <section class="glc-fp-section glc-fp-hero" aria-labelledby="glc-hero-heading">
 
         <div class="glc-fp-text">
             <span class="glc-fp-label">The Lake Starts Here</span>
@@ -31,7 +31,15 @@ get_header();
                 <p>We are cleaning local rivers and shores by foot and paddle because
                 what enters our water reaches our Great Lakes and pollutes all along the way.</p>
             </div>
-            <div class="glc-cta-row glc-cta-row--section">
+            <?php
+            // Second CTA slot: the soonest upcoming event replaces "Submit a
+            // Cleanup" in place, and reverts to it on its own once that event's
+            // day has passed (glc_get_upcoming_events() is date-driven). When an
+            // event is showing, --has-event lets mobile drop to just the chip.
+            $next_event = function_exists( 'glc_get_upcoming_events' ) ? glc_get_upcoming_events( 1 ) : [];
+            $next_event = $next_event ? $next_event[0] : null;
+            ?>
+            <div class="glc-cta-row glc-cta-row--section glc-cta-row--hero<?php echo $next_event ? ' glc-cta-row--has-event' : ''; ?>">
                 <?php
                 $cleanups_page = get_page_by_path( 'cleanups' );
                 $cleanups_url  = $cleanups_page
@@ -42,12 +50,41 @@ get_header();
                     <?php esc_html_e( 'See Our Cleanups', 'great-lake-cleaners' ); ?>
                 </a>
                 <?php
-                $submit_page = get_page_by_path( 'submit-cleanup' );
-                $submit_url  = $submit_page ? get_permalink( $submit_page ) : '#';
+                if ( $next_event ) :
+                    $ev_id   = $next_event->ID;
+                    $ev_date = glc_event_date( $ev_id );
+                    $ev_ts   = $ev_date ? strtotime( $ev_date ) : 0;
+                    $ev_time = glc_event_time_range( $ev_id );
+                    $ev_site = get_post_meta( $ev_id, 'site_name', true );
+
+                    $ev_aria = [ get_the_title( $ev_id ) ];
+                    if ( $ev_ts )   $ev_aria[] = date( 'F j', $ev_ts );
+                    if ( $ev_time ) $ev_aria[] = $ev_time;
+                    if ( $ev_site ) $ev_aria[] = $ev_site;
+                    $ev_aria[] = __( 'details and RSVP', 'great-lake-cleaners' );
+                ?>
+                <a class="glc-hero-event"
+                   href="<?php echo esc_url( get_permalink( $ev_id ) ); ?>"
+                   aria-label="<?php echo esc_attr( implode( ', ', $ev_aria ) ); ?>">
+                    <?php if ( $ev_ts ) : ?>
+                    <span class="glc-hero-event-date" aria-hidden="true">
+                        <span class="glc-hero-event-month"><?php echo esc_html( strtoupper( date( 'M', $ev_ts ) ) ); ?></span>
+                        <span class="glc-hero-event-day"><?php echo esc_html( date( 'j', $ev_ts ) ); ?></span>
+                    </span>
+                    <?php endif; ?>
+                    <span class="glc-hero-event-text">
+                        <span class="glc-hero-event-title"><?php echo esc_html( get_the_title( $ev_id ) ); ?></span>
+                        <span class="glc-hero-event-rsvp"><?php esc_html_e( 'RSVP', 'great-lake-cleaners' ); ?> &rarr;</span>
+                    </span>
+                </a>
+                <?php else :
+                    $submit_page = get_page_by_path( 'submit-cleanup' );
+                    $submit_url  = $submit_page ? get_permalink( $submit_page ) : '#';
                 ?>
                 <a href="<?php echo esc_url( $submit_url ); ?>" class="glc-btn-outline">
                     <?php esc_html_e( 'Submit a Cleanup', 'great-lake-cleaners' ); ?>
                 </a>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -201,68 +238,7 @@ get_header();
 
     <?php endif; ?>
 
-    <!-- ── Upcoming events (hidden entirely when nothing is scheduled) ─────── -->
-    <?php
-    $upcoming_events = function_exists( 'glc_get_upcoming_events' ) ? glc_get_upcoming_events( 3 ) : [];
-    if ( ! empty( $upcoming_events ) ) :
-    ?>
-    <div class="glc-wave-divider" aria-hidden="true">
-        <svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0,11 C150,3 300,19 450,11 C600,3 750,19 900,11 C1050,3 1200,19 1200,11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M0,16 C150,8 300,24 450,16 C600,8 750,24 900,16 C1050,8 1200,24 1200,16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.45"/>
-        </svg>
-    </div>
-
-    <section class="glc-fp-spotlight glc-ev-strip" aria-labelledby="glc-events-heading">
-
-        <div class="glc-spot-header">
-            <h2 id="glc-events-heading" class="glc-spot-h2">Upcoming events</h2>
-        </div>
-
-        <div class="glc-ev-fp-grid">
-            <?php foreach ( $upcoming_events as $ev ) :
-                $ev_id   = $ev->ID;
-                $ev_date = glc_event_date( $ev_id );
-                $ev_time = glc_event_time_range( $ev_id );
-                $ev_site = get_post_meta( $ev_id, 'site_name', true );
-                $ev_ts   = $ev_date ? strtotime( $ev_date ) : 0;
-
-                $ev_label_parts = [ get_the_title( $ev_id ) ];
-                if ( $ev_date ) $ev_label_parts[] = date( 'l, F j, Y', $ev_ts );
-                if ( $ev_time ) $ev_label_parts[] = $ev_time;
-                if ( $ev_site ) $ev_label_parts[] = $ev_site;
-                $ev_label_parts[] = 'details and RSVP';
-            ?>
-            <a class="glc-ev-fp-card"
-               href="<?php echo esc_url( get_permalink( $ev_id ) ); ?>"
-               aria-label="<?php echo esc_attr( implode( ', ', $ev_label_parts ) ); ?>">
-                <?php if ( $ev_ts ) : ?>
-                <span class="glc-ev-fp-date" aria-hidden="true">
-                    <span class="glc-ev-fp-month"><?php echo esc_html( date( 'M', $ev_ts ) ); ?></span>
-                    <span class="glc-ev-fp-day"><?php echo esc_html( date( 'j', $ev_ts ) ); ?></span>
-                </span>
-                <?php endif; ?>
-                <span class="glc-ev-fp-body">
-                    <span class="glc-ev-fp-title"><?php echo esc_html( get_the_title( $ev_id ) ); ?></span>
-                    <?php if ( $ev_time || $ev_site ) : ?>
-                    <span class="glc-ev-fp-meta">
-                        <?php echo esc_html( implode( ' · ', array_filter( [ $ev_time, $ev_site ] ) ) ); ?>
-                    </span>
-                    <?php endif; ?>
-                    <span class="glc-ev-fp-rsvp">Details &amp; RSVP &rarr;</span>
-                </span>
-            </a>
-            <?php endforeach; ?>
-        </div>
-
-        <div class="glc-spot-footer">
-            <a class="glc-spot-view-all" href="<?php echo esc_url( get_post_type_archive_link( 'glc_event' ) ); ?>">
-                View all events &rarr;
-            </a>
-        </div>
-
-    </section>
-    <?php endif; ?>
+    <!-- ── Upcoming events now surface in the hero CTA row (.glc-hero-event) ── -->
 
     <div class="glc-wave-divider" aria-hidden="true">
         <svg viewBox="0 0 1200 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
