@@ -16,16 +16,18 @@ function glc_handle_crew_signup() {
         wp_send_json_success( "You're on the list! We'll reach out before our next outing." );
     }
 
-    // Rate limit: 3 per 10 min per IP
-    $ip_hash  = substr( md5( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ), 0, 16 );
-    $rate_key = 'glc_crew_' . $ip_hash;
-    $attempts = (int) get_transient( $rate_key );
-    if ( $attempts >= 3 ) {
-        wp_send_json_error( 'Too many submissions — please try again in a few minutes.' );
+    // Rate limit: 3 per 10 min per IP, plus the site-wide hourly ceiling in
+    // security.php — the per-IP limit alone does nothing about a rotating-IP
+    // script, where every request looks like a first attempt.
+    $rate = glc_rate_limit_check( 'crew', 3 );
+    if ( true !== $rate ) {
+        wp_send_json_error( $rate );
     }
 
-    $name  = sanitize_text_field( wp_unslash( $_POST['glc_crew_name']  ?? '' ) );
-    $email = sanitize_email(      wp_unslash( $_POST['glc_crew_email'] ?? '' ) );
+    // Length-capped: both values go straight into the subject line and body of
+    // an email, and nothing client side is binding on a scripted POST.
+    $name  = glc_clean_text( $_POST['glc_crew_name']  ?? '', 100 );
+    $email = sanitize_email( glc_clean_text( $_POST['glc_crew_email'] ?? '', 200 ) );
 
     if ( ! $email || ! is_email( $email ) ) {
         wp_send_json_error( 'Please enter a valid email address.' );
@@ -46,7 +48,7 @@ function glc_handle_crew_signup() {
         wp_send_json_error( 'Something went wrong — please email us directly at info@greatlakecleaners.ca.' );
     }
 
-    set_transient( $rate_key, $attempts + 1, 10 * MINUTE_IN_SECONDS );
+    glc_rate_limit_hit( 'crew' );
     wp_send_json_success( "You're on the list! We'll reach out before our next outing." );
 }
 

@@ -6,11 +6,76 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.4.9' );
+define( 'GLC_THEME_VERSION', '1.5.2' );
 
 // PayPal Pool fundraiser — cigarette butt dispensers at trail heads.
 // Used by the header + footer donate icons and the NGO JSON-LD DonateAction.
 define( 'GLC_DONATE_URL', 'https://www.paypal.com/pools/c/9rTJrg2a4B' );
+
+// ── Response headers are the host's job, not the theme's ────────────────
+//
+// Production serves HSTS, a Content-Security-Policy, X-Frame-Options,
+// X-Content-Type-Options, Referrer-Policy and Permissions-Policy from the Apache
+// config. The theme deliberately sends none of them, and re-adding them here is
+// a mistake that has already been made twice:
+//
+//   1.5.0  sent them unconditionally    -> every header arrived twice
+//   1.5.1  tried to skip ones already   -> still arrived twice; Apache uses
+//          present via headers_list()      `Header always set`, which lands in
+//                                          err_headers_out *after* PHP has
+//                                          finished, so headers_list() cannot
+//                                          see it and it does not replace PHP's
+//                                          copy either
+//
+// There is no reliable way for PHP to detect those, so the only way to have one
+// copy of each is for exactly one layer to own them — and the host is the layer
+// that can also serve HSTS and a CSP. If this site ever moves somewhere without
+// that config, add the headers to the new host's vhost/.htaccess, not here.
+//
+// If they must live in PHP for some future host, note that Permissions-Policy
+// has to keep `geolocation=(self)`: the submit-cleanup and report-issue forms
+// both have a "Use my location" button backed by navigator.geolocation.
+
+// ── Close off username enumeration ───────────────────────────────────────────
+//
+// A live check found both of WordPress's default channels open, each handing out
+// the login slugs of every account on the site:
+//
+//   /wp-json/wp/v2/users     full JSON list, names + slugs
+//   /?author=1               301s to /author/<slug>/, confirming the slug
+//
+// Usernames are half of a credential-stuffing attempt, and wp-login.php is
+// public. Nothing on this site uses author archives or needs the users
+// collection anonymously, so both are closed to logged-out visitors.
+
+add_filter( 'rest_endpoints', function( $endpoints ) {
+    // Logged-in editors keep the collection — the block editor needs it.
+    if ( is_user_logged_in() ) return $endpoints;
+
+    unset( $endpoints['/wp/v2/users'] );
+    unset( $endpoints['/wp/v2/users/(?P<id>[\d]+)'] );
+
+    return $endpoints;
+} );
+
+// Priority 0: redirect_canonical() is itself on template_redirect, and it is what
+// turns /?author=1 into the /author/<slug>/ redirect that leaks the name. This
+// has to answer first.
+add_action( 'template_redirect', function() {
+    if ( is_admin() || ! is_author() ) return;
+
+    global $wp_query;
+    $wp_query->set_404();
+    status_header( 404 );
+    nocache_headers();
+}, 0 );
+
+// The generator tag reports the exact WordPress version to anyone who views
+// source. Removing it is cosmetic on its own — readme.html and the ?ver= strings
+// on core assets still disclose it, and staying patched is what actually matters
+// — but it costs one line and trims the obvious tell.
+remove_action( 'wp_head', 'wp_generator' );
+add_filter( 'the_generator', '__return_empty_string' );
 
 // ── Theme setup ───────────────────────────────────────────────────────────────
 add_action( 'after_setup_theme', function() {

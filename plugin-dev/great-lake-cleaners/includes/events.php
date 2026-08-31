@@ -344,12 +344,12 @@ function glc_handle_event_rsvp() {
         wp_send_json_success( "You're in! See you at the river." );
     }
 
-    // Rate limit: 3 per 10 min per IP
-    $ip_hash  = substr( md5( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ), 0, 16 );
-    $rate_key = 'glc_rsvp_' . $ip_hash;
-    $attempts = (int) get_transient( $rate_key );
-    if ( $attempts >= 3 ) {
-        wp_send_json_error( 'Too many submissions — please try again in a few minutes.' );
+    // Rate limit: 3 per 10 min per IP, plus the site-wide hourly ceiling in
+    // security.php (set higher for RSVPs — they spike legitimately the day an
+    // event is announced).
+    $rate = glc_rate_limit_check( 'rsvp', 3 );
+    if ( true !== $rate ) {
+        wp_send_json_error( $rate );
     }
 
     $event_id = absint( $_POST['glc_rsvp_event_id'] ?? 0 );
@@ -361,9 +361,9 @@ function glc_handle_event_rsvp() {
         wp_send_json_error( 'This event has already happened.' );
     }
 
-    $name  = sanitize_text_field( wp_unslash( $_POST['glc_rsvp_name']  ?? '' ) );
-    $email = sanitize_email(      wp_unslash( $_POST['glc_rsvp_email'] ?? '' ) );
-    $party = min( 20, max( 1, (int) ( $_POST['glc_rsvp_party'] ?? 1 ) ) );
+    $name  = glc_clean_text( $_POST['glc_rsvp_name'] ?? '', 100 );
+    $email = sanitize_email( glc_clean_text( $_POST['glc_rsvp_email'] ?? '', 200 ) );
+    $party = glc_clean_int( $_POST['glc_rsvp_party'] ?? 1, 20, 1 );
 
     if ( ! $name ) {
         wp_send_json_error( 'Please enter your name.' );
@@ -396,7 +396,7 @@ function glc_handle_event_rsvp() {
         wp_send_json_error( 'Something went wrong — please email us directly at info@greatlakecleaners.ca.' );
     }
 
-    set_transient( $rate_key, $attempts + 1, 10 * MINUTE_IN_SECONDS );
+    glc_rate_limit_hit( 'rsvp' );
 
     // Aggregate headcount for the "N people coming" line — social proof only
     update_post_meta( $event_id, 'rsvp_count',   (int) get_post_meta( $event_id, 'rsvp_count',   true ) + $party );

@@ -348,33 +348,38 @@ add_action( 'save_post_glc_submission', function( $post_id ) {
         'glc_gps_lat', 'glc_gps_lon',
     ];
 
+    // wp_unslash() before every sanitizer: WordPress slash-escapes the
+    // superglobals, so without it an apostrophe in a site name is stored with a
+    // leading backslash, gaining another on every re-save of the same record.
     foreach ( $text_fields as $key => $fn ) {
         if ( isset( $_POST[ $key ] ) ) {
-            update_post_meta( $post_id, $key, $fn( $_POST[ $key ] ) );
+            update_post_meta( $post_id, $key, $fn( wp_unslash( $_POST[ $key ] ) ) );
         }
     }
+    // glc_clean_float() rather than a bare (float) cast — "1e999" casts to INF,
+    // which would silently poison every cumulative total it is added to.
     foreach ( $number_fields as $key ) {
         if ( isset( $_POST[ $key ] ) && $_POST[ $key ] !== '' ) {
-            update_post_meta( $post_id, $key, (float) $_POST[ $key ] );
+            update_post_meta( $post_id, $key, glc_clean_float( $_POST[ $key ], -1000000, 1000000 ) );
         } elseif ( isset( $_POST[ $key ] ) ) {
             delete_post_meta( $post_id, $key );
         }
     }
 
     // Derived stats keys read by glc_get_impact_stats()
-    $cans    = absint( $_POST['glc_cans']    ?? 0 );
-    $bottles = absint( $_POST['glc_bottles'] ?? 0 );
+    $cans    = glc_clean_int( $_POST['glc_cans']    ?? 0, 100000 );
+    $bottles = glc_clean_int( $_POST['glc_bottles'] ?? 0, 100000 );
     update_post_meta( $post_id, 'items_recycled', $cans + $bottles );
     if ( isset( $_POST['glc_weight_kg'] ) && $_POST['glc_weight_kg'] !== '' ) {
-        update_post_meta( $post_id, 'weight_kg', (float) $_POST['glc_weight_kg'] );
+        update_post_meta( $post_id, 'weight_kg', glc_clean_float( $_POST['glc_weight_kg'], 0, 100000 ) );
     }
     // Shared wildlife key — queried by page-stats.php across both CPTs
-    update_post_meta( $post_id, 'wildlife_obs', sanitize_textarea_field( $_POST['glc_wildlife_obs'] ?? '' ) );
+    update_post_meta( $post_id, 'wildlife_obs', glc_clean_textarea( $_POST['glc_wildlife_obs'] ?? '', 500 ) );
     // Shared tires/bikes/carts keys — matching cleanup_event's field names, queried by
     // [glc_impact_highlights] and the /cleanups/ ?impact= filter across both CPTs
-    update_post_meta( $post_id, 'tires_removed', absint( $_POST['glc_tires_removed'] ?? 0 ) );
-    update_post_meta( $post_id, 'bikes_removed', absint( $_POST['glc_bikes_removed'] ?? 0 ) );
-    update_post_meta( $post_id, 'carts_removed', absint( $_POST['glc_carts_removed'] ?? 0 ) );
+    update_post_meta( $post_id, 'tires_removed', glc_clean_int( $_POST['glc_tires_removed'] ?? 0, 999 ) );
+    update_post_meta( $post_id, 'bikes_removed', glc_clean_int( $_POST['glc_bikes_removed'] ?? 0, 999 ) );
+    update_post_meta( $post_id, 'carts_removed', glc_clean_int( $_POST['glc_carts_removed'] ?? 0, 999 ) );
 
     // Checkbox
     update_post_meta( $post_id, 'glc_photo_repost_ok', isset( $_POST['glc_photo_repost_ok'] ) ? '1' : '0' );
@@ -407,10 +412,10 @@ function glc_render_submit_form() {
 
     if ( $result === 'success' ) {
         // Build receipt from submitted POST data (still available after processing).
-        $r_bags     = absint(              $_POST['glc_bags']         ?? 0 );
-        $r_weight   = (float)(             $_POST['glc_weight_kg']   ?? 0 );
-        $r_waterway = sanitize_text_field( $_POST['glc_waterway']    ?? '' );
-        $r_date     = sanitize_text_field( $_POST['glc_cleanup_date'] ?? '' );
+        $r_bags     = glc_clean_int(   $_POST['glc_bags']          ?? 0, 999 );
+        $r_weight   = glc_clean_float( $_POST['glc_weight_kg']     ?? 0, 0, 100000 );
+        $r_waterway = glc_clean_text(  $_POST['glc_waterway']      ?? '', 200 );
+        $r_date     = glc_clean_text(  $_POST['glc_cleanup_date']  ?? '', 10 );
         $r_location = $r_waterway;
         $r_date_fmt = ( $r_date && strtotime( $r_date ) )
             ? date_i18n( 'F j', strtotime( $r_date ) )
@@ -449,8 +454,10 @@ function glc_render_submit_form() {
         $error = $result;
     }
 
+    // wp_unslash() so a value echoed back after a validation error shows what
+    // the visitor typed, not an apostrophe that has sprouted a backslash.
     $v = function( $key, $default = '' ) {
-        return esc_attr( $_POST[ $key ] ?? $default );
+        return esc_attr( wp_unslash( (string) ( $_POST[ $key ] ?? $default ) ) );
     };
 
     // $fa(id) → aria-invalid + aria-describedby attrs when that field errored
@@ -603,11 +610,11 @@ function glc_render_submit_form() {
                 <div class="glc-field-row">
                     <div class="glc-field">
                         <label for="glc_notable_finds"><?php esc_html_e( 'Notable or Unusual Finds', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( 'Large items, anything out of the ordinary', 'great-lake-cleaners' ); ?></span></label>
-                        <textarea id="glc_notable_finds" name="glc_notable_finds" rows="3" maxlength="1000"><?php echo esc_textarea( $_POST['glc_notable_finds'] ?? '' ); ?></textarea>
+                        <textarea id="glc_notable_finds" name="glc_notable_finds" rows="3" maxlength="1000"><?php echo esc_textarea( wp_unslash( (string) ( $_POST['glc_notable_finds'] ?? '' ) ) ); ?></textarea>
                     </div>
                     <div class="glc-field">
                         <label for="glc_wildlife_obs"><?php esc_html_e( 'Wildlife Observed', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( 'Birds, turtles, fish, mammals — anything you spotted', 'great-lake-cleaners' ); ?></span></label>
-                        <textarea id="glc_wildlife_obs" name="glc_wildlife_obs" rows="3" maxlength="500"><?php echo esc_textarea( $_POST['glc_wildlife_obs'] ?? '' ); ?></textarea>
+                        <textarea id="glc_wildlife_obs" name="glc_wildlife_obs" rows="3" maxlength="500"><?php echo esc_textarea( wp_unslash( (string) ( $_POST['glc_wildlife_obs'] ?? '' ) ) ); ?></textarea>
                     </div>
                     <div class="glc-field">
                         <label for="glc_instagram_url"><?php esc_html_e( 'Instagram Post URL', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( "If you posted about it — we'll link it from your cleanup entry", 'great-lake-cleaners' ); ?></span></label>
@@ -672,7 +679,7 @@ function glc_render_submit_form() {
             return;
         }
         btn.disabled = true;
-        btn.textContent = '<?php echo esc_js( __( 'Detecting\u2026', 'great-lake-cleaners' ) ); ?>';
+        btn.textContent = '<?php echo esc_js( __( 'Detecting…', 'great-lake-cleaners' ) ); ?>';
         navigator.geolocation.getCurrentPosition(
             function(pos) {
                 document.getElementById('glc_gps_lat').value = pos.coords.latitude.toFixed(6);
@@ -706,42 +713,47 @@ function glc_maybe_handle_submission() {
     // Honeypot — bots fill in fields humans never see
     if ( ! empty( $_POST['glc_url'] ) ) return null;
 
-    // Rate limit — max 5 submissions per IP per 10 minutes
-    // Counter increments only just before wp_mail() — validation failures don't burn a slot
-    $ip_key   = 'glc_sub_rate_' . md5( $_SERVER['REMOTE_ADDR'] ?? 'unknown' );
-    $attempts = (int) get_transient( $ip_key );
-    if ( $attempts >= 5 ) {
-        return 'Too many submissions from your connection. Please wait a few minutes and try again.';
-    }
+    // Rate limit — 5 per IP per 10 min, plus the site-wide hourly ceiling in
+    // security.php that a rotating-IP script can't step around. Counters
+    // increment only after the post is created, so a visitor who mistypes their
+    // date doesn't burn a slot.
+    $rate = glc_rate_limit_check( 'sub', 5 );
+    if ( true !== $rate ) return $rate;
 
-    $name     = sanitize_text_field( $_POST['glc_submitter_name'] ?? '' );
-    $date     = sanitize_text_field( $_POST['glc_cleanup_date']   ?? '' );
-    $waterway = sanitize_text_field( $_POST['glc_waterway']       ?? '' );
+    $name     = glc_clean_text( $_POST['glc_submitter_name'] ?? '', 100 );
+    $date     = glc_clean_text( $_POST['glc_cleanup_date']   ?? '', 10 );
+    $waterway = glc_clean_text( $_POST['glc_waterway']       ?? '', 200 );
 
     if ( ! $name )     return [ 'field' => 'glc_submitter_name', 'message' => 'Please enter your name.' ];
     if ( ! $date || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) return [ 'field' => 'glc_cleanup_date', 'message' => 'Please enter a valid cleanup date.' ];
     if ( strtotime( $date ) > time() ) return [ 'field' => 'glc_cleanup_date', 'message' => 'Cleanup date cannot be in the future.' ];
 
-    $email         = sanitize_email(          $_POST['glc_email']           ?? '' );
-    $phone         = sanitize_text_field(     $_POST['glc_phone']           ?? '' );
-    $site_name     = sanitize_text_field(     $_POST['glc_site_name']       ?? '' );
-    $duration_min  = absint(                  $_POST['glc_duration_min']    ?? 0 );
-    $bags          = absint(                  $_POST['glc_bags']            ?? 0 );
-    $weight_kg     = (float)(                 $_POST['glc_weight_kg']       ?? 0 );
-    $garbage_notes = sanitize_text_field(     $_POST['glc_garbage_notes']   ?? '' );
-    $cans          = absint(                  $_POST['glc_cans']            ?? 0 );
-    $bottles       = absint(                  $_POST['glc_bottles']         ?? 0 );
-    $tires_removed = absint(                  $_POST['glc_tires_removed']   ?? 0 );
-    $bikes_removed = absint(                  $_POST['glc_bikes_removed']   ?? 0 );
-    $carts_removed = absint(                  $_POST['glc_carts_removed']   ?? 0 );
-    $volunteers    = max( 1, absint(          $_POST['glc_volunteers']      ?? 1 ) );
-    $hours_input   = (float)(                 $_POST['glc_hours']           ?? 0 );
-    $notable       = sanitize_textarea_field( $_POST['glc_notable_finds']   ?? '' );
-    $wildlife_obs  = sanitize_textarea_field( $_POST['glc_wildlife_obs']    ?? '' );
-    $instagram_url = esc_url_raw(             $_POST['glc_instagram_url']   ?? '' );
+    // Every value below is length- or range-bounded server side. The form's
+    // maxlength/min/max attributes are a UI courtesy only — a script POSTs
+    // whatever it likes, and these values land in post meta and in the email
+    // body sent to the org.
+    $email         = sanitize_email( glc_clean_text( $_POST['glc_email'] ?? '', 200 ) );
+    $phone         = glc_clean_text(     $_POST['glc_phone']         ?? '', 40 );
+    $site_name     = glc_clean_text(     $_POST['glc_site_name']     ?? '', 200 );
+    $garbage_notes = glc_clean_text(     $_POST['glc_garbage_notes'] ?? '', 300 );
+    $notable       = glc_clean_textarea( $_POST['glc_notable_finds'] ?? '', 1000 );
+    $wildlife_obs  = glc_clean_textarea( $_POST['glc_wildlife_obs']  ?? '', 500 );
+    $duration_min  = glc_clean_int(      $_POST['glc_duration_min']  ?? 0, 1440 );   // a day
+    $bags          = glc_clean_int(      $_POST['glc_bags']          ?? 0, 999 );
+    $weight_kg     = glc_clean_float(    $_POST['glc_weight_kg']     ?? 0, 0, 100000 );
+    $cans          = glc_clean_int(      $_POST['glc_cans']          ?? 0, 100000 );
+    $bottles       = glc_clean_int(      $_POST['glc_bottles']       ?? 0, 100000 );
+    $tires_removed = glc_clean_int(      $_POST['glc_tires_removed'] ?? 0, 999 );
+    $bikes_removed = glc_clean_int(      $_POST['glc_bikes_removed'] ?? 0, 999 );
+    $carts_removed = glc_clean_int(      $_POST['glc_carts_removed'] ?? 0, 999 );
+    $volunteers    = glc_clean_int(      $_POST['glc_volunteers']    ?? 1, 500, 1 );
+    $hours_input   = glc_clean_float(    $_POST['glc_hours']         ?? 0, 0, 10000 );
     $repost_ok     = isset( $_POST['glc_photo_repost_ok'] ) ? '1' : '0';
-    $gps_lat       = isset( $_POST['glc_gps_lat'] ) && $_POST['glc_gps_lat'] !== '' ? (float) $_POST['glc_gps_lat'] : '';
-    $gps_lon       = isset( $_POST['glc_gps_lon'] ) && $_POST['glc_gps_lon'] !== '' ? (float) $_POST['glc_gps_lon'] : '';
+    $gps_lat       = glc_clean_coord( $_POST['glc_gps_lat'] ?? '',  -90,  90 );
+    $gps_lon       = glc_clean_coord( $_POST['glc_gps_lon'] ?? '', -180, 180 );
+    // Protocols restricted to http/https — esc_url_raw's default list also
+    // permits mailto:, tel: and ftp:, none of which belong in a post link.
+    $instagram_url = esc_url_raw( glc_clean_text( $_POST['glc_instagram_url'] ?? '', 500 ), [ 'http', 'https' ] );
 
     // Person-hours: prefer duration × volunteers if entered, else use manual hours
     $person_hours = $duration_min > 0
@@ -792,31 +804,36 @@ function glc_maybe_handle_submission() {
     ];
     foreach ( $meta as $key => $val ) update_post_meta( $post_id, $key, $val );
 
-    // Photo uploads
+    // Photo uploads.
+    //
+    // This is the one place an anonymous visitor writes a file into the media
+    // library, so the type check has to be on the bytes, not on the client's
+    // claimed Content-Type — that header is attacker-chosen and proves nothing.
+    // glc_validate_image_upload() sniffs the file and reconciles its extension;
+    // the `mimes` whitelist then stops wp_handle_upload() falling back to
+    // get_allowed_mime_types(), which would accept PDFs, ZIPs and MP4s too.
     $photo_ids = [];
-    if ( ! empty( $_FILES['glc_photos']['name'][0] ) ) {
+    $photos    = glc_normalize_file_array( 'glc_photos', 5 );
+    if ( $photos ) {
         require_once ABSPATH . 'wp-admin/includes/image.php';
         require_once ABSPATH . 'wp-admin/includes/file.php';
         require_once ABSPATH . 'wp-admin/includes/media.php';
-        $allowed = [ 'image/jpeg', 'image/png', 'image/webp' ];
-        $max     = 8 * 1024 * 1024;
-        $count   = min( 5, count( $_FILES['glc_photos']['name'] ) );
-        for ( $i = 0; $i < $count; $i++ ) {
-            if ( $_FILES['glc_photos']['error'][$i] !== UPLOAD_ERR_OK ) continue;
-            if ( $_FILES['glc_photos']['size'][$i]  > $max )            continue;
-            if ( ! in_array( $_FILES['glc_photos']['type'][$i], $allowed, true ) ) continue;
-            $_FILES['glc_photo_single'] = [
-                'name'     => $_FILES['glc_photos']['name'][$i],
-                'type'     => $_FILES['glc_photos']['type'][$i],
-                'tmp_name' => $_FILES['glc_photos']['tmp_name'][$i],
-                'error'    => $_FILES['glc_photos']['error'][$i],
-                'size'     => $_FILES['glc_photos']['size'][$i],
-            ];
-            $uploaded = wp_handle_upload( $_FILES['glc_photo_single'], ['test_form'=>false] );
+        $max = 8 * 1024 * 1024;
+        foreach ( $photos as $photo ) {
+            $valid = glc_validate_image_upload( $photo, $max );
+            if ( ! $valid ) continue;
+
+            $photo['name'] = $valid['name'];
+            $photo['type'] = $valid['type'];
+
+            $uploaded = wp_handle_upload( $photo, [
+                'test_form' => false,
+                'mimes'     => glc_allowed_image_mimes(),
+            ] );
             if ( isset( $uploaded['file'] ) ) {
                 $att_id = wp_insert_attachment( [
                     'post_mime_type' => $uploaded['type'],
-                    'post_title'     => sanitize_file_name( $_FILES['glc_photos']['name'][$i] ),
+                    'post_title'     => $valid['name'],
                     'post_status'    => 'inherit',
                     'post_parent'    => $post_id,
                 ], $uploaded['file'], $post_id );
@@ -830,8 +847,9 @@ function glc_maybe_handle_submission() {
         if ( $photo_ids ) update_post_meta( $post_id, 'glc_photo_ids', $photo_ids );
     }
 
-    // Admin notification — increment rate limit counter only here, after all validation passes
-    set_transient( $ip_key, $attempts + 1, 10 * MINUTE_IN_SECONDS );
+    // Admin notification — rate limit counters bump only here, after all
+    // validation has passed and the submission actually exists.
+    glc_rate_limit_hit( 'sub' );
     wp_mail(
         get_option( 'admin_email' ),
         sprintf( '[Great Lake Cleaners] New submission: %s on %s', $waterway, $date ),

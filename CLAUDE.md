@@ -124,6 +124,13 @@ Fields via native "Event Details" meta box:
 | Linked Cleanup Report | `linked_cleanup_id` | post ID of the resulting `cleanup_event` — past events show "See the results →" |
 | RSVP totals | `rsvp_count` / `rsvp_parties` | aggregate counters bumped by the RSVP handler; read-only in the meta box |
 
+**Live since August 2026.** `/events/` is deployed and the first hosted
+community cleanup is **World Cleanup Day** (`/events/world-cleanup-day/`,
+post ID 811), with a working RSVP form. The rewrite flush was done at
+rollout; a further deactivate/reactivate is only needed if the archive
+404s again. After the cleanup happens, log the `cleanup_event` as usual and
+set **Linked Cleanup Report** on the event so it shows "See the results →".
+
 **Stats:** events never count toward public stats — `glc_get_impact_stats()` and `page-stats.php` query by post type.
 
 **Upcoming vs past:** an event is upcoming through the end of its calendar day, compared with `current_time('Y-m-d')` (site timezone), never `date()` (server may be UTC). Undated events count as past. Helpers: `glc_event_is_past()`, `glc_get_upcoming_events( $limit )` (date ASC, start-time tiebreak), `glc_get_past_events()` (date DESC).
@@ -161,6 +168,162 @@ Email-only — no CPT, no admin review queue. Reports go directly to `info@great
 | `[glc_join_crew]` | Email signup, AJAX, rate-limited (3/10 min per IP), honeypot + nonce. No CPT. |
 | `[glc_wildlife_log]` | Chronological wildlife sightings list. Superseded by `page-stats.php` wildlife cards but still usable. |
 | `[glc_event_rsvp]` | Event RSVP form — see `glc_event` CPT section. Attr: `post_id` (defaults to current post). Returns empty for past/non-event posts. |
+
+---
+
+### Public form security — `includes/security.php`
+
+Four entry points accept input from anyone, with no login: `[glc_submit_form]`
+(creates a pending post + uploads photos), `[glc_report_form]` (emails info@ with
+attachments), `[glc_join_crew]` and `[glc_event_rsvp]` (both email info@).
+`security.php` holds every guard they share — **fix things there, not in one
+form**, or the four drift apart.
+
+| Helper | Use |
+|---|---|
+| `glc_rate_limit_check( $bucket, $ip_max )` / `glc_rate_limit_hit( $bucket )` | Per-IP limit **and** a site-wide hourly ceiling (`glc_rate_limit_global_cap()`, filterable). Check before doing the work; `hit` only after the mail/post succeeds, so a validation failure never burns a slot |
+| `glc_clean_text` / `glc_clean_textarea` | Sanitize + `wp_unslash` + **length cap** |
+| `glc_clean_int` / `glc_clean_float` / `glc_clean_coord` | Range-bounded numerics; reject INF/NaN |
+| `glc_validate_image_upload( $file, $max )` | Content-sniffs the bytes and reconciles the extension |
+| `glc_allowed_image_mimes()` | JPEG/PNG/WebP, in WP's `ext => mime` shape — pass as `mimes` to `wp_handle_upload()` |
+| `glc_normalize_file_array( $field, $limit )` | PHP's parallel `name[]/tmp_name[]` arrays → a list of single-file arrays |
+
+Invariants worth not re-breaking:
+
+- **`$_FILES['type']` is the client's Content-Type header — it proves nothing.**
+  A bot sets `image/jpeg` on any file. Both upload paths previously trusted it,
+  which let an anonymous visitor put arbitrary WordPress-allowed types (PDF, ZIP,
+  MP4, Office docs) into `wp-content/uploads`, and mail arbitrary file content to
+  info@. Always validate via `glc_validate_image_upload()`.
+- **Pass `mimes` to `wp_handle_upload()`.** Without it, it falls back to
+  `get_allowed_mime_types()` — far wider than three image types.
+- **`maxlength` on an input is a UI courtesy.** Every free-text field that reaches
+  post meta or an email body needs a server-side cap.
+- **The per-IP rate limit alone is not enough** — a rotating-IP script looks like
+  a first attempt every time. The global cap is the circuit breaker; keep both.
+- **`glc_client_ip()` reads `REMOTE_ADDR` only.** `X-Forwarded-For` is attacker-
+  supplied unless a proxy overwrites it. If the site moves behind Cloudflare,
+  restore the real IP at the host/mu-plugin level, not by reading a header here.
+- **Every `$_POST` read needs `wp_unslash()` before its sanitizer** (the
+  `glc_clean_*` helpers do it). Without it an apostrophe is stored with a leading
+  backslash and gains another on each admin re-save.
+- **Map popups are HTML strings passed to `bindPopup()`** — run every
+  interpolated value through the `esc()` helper defined at the top of the map
+  script. Site names arrive from community submissions.
+- **No `JSON_UNESCAPED_SLASHES` on JSON-LD** (`header.php`). Escaped slashes are
+  valid JSON-LD; the flag would let a `</script>` in a post title close the block
+  and run the rest as markup.
+
+Email safety: all four forms send to a **hardcoded** address — there is no
+user-controlled recipient anywhere. Attacker-supplied values only reach the
+subject, body, and `Reply-To`, and `sanitize_text_field` / `sanitize_email` strip
+newlines, so header injection is not reachable. Keep it that way: never build a
+`To:` from input, and never pass a raw `$_POST` value into `$headers`.
+
+**Response headers are the host's, not the theme's.** Production serves
+`Strict-Transport-Security`, a `Content-Security-Policy` (allowlisting
+`*.basemaps.cartocdn.com` for map tiles and `secure.gravatar.com`, with
+`'unsafe-inline'`/`'unsafe-eval'` on `script-src`), `X-Frame-Options`,
+`X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` and
+`X-XSS-Protection: 0` from the Apache config. **The theme sends none of them, on
+purpose.** Re-adding them there was tried twice and failed twice:
+
+| | attempt | result |
+|---|---|---|
+| theme 1.5.0 | unconditional `header()` calls | every header arrived **twice** |
+| theme 1.5.1 | skip any header already in `headers_list()` | still twice |
+| theme 1.5.2 | send nothing; host owns them | **one copy each — verified live** |
+
+The 1.5.1 attempt failed because Apache uses `Header always set`, which writes to
+`err_headers_out` *after* PHP has finished. `headers_list()` cannot see it, and it
+does not replace PHP's copy either — so both go out. **There is no reliable way
+for PHP to detect them**, which is why exactly one layer has to own the headers,
+and that layer is the host (it is also the only one that can serve HSTS and a
+CSP). If the site moves to a host without that config, add them to the new
+vhost/`.htaccess` — not to `functions.php`.
+
+Whoever owns them: **`Permissions-Policy` must keep `geolocation=(self)`.** The
+submit-cleanup and report-issue forms both have a "Use my location" button backed
+by `navigator.geolocation`. `site_audit.py` asserts this specifically.
+
+A theme-side CSP is still off the table regardless: the theme and plugin emit
+inline `<script>` throughout, so a restrictive policy needs nonces threaded
+through all of them first.
+
+**Username enumeration is closed in `functions.php`.** WordPress leaks account
+login slugs through two default channels, and a live check found both open
+(`/wp-json/wp/v2/users` returned the full list; `/?author=1` 301'd to
+`/author/<slug>/`). Usernames are half a credential-stuffing attempt and
+`wp-login.php` is public, so the `rest_endpoints` filter drops the users
+collection for logged-out visitors (logged-in editors keep it — the block editor
+needs it) and `template_redirect` at **priority 0** 404s author archives. The
+priority matters: `redirect_canonical()` is itself on `template_redirect`, and it
+is what performs the leaking redirect, so this has to answer first. Nothing on
+the site links to an author archive.
+
+### `site_audit.py` — live checks against production
+
+One script at the repo root replaces the ad-hoc curl loops. Run it after every
+deploy; the exit code is 1 if anything failed, so it can gate one.
+
+```
+python site_audit.py                       # passive, read-only
+python site_audit.py --post                # + one real submission per form
+python site_audit.py --post --only report  # just one surface
+python site_audit.py --base http://localhost:8080
+```
+
+**Passive** covers header hygiene (including *duplicate* headers, which is how
+the 1.5.0/1.5.1 problem was caught), HSTS and the HTTPS redirect, exposed files,
+username enumeration, the REST surface, `corridors.geojson` gzip/caching, page
+health, and rendered-HTML encoding.
+
+**`--post` has real side effects** — pending posts in the database and mail in
+info@ — so it is off by default, every payload is tagged `GLC-AUDIT-TEST` plus a
+timestamp, and a 10-minute cooldown stamp (`.site_audit_last_post`, gitignored)
+stops a second run. That guard exists because **piping the script through
+`head`/`sed` re-runs it from the top and fires the POSTs again** — which is
+exactly how the first session produced three sets of test data. Redirect to a
+file instead; `--force` overrides.
+
+The most valuable single check is the **spoofed-upload test**: it submits a PDF
+with `Content-Type: image/jpeg` and then confirms via the media REST endpoint
+that the file never landed. That is the regression test for the
+`glc_validate_image_upload()` hardening, and it is the one thing a passive scan
+cannot distinguish from a legitimate photo.
+
+**`\uXXXX` inside a PHP single-quoted string is not an escape.** `'Detecting\u2026'`
+is a literal backslash-u, and `esc_js()` calls `stripslashes()` on it, so the
+geolocation button rendered the visible text `Detectingu2026` (plugin 1.4.1 fixes
+it; use the real `…` character, as `report.php` already did). `\u2713` written in
+the *raw JS* outside the `<?php ?>` tag is fine — the browser resolves it. The
+audit script's encoding check greps rendered output for a word running straight
+into `uXXXX` to catch a recurrence.
+
+### The VPS is shared — greatlakecleaners.ca is not alone on it
+
+Both `greatlakecleaners.ca` and `savingsphase.ca` resolve to **167.114.129.162**
+and run on the same Apache. That makes them one security surface in practice: a
+foothold on either can reach the other unless the filesystem and service
+boundaries actually hold. savingsphase is a Flask/waitress app on `127.0.0.1:5051`
+behind a reverse-proxy vhost, running as the `tudor` user, with Postgres and a
+Google OAuth client secret behind it; WordPress here runs under Apache's own user.
+Neither should be able to read the other's credentials, and neither should be able
+to write into the other's document root.
+
+Verified so far: Apache answers **421 Misdirected Request** when asked for the GLC
+host on the savingsphase certificate, so vhost isolation holds at the HTTP layer,
+and port 5051 is not reachable from outside. The filesystem side is unverified and
+has to be checked on the box — it cannot be probed over HTTP.
+
+The analysis, the server-level checks, and the port of this script to a Flask app
+live in **`plan.md` in the `ISP` repo** (`# Server-wide security audit`); confirmed
+defects on that side go in its **`bug.md`**, not in the plan. Anything learned here
+that applies to both sites belongs there too — savingsphase.ca is currently sending
+duplicate `X-Frame-Options` / `X-Content-Type-Options`, the same bug theme
+1.5.0/1.5.1 had, found by the same check and now filed in that `bug.md`.
+
+
 
 ---
 
@@ -423,21 +586,14 @@ The video gallery reuses the photo CSS wholesale (`.glc-gallery-wrap`, `-tabs`, 
 
 ## Next Steps
 
-- [ ] **Events rollout (~July 2026)** — The `glc_event` feature is fully built and packed in both zips (plugin 1.1.0, theme 1.2.0) but **not yet deployed to production**. Holding until closer to the first hosted community event. Rollout checklist:
-  1. Upload both zips to production (plugin: Plugins → Upload; theme: Appearance → Themes → Upload)
-  2. **Deactivate → reactivate the plugin** (rewrite flush — skipping this 404s `/events/`)
-  3. Appearance → Menus → primary: add Custom Link `/events/`, label "Events", after Cleanups
-  4. Create the first event (Events → Add New Event): date, start/end time, site, meeting point, GPS, what to bring
-  5. Verify: `/events/` archive, single page map + RSVP (test email arrives at info@ with Reply-To), front-page "Upcoming events" section appears, footer stats unchanged
-  6. After the cleanup happens: log the `cleanup_event` as usual, then set "Linked Cleanup Report" on the event so it shows "See the results →"
-- [ ] **Videos + Crew at Work rollout** — `[glc_video_gallery]` + `page-videos.php` and the combined `page-see-us-in-action.php` (published as **Crew at Work** at `/see-us-in-action/`, under a "Media" nav dropdown) shipped in plugin 1.3.1 / theme 1.4.3. The Crew at Work page is live; remaining:
-  1. Re-upload the theme zip (theme 1.4.9) — carries the Crew at Work rename (`<h1>` / nav label / Template Name) plus the `.glc-wave-divider` swap on `page-see-us-in-action.php` (plain section-head lines → the site wave rule)
-  2. Pages → Crew at Work: set the page **Title** to "Crew at Work" (leave the slug `see-us-in-action`) — the `<h1>` now echoes the page title
-  3. Appearance → Menus: rename the "See Us In Action" link to "Crew at Work"
-  4. Confirm **Videos** page exists (slug `videos`, Template **Videos**) and at least one clip is flagged "Feature in video gallery" → **Save**
-  5. Verify `/videos/`: tile shows a first frame + duration, lightbox plays, arrow keys move between clips, Esc closes and the clip stops
-  6. Verify `/see-us-in-action/`: heading reads "Crew at Work", newest ≤20 photos then newest ≤10 videos, **no year tabs**, both lightboxes work independently, "All photos →" / "All videos →" links land on `/photos/` and `/videos/`
-  - No rewrite flush needed — both are page templates, not CPT archives.
+- [ ] **Deploy plugin 1.4.1** — theme 1.5.2 is live and verified; the plugin is
+  not. Until it ships, `/submit-cleanup/` still renders the geolocation button as
+  `Detectingu2026` (see the `esc_js` note above). Drop-in re-upload, no rewrite
+  flush, no DB migration. `python site_audit.py` should then finish with zero
+  failures — that one encoding FAIL is the only thing left in the run.
+- [x] ~~Videos + Crew at Work rollout~~ — **done.** `/videos/` serves 10 flagged
+  clips, `/see-us-in-action/` is titled "Crew at Work" in both the `<h1>` and
+  the nav, and the slug stayed `see-us-in-action`. Verified live 2026-08-30.
 - [ ] **Donate / support page** — E-transfer or PayPal link, honest note that tax receipts aren't available pre-incorporation. **Blocked on:** deciding on a dedicated e-transfer email or PayPal account separate from `info@`.
 - [ ] Consider physical badge ("Watershed Steward" patch) for top contributors at year-end — award based on cleanups logged (3+), not weight.
 - [ ] **Gallery thumbnail Option B** — register `glc-thumb` custom image size with `crop: ['center', 'top']`, update gallery shortcode, run "Regenerate Thumbnails". Do when gallery load time becomes a concern.

@@ -174,7 +174,7 @@ function glc_render_report_form() {
                             <span class="glc-label-text"><?php esc_html_e( 'Your name', 'great-lake-cleaners' ); ?></span>
                         </label>
                         <input type="text" id="glc_reporter_name" name="glc_reporter_name"
-                               value="<?php echo esc_attr( $_POST['glc_reporter_name'] ?? '' ); ?>"
+                               value="<?php echo esc_attr( wp_unslash( (string) ( $_POST['glc_reporter_name'] ?? '' ) ) ); ?>"
                                placeholder="<?php esc_attr_e( 'Jane Smith', 'great-lake-cleaners' ); ?>"
                                autocomplete="name">
                         <span class="glc-field-note"><?php esc_html_e( 'So we can address our follow-up.', 'great-lake-cleaners' ); ?></span>
@@ -184,7 +184,7 @@ function glc_render_report_form() {
                             <span class="glc-label-text"><?php esc_html_e( 'Email', 'great-lake-cleaners' ); ?></span>
                         </label>
                         <input type="email" id="glc_reporter_email" name="glc_reporter_email"
-                               value="<?php echo esc_attr( $_POST['glc_reporter_email'] ?? '' ); ?>"
+                               value="<?php echo esc_attr( wp_unslash( (string) ( $_POST['glc_reporter_email'] ?? '' ) ) ); ?>"
                                placeholder="<?php esc_attr_e( 'jane@example.com', 'great-lake-cleaners' ); ?>"
                                autocomplete="email">
                         <span class="glc-field-note"><?php esc_html_e( "We'll follow up once we've had eyes on it.", 'great-lake-cleaners' ); ?></span>
@@ -216,7 +216,7 @@ function glc_render_report_form() {
                             <span class="glc-label-text"><?php esc_html_e( 'Date spotted', 'great-lake-cleaners' ); ?><span class="glc-required" aria-hidden="true">*</span></span>
                         </label>
                         <input type="date" id="glc_issue_date" name="glc_issue_date" required
-                               value="<?php echo esc_attr( $_POST['glc_issue_date'] ?? date( 'Y-m-d' ) ); ?>"
+                               value="<?php echo esc_attr( wp_unslash( (string) ( $_POST['glc_issue_date'] ?? date( 'Y-m-d' ) ) ) ); ?>"
                                max="<?php echo esc_attr( date( 'Y-m-d' ) ); ?>"<?php echo $fa('glc_issue_date'); ?>>
                         <?php echo $fe('glc_issue_date'); ?>
                     </div>
@@ -226,7 +226,7 @@ function glc_render_report_form() {
                         </label>
                         <input type="text" id="glc_issue_waterway" name="glc_issue_waterway" required maxlength="200"
                                placeholder="<?php esc_attr_e( 'e.g. Speed River, Grand River', 'great-lake-cleaners' ); ?>"
-                               value="<?php echo esc_attr( $_POST['glc_issue_waterway'] ?? '' ); ?>"<?php echo $fa('glc_issue_waterway'); ?>>
+                               value="<?php echo esc_attr( wp_unslash( (string) ( $_POST['glc_issue_waterway'] ?? '' ) ) ); ?>"<?php echo $fa('glc_issue_waterway'); ?>>
                         <?php echo $fe('glc_issue_waterway'); ?>
                     </div>
                 </div>
@@ -238,7 +238,7 @@ function glc_render_report_form() {
                         </label>
                         <textarea id="glc_issue_description" name="glc_issue_description"
                                   rows="5" required<?php echo $fa('glc_issue_description'); ?>
-                                  placeholder="<?php esc_attr_e( 'Describe the issue — type of debris, approximate quantity, any hazard concern (e.g. chemicals, sharp materials). The more specific, the better.', 'great-lake-cleaners' ); ?>"><?php echo esc_textarea( $_POST['glc_issue_description'] ?? '' ); ?></textarea>
+                                  placeholder="<?php esc_attr_e( 'Describe the issue — type of debris, approximate quantity, any hazard concern (e.g. chemicals, sharp materials). The more specific, the better.', 'great-lake-cleaners' ); ?>"><?php echo esc_textarea( wp_unslash( (string) ( $_POST['glc_issue_description'] ?? '' ) ) ); ?></textarea>
                         <?php echo $fe('glc_issue_description'); ?>
                     </div>
                 </div>
@@ -258,7 +258,7 @@ function glc_render_report_form() {
                             <span class="glc-label-text"><?php esc_html_e( 'Location description', 'great-lake-cleaners' ); ?><span class="glc-required" aria-hidden="true">*</span></span>
                         </label>
                         <input type="text" id="glc_issue_location" name="glc_issue_location" required
-                               value="<?php echo esc_attr( $_POST['glc_issue_location'] ?? '' ); ?>"
+                               value="<?php echo esc_attr( wp_unslash( (string) ( $_POST['glc_issue_location'] ?? '' ) ) ); ?>"
                                placeholder="<?php esc_attr_e( 'e.g. nearest park / intersection', 'great-lake-cleaners' ); ?>"<?php echo $fa('glc_issue_location'); ?>>
                         <?php echo $fe('glc_issue_location'); ?>
                     </div>
@@ -272,11 +272,11 @@ function glc_render_report_form() {
                         <div class="glc-geo-row">
                             <input type="number" id="glc_issue_lat" name="glc_issue_lat"
                                    step="0.000001" min="42" max="57"
-                                   value="<?php echo esc_attr( $_POST['glc_issue_lat'] ?? '' ); ?>"
+                                   value="<?php echo esc_attr( wp_unslash( (string) ( $_POST['glc_issue_lat'] ?? '' ) ) ); ?>"
                                    placeholder="<?php esc_attr_e( 'Latitude', 'great-lake-cleaners' ); ?>">
                             <input type="number" id="glc_issue_lon" name="glc_issue_lon"
                                    step="0.000001" min="-95" max="-74"
-                                   value="<?php echo esc_attr( $_POST['glc_issue_lon'] ?? '' ); ?>"
+                                   value="<?php echo esc_attr( wp_unslash( (string) ( $_POST['glc_issue_lon'] ?? '' ) ) ); ?>"
                                    placeholder="<?php esc_attr_e( 'Longitude', 'great-lake-cleaners' ); ?>">
                             <button type="button" class="glc-geo-btn"
                                     onclick="glcDetectReportLocation(this)">
@@ -389,18 +389,19 @@ function glc_maybe_handle_report() {
     // Honeypot — bots fill in fields humans never see
     if ( ! empty( $_POST['glc_url'] ) ) return null;
 
-    // Rate limit — max 5 reports per IP per 10 minutes
-    // Counter increments only just before wp_mail() — validation failures don't burn a slot
-    $ip_key   = 'glc_rep_rate_' . md5( $_SERVER['REMOTE_ADDR'] ?? 'unknown' );
-    $attempts = (int) get_transient( $ip_key );
-    if ( $attempts >= 5 ) {
-        return 'Too many reports from your connection. Please wait a few minutes and try again.';
-    }
+    // Rate limit — 5 per IP per 10 min, plus the site-wide hourly ceiling in
+    // security.php. This form is the mail-volume risk on the site: every
+    // accepted report pushes up to three photo attachments into one inbox, so
+    // the global cap is what stops a rotating-IP script filling it.
+    $rate = glc_rate_limit_check( 'rep', 5 );
+    if ( true !== $rate ) return $rate;
 
-    $date        = sanitize_text_field( $_POST['glc_issue_date']        ?? '' );
-    $waterway    = sanitize_text_field( $_POST['glc_issue_waterway']    ?? '' );
-    $description = sanitize_textarea_field( $_POST['glc_issue_description'] ?? '' );
-    $location    = sanitize_text_field( $_POST['glc_issue_location']    ?? '' );
+    // Bounded server side — the maxlength attributes on the form are a UI
+    // courtesy, and the description field never had one at all.
+    $date        = glc_clean_text(     $_POST['glc_issue_date']        ?? '', 10 );
+    $waterway    = glc_clean_text(     $_POST['glc_issue_waterway']    ?? '', 200 );
+    $location    = glc_clean_text(     $_POST['glc_issue_location']    ?? '', 300 );
+    $description = glc_clean_textarea( $_POST['glc_issue_description'] ?? '', 5000 );
 
     if ( ! $date || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
         return [ 'field' => 'glc_issue_date', 'message' => 'Please enter a valid date.' ];
@@ -418,11 +419,14 @@ function glc_maybe_handle_report() {
         return [ 'field' => 'glc_issue_location', 'message' => 'Please describe the location.' ];
     }
 
-    $name         = sanitize_text_field( $_POST['glc_reporter_name']    ?? '' );
-    $email        = sanitize_email(      $_POST['glc_reporter_email']   ?? '' );
-    $wants_help   = ! empty( $_POST['glc_wants_to_help'] );
-    $lat   = $_POST['glc_issue_lat'] !== '' ? (float) ( $_POST['glc_issue_lat'] ?? '' ) : '';
-    $lon   = $_POST['glc_issue_lon'] !== '' ? (float) ( $_POST['glc_issue_lon'] ?? '' ) : '';
+    $name       = glc_clean_text( $_POST['glc_reporter_name'] ?? '', 100 );
+    $email      = sanitize_email( glc_clean_text( $_POST['glc_reporter_email'] ?? '', 200 ) );
+    $wants_help = ! empty( $_POST['glc_wants_to_help'] );
+    // ?? on the array read, not on the comparison — reading an absent key first
+    // raised an "Undefined array key" warning and then reported GPS 0, 0 (a real
+    // spot in the Gulf of Guinea) instead of "not provided".
+    $lat = glc_clean_coord( $_POST['glc_issue_lat'] ?? '',  -90,  90 );
+    $lon = glc_clean_coord( $_POST['glc_issue_lon'] ?? '', -180, 180 );
 
     // Build plain-text email body
     $body  = "A waterway issue has been reported via greatlakecleaners.ca.\n\n";
@@ -440,20 +444,23 @@ function glc_maybe_handle_report() {
     );
     $body .= "\nDescription:\n" . $description . "\n";
 
-    // Handle photo attachments
+    // Handle photo attachments.
+    //
+    // These land in a human's inbox, so the type check has to be on the bytes.
+    // $_FILES['type'] is just the client's multipart Content-Type header — a
+    // script sets "image/jpeg" on an executable and the old check waved it
+    // through, turning this form into a way to mail arbitrary files to the org.
     $attachments = [];
-    if ( ! empty( $_FILES['glc_report_photos']['name'][0] ) ) {
-        $allowed  = [ 'image/jpeg', 'image/png', 'image/webp' ];
+    $photos      = glc_normalize_file_array( 'glc_report_photos', 3 );
+    if ( $photos ) {
         $max_size = 8 * 1024 * 1024;
-        $count    = min( 3, count( $_FILES['glc_report_photos']['name'] ) );
-        for ( $i = 0; $i < $count; $i++ ) {
-            if ( $_FILES['glc_report_photos']['error'][$i] !== UPLOAD_ERR_OK ) continue;
-            if ( $_FILES['glc_report_photos']['size'][$i]  > $max_size )       continue;
-            if ( ! in_array( $_FILES['glc_report_photos']['type'][$i], $allowed, true ) ) continue;
-            // Move to a temp location wp_mail can attach from
-            $tmp  = $_FILES['glc_report_photos']['tmp_name'][$i];
-            $dest = get_temp_dir() . 'glc-report-' . uniqid() . '-' . sanitize_file_name( $_FILES['glc_report_photos']['name'][$i] );
-            if ( move_uploaded_file( $tmp, $dest ) ) {
+        foreach ( $photos as $photo ) {
+            $valid = glc_validate_image_upload( $photo, $max_size );
+            if ( ! $valid ) continue;
+            // Move to a temp location wp_mail can attach from. The name is the
+            // one glc_validate_image_upload() reconciled against the real bytes.
+            $dest = get_temp_dir() . 'glc-report-' . uniqid() . '-' . $valid['name'];
+            if ( move_uploaded_file( $photo['tmp_name'], $dest ) ) {
                 $attachments[] = $dest;
             }
         }
@@ -473,8 +480,8 @@ function glc_maybe_handle_report() {
         $headers[]  = sprintf( 'Reply-To: %s <%s>', $reply_name, $email );
     }
 
-    // Increment rate limit counter only here, after all validation passes
-    set_transient( $ip_key, $attempts + 1, 10 * MINUTE_IN_SECONDS );
+    // Counters bump only here, after all validation passes
+    glc_rate_limit_hit( 'rep' );
     $sent = wp_mail( GLC_REPORT_EMAIL, $subject, $body, $headers, $attachments );
 
     // Clean up temp files

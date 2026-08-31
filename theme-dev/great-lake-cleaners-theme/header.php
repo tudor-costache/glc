@@ -93,7 +93,11 @@
             'target' => GLC_DONATE_URL,
         ],
     ];
-    echo '<script type="application/ld+json">' . wp_json_encode( $glc_jsonld_org, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "</script>\n";
+    // JSON_UNESCAPED_SLASHES is deliberately absent: escaped forward slashes
+    // are valid JSON-LD and consumers handle them fine, while turning the
+    // escaping off would let a "</script>" inside any interpolated value close
+    // this block early and run the remainder as markup.
+    echo '<script type="application/ld+json">' . wp_json_encode( $glc_jsonld_org, JSON_UNESCAPED_UNICODE ) . "</script>\n";
 
     // ── JSON-LD: Event (cleanup_event single pages) ───────────────────────────
     if ( is_singular( 'cleanup_event' ) ) {
@@ -123,7 +127,8 @@
                 'longitude' => (float) $glc_jlon,
             ];
         }
-        echo '<script type="application/ld+json">' . wp_json_encode( $glc_jsonld_event, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "</script>\n";
+        // See the note on the Organization block above — slashes stay escaped.
+        echo '<script type="application/ld+json">' . wp_json_encode( $glc_jsonld_event, JSON_UNESCAPED_UNICODE ) . "</script>\n";
     }
     ?>
     <?php wp_head(); ?>

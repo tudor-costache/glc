@@ -4,3 +4,4 @@ __pycache__/
 .claude/settings.local.json
 cleanups/cleanups.csv
 .claude/settings.local.json
+.site_audit_last_post

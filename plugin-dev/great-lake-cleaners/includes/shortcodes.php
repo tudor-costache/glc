@@ -401,6 +401,12 @@ function glc_shortcode_map( $atts ) {
     </div>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Popups are built as HTML strings and handed to bindPopup(), so every
+        // interpolated value is escaped first. Site names and cleanup titles
+        // reach here from community submissions and from post titles, neither of
+        // which is guaranteed to be markup-free. Same helper as page-stats.php.
+        function esc(s) { var d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
+
         var markers = <?php echo wp_json_encode( $markers ); ?>;
         var corridorLinesUrl = <?php echo wp_json_encode( $corridor_lines_url ); ?>;
         var corridorTotals = <?php echo wp_json_encode( $corridor_totals ); ?>;
@@ -441,10 +447,10 @@ function glc_shortcode_map( $atts ) {
             });
 
             markers.forEach(function(m) {
-                var popup = '<strong>' + m.title + '</strong><br>'
-                          + m.date + '<br>'
-                          + m.bags + (m.bags === 1 ? ' bag' : ' bags') + ' collected<br>'
-                          + '<a href="' + m.url + '">View details →</a>';
+                var popup = '<strong>' + esc(m.title) + '</strong><br>'
+                          + esc(m.date) + '<br>'
+                          + esc(m.bags) + (m.bags === 1 ? ' bag' : ' bags') + ' collected<br>'
+                          + '<a href="' + esc(m.url) + '">View details →</a>';
                 L.marker([m.lat, m.lon], {icon: icon})
                  .addTo(map)
                  .bindPopup(popup);
@@ -462,11 +468,11 @@ function glc_shortcode_map( $atts ) {
             });
 
             corridorTotals.forEach(function(c) {
-                var popup = '<strong>' + c.name + '</strong><br>'
+                var popup = '<strong>' + esc(c.name) + '</strong><br>'
                           + Math.round(c.weight_kg) + ' kg removed<br>'
                           + c.bags + (c.bags === 1 ? ' bag' : ' bags') + ' collected<br>'
                           + c.items_recycled + ' items recycled<br>'
-                          + '<a href="' + archiveUrl + '?corridor=' + c.slug + '">View cleanups on the ' + c.name + ' →</a>';
+                          + '<a href="' + esc(archiveUrl) + '?corridor=' + encodeURIComponent(c.slug) + '">View cleanups on the ' + esc(c.name) + ' →</a>';
                 L.marker([c.lat, c.lon], {icon: corridorIcon})
                  .addTo(map)
                  .bindPopup(popup);
