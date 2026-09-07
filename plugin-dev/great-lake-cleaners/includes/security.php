@@ -8,8 +8,9 @@
  *   [glc_report_form]   report.php       emails info@ with photo attachments
  *   [glc_join_crew]     crew-signup.php  emails info@
  *   [glc_event_rsvp]    events.php       emails info@
+ *   [glc_account]       accounts.php     creates a user + emails the VISITOR
  *
- * All four are reachable by anyone, so the guards below are the only thing
+ * All five are reachable by anyone, so the guards below are the only thing
  * between a bot and either the media library or the org's inbox. Keep the
  * helpers here rather than duplicating them — a fix applied to one form and
  * not the others is the failure mode this file exists to prevent.
@@ -49,10 +50,15 @@ function glc_client_ip() {
  */
 function glc_rate_limit_global_cap( $bucket ) {
     $caps = [
-        'sub'  => 40,   // community cleanup submissions
-        'rep'  => 40,   // waterway issue reports
-        'crew' => 40,   // crew signups
-        'rsvp' => 80,   // event RSVPs — spike legitimately when an event is announced
+        'sub'   => 40,  // community cleanup submissions
+        'rep'   => 40,  // waterway issue reports
+        'crew'  => 40,  // crew signups
+        'rsvp'  => 80,  // event RSVPs — spike legitimately when an event is announced
+        'login' => 60,  // magic-link sign-in requests (accounts.php)
+        'acct'  => 20,  // new account creations — deliberately the tightest ceiling
+                        // on the site: an account is a durable object, and a
+                        // registration flood is the one abuse that outlives the
+                        // hour it happened in
     ];
     return (int) apply_filters( 'glc_rate_limit_global_cap', $caps[ $bucket ] ?? 40, $bucket );
 }
@@ -60,7 +66,8 @@ function glc_rate_limit_global_cap( $bucket ) {
 /**
  * Whether this request is allowed through.
  *
- * @param string $bucket Short form identifier ('sub', 'rep', 'crew', 'rsvp').
+ * @param string $bucket Short form identifier ('sub', 'rep', 'crew', 'rsvp',
+ *                       'login', 'acct').
  * @param int    $ip_max Requests allowed per IP per 10 minutes.
  * @return true|string   True when allowed, else a visitor-facing message.
  */

@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.5.2
+Version:     1.6.1
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -3687,7 +3687,9 @@ a.glc-ih-card:focus-visible .glc-ih-value {
     line-height: 1.15;
 }
 .dirCL-sec-h b { color: var(--glc-green-dark); }
-.dirCL-sec-note { font-size: 1rem; color: var(--glc-muted); margin-bottom: 24px; max-width: 62ch; }
+.dirCL-sec-note { font-size: 1rem; color: var(--glc-muted); margin-bottom: 24px; }
+/* Opt back in to a reading-measure cap for a genuinely multi-line note; the default runs full section width so short notes sit on one line under the heading */
+.dirCL-sec-note--measure { max-width: 74ch; }
 
 /* Chart card */
 .dirCL-chartwrap {
@@ -4073,6 +4075,292 @@ a.glc-ih-card:focus-visible .glc-ih-value {
 
 @media (max-width: 768px) {
     .glc-ev-results-link { margin-left: 0; flex-basis: 100%; align-self: flex-start; width: max-content; }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   Community accounts + cleaner profiles
+   (plugin: includes/accounts.php — glc-profile.php, page-account.php)
+
+   Almost all of this is layout only. The profile reuses .glc-ih-card from
+   [glc_impact_highlights] for its stat strip, the archive's .glc-archive-grid
+   and card markup for the cleanup list, and .glc-submit-form for every form on
+   the dashboard. What is left is spacing, the slug field, and the delete block.
+═════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Public profile (/cleaners/{slug}/) ──────────────────────────────────── */
+.glc-profile-wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 72px 32px 48px;
+}
+
+.glc-profile-header { margin-bottom: 36px; }
+
+.glc-profile-h1 {
+    font-family: var(--glc-font-display);
+    font-weight: 900;
+    font-size: 2.2rem;
+    color: var(--glc-navy);
+    line-height: 1.15;
+    margin-bottom: 12px;
+}
+
+.glc-profile-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.glc-profile-since {
+    font-size: 0.88rem;
+    color: var(--glc-muted);
+    margin-right: 4px;
+}
+
+/* Owner-only line: "this is your public profile" / "only you can see this". */
+.glc-profile-owner-note {
+    margin-top: 14px;
+    font-size: 0.85rem;
+    color: var(--glc-muted);
+    background: var(--glc-off-white);
+    border: 1px solid var(--glc-border);
+    border-left: 3px solid var(--glc-gold);
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+.glc-profile-owner-note a { color: var(--glc-navy); font-weight: 700; }
+
+/* Four .glc-ih-card stat tiles — the same card the impact highlights use, four
+   across rather than that block's 2 + 3 split. */
+.glc-profile-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+/* isolation: isolate — same reason as every other map wrapper on the site.
+   Leaflet's pane z-indices (200–600) have to stay inside a stacking context or
+   they climb over the sticky header. */
+.glc-profile-map {
+    border-radius: 10px;
+    overflow: hidden;
+    isolation: isolate;
+    margin-bottom: 44px;
+}
+
+.glc-profile-cleanups { margin-bottom: 8px; }
+.glc-profile-cleanups .glc-impact-heading { margin-bottom: 24px; }
+
+/* Owner-only pending row: visibly provisional, and not a link — an unpublished
+   submission has no public permalink to send anyone to. */
+.glc-profile-card--pending {
+    border-left-color: var(--glc-muted);
+    opacity: 0.78;
+}
+
+.glc-profile-foot {
+    text-align: center;
+    margin: 24px 0 48px;
+}
+.glc-profile-foot a {
+    font-family: var(--glc-font-display);
+    font-weight: 800;
+    font-size: 0.92rem;
+    color: var(--glc-green);
+    text-decoration: none;
+}
+.glc-profile-foot a:hover { text-decoration: underline; }
+
+@media (max-width: 900px) {
+    .glc-profile-stats { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+    .glc-profile-wrap { padding: 48px 18px 32px; }
+    .glc-profile-stats { grid-template-columns: 1fr; }
+    .glc-profile-h1 { font-size: 1.8rem; }
+}
+
+/* ── Account dashboard (/account/) ───────────────────────────────────────── */
+.glc-acct-wrap > * + * { margin-top: 28px; }
+
+.glc-acct-welcome {
+    background: var(--glc-green-light);
+    border: 1px solid #c8e8d8;
+    border-radius: 10px;
+    padding: 18px 22px;
+}
+.glc-acct-welcome h2 {
+    font-family: var(--glc-font-display);
+    font-weight: 900;
+    font-size: 1.3rem;
+    color: var(--glc-green-dark);
+    margin: 0 0 4px;
+}
+.glc-acct-welcome p { margin: 0; color: var(--glc-text); }
+
+.glc-acct-notice {
+    background: var(--glc-green-light);
+    border: 1px solid #c8e8d8;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--glc-green-dark);
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.glc-acct-summary {
+    background: var(--glc-off-white);
+    border: 1px solid var(--glc-border);
+    border-left: 3px solid var(--glc-navy);
+    border-radius: 10px;
+    padding: 16px 20px;
+}
+.glc-acct-identity {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0 0 4px;
+}
+.glc-acct-identity strong {
+    font-family: var(--glc-font-display);
+    font-size: 1.15rem;
+    color: var(--glc-navy);
+}
+.glc-acct-identity span,
+.glc-acct-counts { font-size: 0.85rem; color: var(--glc-muted); }
+.glc-acct-profile-link { margin: 0 0 4px; font-size: 0.85rem; word-break: break-all; }
+.glc-acct-counts { margin: 0; }
+.glc-acct-hidden-tag {
+    font-size: 0.68rem;
+    font-weight: 700;
+    font-variant: small-caps;
+    letter-spacing: 0.08em;
+    background: #f1f1ee;
+    color: var(--glc-muted);
+    border: 1px solid var(--glc-border);
+    border-radius: 20px;
+    padding: 2px 8px;
+    margin-right: 6px;
+}
+
+/* Slug field: the fixed /cleaners/ prefix sits inline with the input so it is
+   obvious the value is a URL segment, not a free-text name. */
+.glc-acct-slug-row {
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+}
+.glc-acct-slug-prefix {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 0.8rem;
+    color: var(--glc-muted);
+    background: #f1f1ee;
+    border: 1px solid var(--glc-border);
+    border-right: none;
+    border-radius: 6px 0 0 6px;
+    white-space: nowrap;
+}
+/* Specificity has to clear `.glc-field input[type="text"]` (0,2,1), which
+   sets both width and border-radius. */
+.glc-field .glc-acct-slug-row input[type="text"] {
+    flex: 1 1 8ch;
+    min-width: 8ch;
+    width: auto;
+    border-radius: 0 6px 6px 0;
+}
+.glc-acct-slug-ok  { color: var(--glc-green-dark); font-weight: 700; }
+.glc-acct-slug-bad { color: var(--glc-red); font-weight: 700; }
+
+.glc-acct-section {
+    border-top: 1px solid var(--glc-border);
+    padding-top: 24px;
+}
+.glc-acct-h2 {
+    font-family: var(--glc-font-display);
+    font-weight: 900;
+    font-size: 1.15rem;
+    color: var(--glc-navy);
+    margin-bottom: 12px;
+}
+
+.glc-acct-pending {
+    list-style: none;
+    margin: 0 0 10px;
+    padding: 0;
+}
+.glc-acct-pending li {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--glc-border);
+}
+.glc-acct-pending-site { font-weight: 700; color: var(--glc-navy); }
+.glc-acct-pending-date { font-size: 0.82rem; color: var(--glc-muted); }
+
+.glc-acct-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 18px;
+}
+.glc-acct-signout {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--glc-muted);
+}
+
+/* Delete: red, but not shouty — the copy beside it is doing the real work of
+   explaining that the cleanups survive. */
+.glc-acct-danger { border-top-color: #e8cfcb; }
+.glc-acct-danger .glc-acct-h2 { color: var(--glc-red-dark); }
+.glc-acct-danger p { font-size: 0.88rem; color: var(--glc-muted); max-width: 60ch; }
+.glc-acct-delete-form { margin-top: 14px; max-width: 300px; }
+.glc-acct-delete-button {
+    margin-top: 8px;
+    background: none;
+    border: 1px solid var(--glc-red);
+    color: var(--glc-red-dark);
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-family: var(--glc-font-display);
+    font-weight: 800;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.glc-acct-delete-button:hover {
+    background: var(--glc-red);
+    color: #fff;
+}
+
+.glc-acct-optional { margin-top: 18px; }
+
+/* ── Account touches on the submit form ──────────────────────────────────── */
+.glc-acct-signedin-note {
+    background: var(--glc-green-light);
+    border: 1px solid #c8e8d8;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 0.88rem;
+    color: var(--glc-green-dark);
+}
+.glc-acct-credit { margin-top: 4px; }
+.glc-acct-offer { margin-top: 10px; }
+/* A read-only field must look inert — it is prefilled from the account and the
+   server ignores whatever is posted back for it. */
+.glc-submit-form input[readonly] {
+    background: #f5f5f2;
+    color: var(--glc-muted);
+    cursor: not-allowed;
 }
 
 /* ── Global focus-visible ring ────────────────────────────────────────────── */

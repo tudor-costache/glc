@@ -23,7 +23,7 @@ $contact   = 'info@greatlakecleaners.ca';
         <h1 class="glc-page-h1"><?php esc_html_e( 'Privacy Policy', 'great-lake-cleaners' ); ?></h1>
         <p class="glc-privacy-updated">
             <?php esc_html_e( 'Last updated: ', 'great-lake-cleaners' ); ?>
-            <time datetime="2025-04-01">April 1, 2025</time>
+            <time datetime="2026-09-02">September 2, 2026</time>
         </p>
     </header>
 
@@ -49,6 +49,41 @@ $contact   = 'info@greatlakecleaners.ca';
             <li><strong>Location coordinates</strong> (optional) — the GPS coordinates of the cleanup site, which is a public waterway access point, not your personal location. These coordinates are used to place a pin on our cleanup map.</li>
             <li><strong>Photos</strong> (optional) — only published if you explicitly check the consent box in the submission form.</li>
         </ul>
+
+        <h3>Cleaner accounts</h3>
+        <p>
+            You can optionally create an account, which collects your cleanups on a public
+            profile page. Submitting a cleanup without an account works exactly the same and
+            always will &mdash; an account is never required for anything.
+        </p>
+        <ul>
+            <li><strong>Your email address</strong> &mdash; this is how you sign in. We email you a
+                single-use link rather than asking you to choose a password, so there is no
+                password of yours for us to store or for anyone to steal. Your email address is
+                never shown on your profile or anywhere else on the site.</li>
+            <li><strong>A display name and a profile address</strong> &mdash; both chosen by you, both
+                changeable at any time, and both public. Use whatever name you are comfortable
+                having published.</li>
+            <li><strong>Your cleanups</strong> &mdash; a profile shows the cleanups you submitted, their
+                combined totals, and a map of where they happened. Every one of those cleanups is
+                already published individually on this site; the profile groups them together.</li>
+        </ul>
+        <p>
+            The first time you sign in, we look for cleanups you previously submitted using the
+            same email address and add them to your profile. We only do this once your address has
+            been proven by the sign-in link, and never for a cleanup you asked us not to credit.
+        </p>
+        <p>
+            You can hide your profile at any time from your account page &mdash; it then returns a
+            &ldquo;not found&rdquo; page for everyone but you &mdash; and you can submit any individual
+            cleanup without credit.
+        </p>
+        <p>
+            <strong>If you delete your account,</strong> your cleanups stay published. They are part of
+            a public environmental record and the site&rsquo;s totals count them. What is removed is the
+            credit: your name and email address are deleted from those records, the cards read
+            &ldquo;Community member&rdquo;, and your profile disappears.
+        </p>
 
         <h3>Server logs</h3>
         <p>

@@ -44,10 +44,30 @@
         $glc_site = get_post_meta( $glc_id, 'glc_site_name', true )
                   ?: get_post_meta( $glc_id, 'glc_waterway', true )
                   ?: get_the_title();
-        $glc_name = get_post_meta( $glc_id, 'glc_submitter_name', true );
+        // Same byline resolution the visible page uses — a submission whose
+        // author asked not to be credited must not have their name reappear in
+        // the meta description.
+        $glc_name = function_exists( 'glc_submission_credit' )
+            ? glc_submission_credit( $glc_id )['name']
+            : get_post_meta( $glc_id, 'glc_submitter_name', true );
         $glc_meta_desc = $glc_name
             ? sprintf( 'Community cleanup at %s, submitted by %s. Logged by Great Lake Cleaners, Guelph, Ontario.', $glc_site, $glc_name )
             : sprintf( 'Community cleanup at %s — logged by Great Lake Cleaners, Guelph, Ontario.', $glc_site );
+
+    } elseif ( get_query_var( 'glc_cleaner' ) && function_exists( 'glc_profile_queried_user' )
+        && ( $glc_profile = glc_profile_queried_user() ) ) {
+        // Cleaner profile — deliberately indexable, so it gets a real
+        // description rather than falling through to the site tagline.
+        $glc_pstats = glc_user_impact_stats( $glc_profile->ID );
+        $glc_meta_desc = $glc_pstats['cleanups']
+            ? sprintf(
+                '%s has logged %d community %s with Great Lake Cleaners — %s kg of debris removed from Ontario waterways.',
+                $glc_profile->display_name,
+                (int) $glc_pstats['cleanups'],
+                1 === (int) $glc_pstats['cleanups'] ? 'cleanup' : 'cleanups',
+                number_format( (float) $glc_pstats['weight_kg'], 1 )
+            )
+            : sprintf( '%s — a Great Lake Cleaners community cleaner in Guelph, Ontario.', $glc_profile->display_name );
 
     } elseif ( is_post_type_archive( 'cleanup_event' ) ) {
         $glc_meta_desc = 'Every Great Lake Cleaners outing logged — shore and paddle cleanups along the Speed River, Eramosa River, and Hanlon Creek in Guelph, Ontario.';
@@ -211,6 +231,35 @@
                             </g>
                         </svg>
                     </a>
+                    <?php
+                    // Accounts (plugin: includes/accounts.php). Inside
+                    // .glc-header-social, never .glc-header-actions directly —
+                    // that wrapper is a flex COLUMN, so an icon added to it
+                    // stacks vertically instead of joining the row. The whole
+                    // row is display:none below 768px; mobile relies on the
+                    // footer link.
+                    $glc_account_page = get_page_by_path( 'account' );
+                    if ( $glc_account_page ) :
+                        $glc_signed_in = function_exists( 'glc_current_cleaner' ) && glc_current_cleaner();
+                    ?>
+                    <a href="<?php echo esc_url( get_permalink( $glc_account_page ) ); ?>"
+                       class="glc-insta-link"
+                       aria-label="<?php echo $glc_signed_in
+                           ? esc_attr__( 'Your account', 'great-lake-cleaners' )
+                           : esc_attr__( 'Sign in to your cleaner account', 'great-lake-cleaners' ); ?>"
+                       title="<?php echo $glc_signed_in
+                           ? esc_attr__( 'Your account', 'great-lake-cleaners' )
+                           : esc_attr__( 'Sign in', 'great-lake-cleaners' ); ?>">
+                        <?php // Stroke-drawn and inset to ~20 of 24 units, matching the Instagram and heart marks. ?>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                             stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                    </a>
+                    <?php endif; ?>
+
                     <a href="<?php echo esc_url( GLC_DONATE_URL ); ?>"
                        class="glc-insta-link"
                        target="_blank"

@@ -349,7 +349,7 @@ get_header();
 	<!-- ═══ DEBRIS & RECYCLING ══════════════════════════════════════════════ -->
 	<div class="dirCL-sec" id="debris">
 		<h3 class="dirCL-sec-h">Debris &amp; Recycling <b>diverted</b> over time</h3>
-		<p class="dirCL-sec-note">Everything we collect on shore or on the water helps reduce downstream pollution in our Great Lakes.  Debris (kg) is landfill, tires and metal. Recyclables are counted as items, not weight, and are diverted to the blue bin program.</p>
+		<p class="dirCL-sec-note dirCL-sec-note--measure">Everything we collect on shore or on the water helps reduce downstream pollution in our Great Lakes.  Debris (kg) is landfill, tires and metal. Recyclables are counted as items, not weight, and are diverted to the blue bin program.</p>
 
 		<div class="dirCL-chartwrap">
 			<!-- Legend -->
@@ -588,7 +588,9 @@ get_header();
 		        var markers = <?php echo wp_json_encode( $_wl_markers ); ?>;
 		        if (!markers.length) return;
 		        var corridorLinesUrl = <?php echo wp_json_encode( $_corridor_lines_url ); ?>;
-		        var map = L.map('glc-wl-map', { zoomControl: true }).setView([43.545, -80.248], 12);
+		        // Guelph is home base — the fit at the end sets zoom only, not centre.
+		        var GLC_HOME = [43.545, -80.248];
+		        var map = L.map('glc-wl-map', { zoomControl: true }).setView(GLC_HOME, 12);
 		        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_29e5_1_17f74f1d3418f4c313616f46', {
 		            attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
 		            subdomains: 'abcd',
@@ -630,10 +632,15 @@ get_header();
 		        var ll = markers.map(function (m) { return [m.lat, m.lon]; });
 		        if (ll.length === 1) { map.setView(ll[0], 15); }
 		        else {
-		            map.fitBounds(ll, { padding: [50, 50] });
-		            // fitBounds floors to the nearest zoom guaranteed to fit; one level
-		            // tighter reads better — the taller .glc-wl-map box gives it room.
-		            map.setZoom(map.getZoom() + 1);
+		            // Zoom from the bounds, centre always on Guelph — a lone far-north
+		            // sighting would otherwise drag the map off home base. Same rule and
+		            // same reasoning as [glc_map]; see shortcodes.php for why this uses
+		            // getBoundsZoom() rather than fitBounds(). Padding is the total, so
+		            // the old { padding: [50, 50] } per side is [100, 100] here.
+		            var fitZoom = map.getBoundsZoom(L.latLngBounds(ll), false, L.point(100, 100));
+		            // One level tighter than guaranteed-to-fit; the taller .glc-wl-map
+		            // box gives it room.
+		            map.setView(GLC_HOME, fitZoom + 1);
 		        }
 		    });
 		})();

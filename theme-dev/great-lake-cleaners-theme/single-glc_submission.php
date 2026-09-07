@@ -36,7 +36,11 @@ if ( have_posts() ) :
     $wildlife  = get_post_meta( $id, 'wildlife_obs',        true ); // unprefixed — shared key with cleanup_event
     $wimg      = $wildlife ? glc_stats_wildlife_img( $wildlife ) : null;
     $insta     = get_post_meta( $id, 'glc_instagram_url',   true );
-    $name      = get_post_meta( $id, 'glc_submitter_name',  true );
+    // Byline resolved by the plugin: an owned submission credits the account's
+    // current display name and links to its profile; an explicit opt-out reads
+    // "Community member"; anything else falls back to the typed name.
+    $credit    = glc_submission_credit( $id );
+    $name      = $credit['name'];
     $photo_ids = get_post_meta( $id, 'glc_photo_ids',       true );
     $repost_ok = get_post_meta( $id, 'glc_photo_repost_ok', true );
     $gps_lat   = get_post_meta( $id, 'glc_gps_lat',         true );
@@ -76,7 +80,14 @@ if ( have_posts() ) :
             <h1 class="glc-single-sub-h1"><?php echo esc_html( $title ); ?></h1>
             <?php if ( $name ) : ?>
             <p class="glc-single-sub-byline">
-                <?php printf( esc_html__( 'Submitted by %s', 'great-lake-cleaners' ), esc_html( $name ) ); ?>
+                <?php
+                printf(
+                    esc_html__( 'Submitted by %s', 'great-lake-cleaners' ),
+                    $credit['url']
+                        ? '<a href="' . esc_url( $credit['url'] ) . '">' . esc_html( $name ) . '</a>'
+                        : esc_html( $name )
+                );
+                ?>
             </p>
             <?php endif; ?>
         </header>

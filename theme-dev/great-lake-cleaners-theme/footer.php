@@ -92,6 +92,20 @@
             <a href="<?php echo esc_url( home_url( '/privacy-policy/' ) ); ?>">
                 <?php esc_html_e( 'Privacy Policy', 'great-lake-cleaners' ); ?>
             </a>
+            <?php
+            // Accounts (plugin: includes/accounts.php). The header's icon is
+            // hidden below 768px, so this text link is the only way to the
+            // dashboard on mobile.
+            $glc_footer_account = get_page_by_path( 'account' );
+            if ( $glc_footer_account ) :
+            ?>
+            &nbsp;·&nbsp;
+            <a href="<?php echo esc_url( get_permalink( $glc_footer_account ) ); ?>">
+                <?php echo function_exists( 'glc_current_cleaner' ) && glc_current_cleaner()
+                    ? esc_html__( 'Your Account', 'great-lake-cleaners' )
+                    : esc_html__( 'Sign In', 'great-lake-cleaners' ); ?>
+            </a>
+            <?php endif; ?>
             &nbsp;·&nbsp;
             <a href="https://instagram.com/greatlakecleaners"
                target="_blank" rel="noopener noreferrer"

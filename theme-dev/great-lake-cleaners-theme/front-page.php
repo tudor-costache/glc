@@ -89,7 +89,7 @@ get_header();
         </div>
 
         <div class="glc-fp-visual glc-fp-map" role="region" aria-label="<?php esc_attr_e( 'Cleanup locations map', 'great-lake-cleaners' ); ?>">
-            <?php echo do_shortcode( '[glc_map height="340px" limit="5" cluster_radius="10" corridors="1" corridor_pins="0"]' ); ?>
+            <?php echo do_shortcode( '[glc_map height="340px" limit="5" cluster_radius="10" corridors="1" corridor_pins="0" zoom_offset="2"]' ); ?>
         </div>
 
     </section>

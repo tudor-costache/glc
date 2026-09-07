@@ -312,6 +312,100 @@ def check_rest(base):
                "no unapproved-submission photos exposed via REST")
 
 
+def find_profile_slug(base):
+    """A public profile slug, discovered rather than hardcoded.
+
+    Card bylines on /cleanups/ link to /cleaners/<slug>/ whenever a submission
+    is owned by a visible account, so the archive is the cheapest place to find
+    a real one. Returns None when nobody has a public profile yet, which is a
+    perfectly normal state for this check to report.
+    """
+    for path in ("cleanups/", ""):
+        st, _, body, _ = request(urllib.parse.urljoin(base, path))
+        if st != 200:
+            continue
+        m = re.search(rb"/cleaners/([a-z0-9][a-z0-9-]{1,28}[a-z0-9])/", body)
+        if m:
+            return m.group(1).decode()
+    return None
+
+
+def check_accounts(base):
+    section("Community accounts and cleaner profiles")
+
+    # The dashboard, and the nonce its sign-in form has to carry.
+    st, _, body, _ = request(urllib.parse.urljoin(base, "account/"))
+    if st != 200:
+        record(INFO, "/account/ -> HTTP %s" % st,
+               "expected until the accounts rollout ships")
+    else:
+        record(PASS, "/account/ (200)")
+        if re.search(rb'name=["\']glc_account_nonce["\']', body):
+            record(PASS, "Sign-in form carries a nonce field")
+        else:
+            record(FAIL, "Sign-in form has no glc_account_nonce field",
+                   "the one signed-out write on the site must not be nonce-free")
+
+    # users_can_register must stay off: a second, unguarded sign-up surface.
+    st, hd, body, _ = request(urllib.parse.urljoin(base, "wp-login.php?action=register"),
+                              redirect=False)
+    if st == 200 and b"user_login" in body and b"registerform" in body:
+        record(FAIL, "wp-login.php?action=register serves a registration form",
+               "users_can_register is on - accounts must only be created by the "
+               "guarded /account/ handler")
+    else:
+        record(PASS, "Open registration closed (wp-login.php?action=register -> HTTP %s)" % st)
+
+    # A miss must 404 outright: not a redirect, not a "profile is private" page.
+    # Either of those confirms the slug exists.
+    st = status_of("cleaners/definitely-not-a-user/", base)
+    if st == 404:
+        record(PASS, "/cleaners/<unknown>/ -> 404")
+    else:
+        record(FAIL, "/cleaners/<unknown>/ -> HTTP %s" % st,
+               "an unknown handle must be indistinguishable from a hidden one")
+
+    slug = find_profile_slug(base)
+    if not slug:
+        record(INFO, "No public cleaner profile linked yet",
+               "profile checks skipped - nothing to resolve against")
+        return
+
+    st, _, body, _ = request(urllib.parse.urljoin(base, "cleaners/%s/" % slug))
+    if st != 200:
+        record(FAIL, "/cleaners/%s/ -> HTTP %s" % (slug, st))
+        return
+    record(PASS, "/cleaners/%s/ (200)" % slug)
+
+    m = re.search(rb'class=["\']glc-profile-h1["\']>([^<]+)<', body)
+    if m and m.group(1).strip():
+        record(PASS, "Profile renders a display name",
+               m.group(1).decode("utf-8", "replace").strip())
+    else:
+        record(WARN, "Profile page has no glc-profile-h1 heading")
+
+    # The regression guard this whole section exists for: a public profile must
+    # not hand back anything the username-enumeration fixes closed off.
+    leaks = []
+    if re.search(rb"cleaner_[0-9a-f]{12}", body):
+        leaks.append("an opaque user_login is rendered in the page")
+    if re.search(rb'href=["\'][^"\']*/author/', body):
+        leaks.append("the page links to an /author/ archive")
+    if leaks:
+        record(FAIL, "Profile page leaks account identifiers", "; ".join(leaks))
+    else:
+        record(PASS, "Profile page exposes no login slug and no /author/ link")
+
+    # The root-level shortcut.
+    st, hd, _, _ = request(urllib.parse.urljoin(base, slug), redirect=False)
+    loc = (hd.get("location") or [""])[0]
+    if st == 301 and loc.rstrip("/").endswith("/cleaners/%s" % slug):
+        record(PASS, "/%s -> 301 -> %s" % (slug, loc))
+    else:
+        record(FAIL, "/%s -> HTTP %s %s" % (slug, st, loc),
+               "expected a 301 to the canonical /cleaners/ URL")
+
+
 def check_pages(base):
     section("Page health")
     for slug in ["", "cleanups", "stats", "photos", "videos", "submit-cleanup",
@@ -643,6 +737,99 @@ def post_rsvp(base, stamp):
                "adjust rsvp_count / rsvp_parties in the meta box if it matters")
 
 
+def post_signin(base, stamp):
+    """Exercise /account/'s sign-in request.
+
+    Two properties are worth a real POST, and neither is visible passively:
+
+      No account oracle. The reply for an address that has just been created
+      must be byte-identical to the reply for one that already exists, or the
+      form tells an attacker which addresses are real.
+
+      The rate limit actually bites. Per-IP is 3 sign-in requests / 10 min.
+
+    Side effects: this creates real (unverified) user accounts and sends mail to
+    the throwaway addresses. example.com is reserved by RFC 2606, so nothing is
+    delivered to a real person. Unverified accounts are swept after 7 days by
+    the plugin's own cron; the display name is tagged so they are obvious in
+    wp-admin before that.
+    """
+    def send(addr):
+        nonce, err = get_nonce(base, "account/", "glc_account_nonce")
+        if not nonce:
+            return None, err
+        body, ctype = multipart({
+            "glc_account_nonce": nonce,
+            "_wp_http_referer": "/account/",
+            "glc_account_email": addr,
+            "glc_account_name": "GLC-AUDIT-TEST %s" % stamp,
+            "glc_url": "",
+            "glc_account_signin": "1",
+        }, [])
+        st, _, rbody, _ = request(urllib.parse.urljoin(base, "account/"),
+                                  method="POST", data=body,
+                                  headers={"Content-Type": ctype})
+        if st != 200:
+            return None, "HTTP %s" % st
+        return rbody, None
+
+    def outcome(rbody):
+        """The rendered result region, normalised for comparison."""
+        m = re.search(rb'<div class="glc-submit-success glc-acct-sent">(.*?)</div>',
+                      rbody, re.S)
+        if m:
+            return ("sent", re.sub(rb"\s+", b" ", m.group(1)).strip())
+        m = re.search(rb'<div class="glc-form-error-banner"[^>]*>(.*?)</div>', rbody, re.S)
+        if m:
+            return ("error", re.sub(rb"\s+", b" ", m.group(1)).strip())
+        return ("none", b"")
+
+    fresh = "glc-audit-%s@example.com" % stamp
+
+    # 1. brand new address -> creates an account
+    b1, err = send(fresh)
+    if err:
+        record(FAIL, "Sign-in request (new address) failed", err)
+        return
+    kind1, copy1 = outcome(b1)
+
+    # 2. the same address again -> the account now exists
+    time.sleep(2)
+    b2, err = send(fresh)
+    if err:
+        record(FAIL, "Sign-in request (existing address) failed", err)
+        return
+    kind2, copy2 = outcome(b2)
+
+    if kind1 != "sent":
+        record(FAIL, "First sign-in request did not report success",
+               copy1.decode("utf-8", "replace")[:160] or kind1)
+    elif copy1 == copy2 and kind1 == kind2:
+        record(PASS, "Sign-in reply is identical for a new and an existing address",
+               "no account-existence oracle")
+    else:
+        record(FAIL, "Sign-in reply differs between a new and an existing address",
+               "new: %s | existing: %s"
+               % (copy1.decode("utf-8", "replace")[:80],
+                  copy2.decode("utf-8", "replace")[:80]))
+
+    # 3 and 4. Per-IP allowance is 3 per 10 minutes, so the fourth must be refused.
+    time.sleep(2)
+    send("glc-audit-%s-b@example.com" % stamp)
+    time.sleep(2)
+    b4, err = send("glc-audit-%s-c@example.com" % stamp)
+    if err:
+        record(WARN, "Fourth sign-in request could not be sent", err)
+        return
+    kind4, copy4 = outcome(b4)
+    if kind4 == "error" and copy4:
+        record(PASS, "Fourth sign-in request in 10 minutes is rate-limited",
+               copy4.decode("utf-8", "replace")[:120])
+    else:
+        record(FAIL, "Fourth sign-in request was not rate-limited",
+               "expected a throttle message, got: %s" % kind4)
+
+
 def check_honeypot(base):
     """The honeypot should absorb a bot silently — no mail, no post."""
     section("Bot controls")
@@ -692,6 +879,7 @@ SURFACES = {
     "report": post_report,
     "crew": post_crew,
     "rsvp": post_rsvp,
+    "signin": post_signin,
 }
 
 
@@ -755,6 +943,7 @@ def main():
     check_exposure(base)
     check_user_enumeration(base)
     check_rest(base)
+    check_accounts(base)
     check_pages(base)
     check_assets(base)
     check_html_encoding(base)
@@ -764,7 +953,7 @@ def main():
 
         section("Live form submissions  [run tag: GLC-AUDIT-TEST %s]" % stamp)
         chosen = args.only or list(SURFACES)
-        for name in ["submit", "spoof", "report", "crew", "rsvp"]:
+        for name in ["submit", "spoof", "report", "crew", "rsvp", "signin"]:
             if name in chosen:
                 SURFACES[name](base, stamp)
                 time.sleep(3)   # stay well under the 5-per-10-min per-IP limit
@@ -791,8 +980,10 @@ def main():
             print("  - %s" % label)
     if args.post:
         print("\nCleanup: trash any post titled 'GLC-AUDIT-TEST %s' in "
-              "WP Admin -> Submissions, and delete the matching info@ emails."
-              % stamp)
+              "WP Admin -> Submissions, delete the matching info@ emails, and "
+              "remove the 'GLC-AUDIT-TEST %s' accounts in WP Admin -> Users "
+              "(or leave them - the plugin sweeps unverified accounts after 7 "
+              "days)." % (stamp, stamp))
     return 1 if fails else 0
 
 

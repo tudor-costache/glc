@@ -222,6 +222,8 @@ function glc_shortcode_map( $atts ) {
         'corridor_pins'  => 1,   // 0 = lines only, no gold corridor pins -- for a view that wants river context without another layer of markers
         'corridor_bounds' => 1,  // let corridor pins expand the map's fit-to-bounds zoom (0 = pins render but never zoom out to reach them -- for curated views that still show pins). No effect when corridor_pins="0" -- nothing to include either way.
         'markers'        => 1,   // render individual site pins (0 = corridor pins only -- less noisy once corridors carry the summary)
+        'author'         => 0,   // restrict to one account's cleanups (a cleaner profile map). All-events mode only
+        'zoom_offset'    => 1,   // levels tighter than the guaranteed-fit zoom for the multi-marker view (front-page hero passes 2 -- reads less zoomed-out and keeps Guelph visually centred; outliers just sit off the edge)
     ], $atts );
 
     // Single-event mode (used on single-cleanup_event.php and single-glc_submission.php)
@@ -245,7 +247,19 @@ function glc_shortcode_map( $atts ) {
         ] ];
     } else {
         // All-events mode — both cleanup_event and glc_submission, deduped by location
-        $events      = glc_get_all_cleanups();
+        $events = glc_get_all_cleanups();
+
+        // Profile mode: one account's cleanups only. Filtered here, before the
+        // dedup loop, so clustering and the fit-to-bounds see the same set the
+        // pins do. author="0" is not "everyone's" -- it is the anonymous author
+        // id, so an unset attribute has to mean no filter at all.
+        $author = (int) $atts['author'];
+        if ( $author > 0 ) {
+            $events = array_values( array_filter( $events, function ( $e ) use ( $author ) {
+                return (int) $e->post_author === $author;
+            } ) );
+        }
+
         $by_location = [];
         foreach ( $events as $e ) {
             $lat = (float) glc_cleanup_field( $e, 'gps_lat' );
@@ -315,6 +329,10 @@ function glc_shortcode_map( $atts ) {
 
     if ( (int) $atts['corridors'] && (int) $atts['post_id'] === 0 ) {
         $geojson_path = GLC_PLUGIN_DIR . 'assets/corridors.geojson';
+        // corridor_pins="0" (front-page hero, cleaner profiles) wants the lines
+        // and nothing else, so the cumulative walk over every cleanup below is
+        // skipped entirely rather than computed and thrown away.
+        $want_pins = (bool) (int) $atts['corridor_pins'];
         $lines_by_slug = [];
 
         if ( file_exists( $geojson_path ) ) {
@@ -338,7 +356,8 @@ function glc_shortcode_map( $atts ) {
         }
 
         $corridor_table = glc_corridor_table();
-        foreach ( glc_get_all_cleanups() as $e ) {
+        $corridor_cleanups = $want_pins ? glc_get_all_cleanups() : [];
+        foreach ( $corridor_cleanups as $e ) {
             $slug = glc_corridor_slug( glc_cleanup_field( $e, 'corridor' ) );
             if ( ! $slug ) continue;
 
@@ -413,8 +432,12 @@ function glc_shortcode_map( $atts ) {
         var corridorBounds = <?php echo wp_json_encode( (bool) $atts['corridor_bounds'] ); ?>;
         var showCorridorPins = <?php echo wp_json_encode( (bool) $atts['corridor_pins'] ); ?>;
         var showMarkers = <?php echo wp_json_encode( (bool) $atts['markers'] ); ?>;
+        var zoomOffset = <?php echo wp_json_encode( (int) $atts['zoom_offset'] ); ?>;
         var archiveUrl = <?php echo wp_json_encode( get_post_type_archive_link( 'cleanup_event' ) ?: home_url( '/cleanups/' ) ); ?>;
-        var map = L.map(<?php echo wp_json_encode( $map_id ); ?>, { zoomControl: false }).setView([43.545, -80.248], 12);
+        // Guelph is home base. Every map centres here; a fit-to-bounds only ever
+        // sets the zoom level, never the centre (see the fit block at the end).
+        var GLC_HOME = [43.545, -80.248];
+        var map = L.map(<?php echo wp_json_encode( $map_id ); ?>, { zoomControl: false }).setView(GLC_HOME, 12);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_29e5_1_17f74f1d3418f4c313616f46', {
             attribution: '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
@@ -489,12 +512,28 @@ function glc_shortcode_map( $atts ) {
         }
 
         if (allPoints.length === 1) {
+            // One pin means a single-event map, where the pin *is* the subject.
             map.setView(allPoints[0], 15);
         } else if (allPoints.length > 1) {
-            map.fitBounds(allPoints, {padding: [40, 40]});
-            // fitBounds floors to the nearest zoom that's guaranteed to fit — one level
-            // tighter is still comfortably within the padding and reads far less zoomed-out.
-            map.setZoom(map.getZoom() + 1);
+            // Take the zoom from the bounds but never the centre. One far-off site
+            // (Duchesnay Creek up in North Bay, Bayfield out on Huron) drags the
+            // bounds centre halfway to Georgian Bay, and the map opens with every
+            // real cleanup crowded into a corner. Guelph stays centred instead;
+            // outliers sit off the edge, and the map still pans and zooms.
+            //
+            // getBoundsZoom() is the same calculation fitBounds() runs internally,
+            // but it only computes — it never moves the map. That matters twice
+            // over: there's no fit-then-pan-back (which lands ~a pixel off Guelph,
+            // since panBy rounds its offset), and no reading back a zoom that
+            // fitBounds may not have applied yet — it defers to requestAnimationFrame
+            // whenever the zoom delta is small enough to animate.
+            // Padding is the *total*, so fitBounds' [40, 40] per side is [80, 80].
+            var fitZoom = map.getBoundsZoom(L.latLngBounds(allPoints), false, L.point(80, 80));
+            // zoomOffset levels tighter than the zoom guaranteed to fit (default 1
+            // — still comfortably inside the padding, reads far less zoomed-out).
+            // The front-page hero passes 2: at +1 its wide spread (North Bay down to
+            // Long Point) still opens too far out to read as a Guelph map.
+            map.setView(GLC_HOME, fitZoom + zoomOffset);
         }
     });
     </script>

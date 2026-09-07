@@ -44,7 +44,7 @@ foreach ( $event_posts as $e ) {
         'carts'    => (int) get_post_meta( $e->ID, 'carts_removed', true ),
         'corridor' => glc_corridor_slug( get_post_meta( $e->ID, 'corridor', true ) ),
         'url'      => get_permalink( $e->ID ),
-        'name'     => '',
+        'credit'   => [ 'name' => '', 'url' => '' ],
     ];
 }
 
@@ -74,7 +74,11 @@ foreach ( $sub_posts as $s ) {
         'carts'    => (int) get_post_meta( $s->ID, 'carts_removed', true ),
         'corridor' => glc_corridor_slug( get_post_meta( $s->ID, 'glc_corridor', true ) ),
         'url'      => get_permalink( $s->ID ),
-        'name'     => get_post_meta( $s->ID, 'glc_submitter_name', true ),
+        // Who to credit, and whether that credit links to a profile. Resolved
+        // by the plugin (accounts.php) rather than read straight off
+        // glc_submitter_name, so an owned submission shows the account's
+        // current display name and an explicit opt-out reads "Community member".
+        'credit'   => glc_submission_credit( $s->ID ),
     ];
 }
 
@@ -202,8 +206,14 @@ $impact_labels = [
             </span>
             <?php endif; ?>
 
-            <?php if ( $c['type'] === 'community' && $c['name'] ) : ?>
-            <p class="glc-archive-card-submitter"><?php echo esc_html( $c['name'] ); ?></p>
+            <?php if ( $c['type'] === 'community' && $c['credit']['name'] ) : ?>
+            <p class="glc-archive-card-submitter">
+                <?php if ( $c['credit']['url'] ) : ?>
+                <a href="<?php echo esc_url( $c['credit']['url'] ); ?>"><?php echo esc_html( $c['credit']['name'] ); ?></a>
+                <?php else : ?>
+                <?php echo esc_html( $c['credit']['name'] ); ?>
+                <?php endif; ?>
+            </p>
             <?php endif; ?>
 
             <div class="glc-fp-card-stats">

@@ -42,8 +42,19 @@ function glc_register_submission_post_type() {
         'show_in_menu'    => true,
         'menu_position'   => 6,
         'menu_icon'       => 'dashicons-upload',
-        'supports'        => [ 'title', 'editor', 'thumbnail' ],
+        // 'author' carries the owning account (accounts.php). It is the single
+        // source of truth for "whose cleanup is this" — an indexed column
+        // WP_Query's `author` arg reads directly, and an admin dropdown for
+        // fixing a mis-attribution by hand. A parallel glc_user_id meta key
+        // would be a second thing to keep in sync, and this codebase has
+        // already paid that tax with the glc_-prefixed dual keys.
+        'supports'        => [ 'title', 'editor', 'thumbnail', 'author' ],
         'capability_type' => 'post',
+        // ⚠ NOT optional. wp_delete_user() with a null $reassign deletes every
+        // post the account owns — here, published community cleanup records
+        // that every public total on the site counts. Deleting an account must
+        // orphan the cleanups (post_author back to 0), never destroy them.
+        'delete_with_user' => false,
         'show_in_rest'    => false,
     ] );
 }
@@ -454,6 +465,13 @@ function glc_render_submit_form() {
         $error = $result;
     }
 
+    // A signed-in cleaner gets their account's name and email prefilled and
+    // locked. The lock is a UI convenience only — glc_maybe_handle_submission()
+    // reads both values off the user record, never off the POST body, so a
+    // scripted post can't credit someone else's account with a third party's
+    // name attached.
+    $acct = glc_current_cleaner();
+
     // wp_unslash() so a value echoed back after a validation error shows what
     // the visitor typed, not an apostrophe that has sprouted a backslash.
     $v = function( $key, $default = '' ) {
@@ -489,18 +507,55 @@ function glc_render_submit_form() {
                     <span class="glc-form-legend-num">1</span>
                     <?php esc_html_e( 'About You', 'great-lake-cleaners' ); ?>
                 </legend>
+                <?php if ( $acct ) : ?>
+                <p class="glc-acct-signedin-note">
+                    <?php
+                    printf(
+                        /* translators: %s: the signed-in cleaner's display name */
+                        esc_html__( 'Signed in as %s — this cleanup will be added to your profile once it is reviewed.', 'great-lake-cleaners' ),
+                        '<strong>' . esc_html( $acct->display_name ) . '</strong>'
+                    );
+                    ?>
+                </p>
+                <?php endif; ?>
+
                 <div class="glc-field-row">
                     <div class="glc-field glc-field--half">
                         <label for="glc_submitter_name"><span class="glc-label-text"><?php esc_html_e( 'Your Name', 'great-lake-cleaners' ); ?><span class="glc-required" aria-label="required">*</span></span></label>
-                        <input type="text" id="glc_submitter_name" name="glc_submitter_name" required maxlength="100" autocomplete="name" value="<?php echo $v('glc_submitter_name'); ?>"<?php echo $fa('glc_submitter_name'); ?>>
+                        <input type="text" id="glc_submitter_name" name="glc_submitter_name" required maxlength="100" autocomplete="name"<?php echo $acct ? ' readonly' : ''; ?> value="<?php echo $acct ? esc_attr( $acct->display_name ) : $v('glc_submitter_name'); ?>"<?php echo $fa('glc_submitter_name'); ?>>
                         <?php echo $fe('glc_submitter_name'); ?>
                     </div>
                     <div class="glc-field glc-field--half">
                         <label for="glc_email"><span class="glc-label-text"><?php esc_html_e( 'Email', 'great-lake-cleaners' ); ?><span class="glc-tooltip" aria-label="<?php esc_attr_e( 'Optional — so we can say thanks', 'great-lake-cleaners' ); ?>" tabindex="0">?<span class="glc-tooltip-text"><?php esc_html_e( 'Optional — so we can say thanks', 'great-lake-cleaners' ); ?></span></span></span></label>
-                        <input type="email" id="glc_email" name="glc_email" maxlength="200" autocomplete="email" value="<?php echo $v('glc_email'); ?>">
+                        <input type="email" id="glc_email" name="glc_email" maxlength="200" autocomplete="email"<?php echo $acct ? ' readonly' : ''; ?> value="<?php echo $acct ? esc_attr( $acct->user_email ) : $v('glc_email'); ?>">
                     </div>
 
                 </div>
+
+                <?php if ( $acct ) : ?>
+                <div class="glc-field glc-acct-credit">
+                    <label class="glc-checkbox-label" for="glc_post_anonymously">
+                        <input type="checkbox" id="glc_post_anonymously" name="glc_post_anonymously" value="1"<?php checked( ! empty( $_POST['glc_post_anonymously'] ) ); ?>>
+                        <span><?php esc_html_e( 'Post this one without credit', 'great-lake-cleaners' ); ?></span>
+                    </label>
+                    <p class="glc-field-note">
+                        <?php esc_html_e( 'Leave unticked and the cleanup appears on your public profile. Tick it and we still get your name for our records, but the public card reads "Community member" and the cleanup stays off your profile.', 'great-lake-cleaners' ); ?>
+                    </p>
+                </div>
+                <?php elseif ( get_page_by_path( 'account' ) ) : ?>
+                <?php // Guarded on the page existing, like every other account
+                      // entry point — until it is created the feature is
+                      // invisible rather than a dead link. ?>
+                <p class="glc-field-note glc-acct-offer">
+                    <?php
+                    printf(
+                        /* translators: %s: link to the account page */
+                        esc_html__( 'Optional: %s to collect your cleanups on a public profile. Submitting without one works exactly the same.', 'great-lake-cleaners' ),
+                        '<a href="' . esc_url( glc_account_url() ) . '">' . esc_html__( 'sign in or make an account', 'great-lake-cleaners' ) . '</a>'
+                    );
+                    ?>
+                </p>
+                <?php endif; ?>
             </fieldset>
 
             <!-- 2. The Cleanup -->
@@ -720,9 +775,29 @@ function glc_maybe_handle_submission() {
     $rate = glc_rate_limit_check( 'sub', 5 );
     if ( true !== $rate ) return $rate;
 
+    // Account attribution. Three cases, and the only difference between them is
+    // one integer on the post row:
+    //   signed in, credit (the default) -> post_author = the account
+    //   signed in, "no credit" ticked   -> post_author = 0, glc_credit_anonymous = 1
+    //   signed out                      -> post_author = 0, exactly as before
+    //
+    // wp_insert_post() defaults post_author to the *current user* when the key
+    // is absent, so it is passed explicitly in every case -- otherwise a
+    // signed-in visitor who asked not to be credited would be credited anyway.
+    $acct      = glc_current_cleaner();
+    $post_anon = $acct && ! empty( $_POST['glc_post_anonymously'] );
+    $author_id = ( $acct && ! $post_anon ) ? (int) $acct->ID : 0;
+
     $name     = glc_clean_text( $_POST['glc_submitter_name'] ?? '', 100 );
     $date     = glc_clean_text( $_POST['glc_cleanup_date']   ?? '', 10 );
     $waterway = glc_clean_text( $_POST['glc_waterway']       ?? '', 200 );
+
+    // The form renders name and email read-only for a signed-in cleaner, but
+    // read-only is markup, not a guard -- both come off the user record here so
+    // a scripted post can't file a third party's name against this account.
+    if ( $acct ) {
+        $name = glc_clean_text( $acct->display_name, 100 );
+    }
 
     if ( ! $name )     return [ 'field' => 'glc_submitter_name', 'message' => 'Please enter your name.' ];
     if ( ! $date || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) return [ 'field' => 'glc_cleanup_date', 'message' => 'Please enter a valid cleanup date.' ];
@@ -732,7 +807,9 @@ function glc_maybe_handle_submission() {
     // maxlength/min/max attributes are a UI courtesy only — a script POSTs
     // whatever it likes, and these values land in post meta and in the email
     // body sent to the org.
-    $email         = sanitize_email( glc_clean_text( $_POST['glc_email'] ?? '', 200 ) );
+    $email         = $acct
+        ? sanitize_email( $acct->user_email )
+        : sanitize_email( glc_clean_text( $_POST['glc_email'] ?? '', 200 ) );
     $phone         = glc_clean_text(     $_POST['glc_phone']         ?? '', 40 );
     $site_name     = glc_clean_text(     $_POST['glc_site_name']     ?? '', 200 );
     $garbage_notes = glc_clean_text(     $_POST['glc_garbage_notes'] ?? '', 300 );
@@ -765,6 +842,7 @@ function glc_maybe_handle_submission() {
         'post_status'  => 'pending',
         'post_title'   => sprintf( '%s (%s)', $waterway ?: 'Waterway cleanup', $date ),
         'post_content' => $notable,
+        'post_author'  => $author_id,
     ] );
 
     if ( is_wp_error( $post_id ) ) return 'Could not save your submission. Please try again.';
@@ -801,6 +879,10 @@ function glc_maybe_handle_submission() {
         'glc_photo_repost_ok' => $repost_ok,
         'glc_gps_lat'         => $gps_lat,
         'glc_gps_lon'         => $gps_lon,
+        // '1' only when a signed-in cleaner opted out of credit. The public
+        // byline then reads "Community member" (glc_submission_credit()) even
+        // though glc_submitter_name is still on file for the org.
+        'glc_credit_anonymous' => $post_anon ? '1' : '0',
     ];
     foreach ( $meta as $key => $val ) update_post_meta( $post_id, $key, $val );
 
@@ -855,12 +937,18 @@ function glc_maybe_handle_submission() {
         sprintf( '[Great Lake Cleaners] New submission: %s on %s', $waterway, $date ),
         sprintf(
             "A new cleanup submission has arrived.\n\nSubmitter:  %s\nEmail:      %s\n"
+            . "Account:    %s\n"
             . "Waterway:   %s\nDate:       %s\nLocation:   %s\nDuration:   %d min\n"
             . "Bags:       %d\nWeight:     %.1f kg\nCans: %d  Bottles: %d\n"
             . "Tires: %d  Bikes: %d  Shopping carts: %d\n"
             . "Volunteers: %d  Person-hours: %.2f\nGPS:        %s, %s\nPhoto consent: %s\n"
             . "Wildlife:   %s\n\nReview:\n%s",
             $name, $email ?: '(none)',
+            $acct
+                ? ( $post_anon
+                    ? $acct->display_name . ' (asked not to be credited publicly)'
+                    : $acct->display_name )
+                : '(no account -- anonymous submission)',
             $waterway, $date, $site_name ?: '(not given)', $duration_min,
             $bags, $weight_kg, $cans, $bottles,
             $tires_removed, $bikes_removed, $carts_removed,

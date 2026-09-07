@@ -156,7 +156,7 @@ Email-only — no CPT, no admin review queue. Reports go directly to `info@great
 | Shortcode | Notes |
 |---|---|
 | `[glc_stats]` | Cumulative totals banner |
-| `[glc_map]` | Leaflet map. Attrs: `height`, `post_id` (single-event mode), `limit` (markers per cluster), `cluster_radius` (km), `corridors` (river corridor lines, see below), `corridor_pins` (default `1` — the gold cumulative-impact pins that come with `corridors`; `0` = lines only, no extra marker layer), `corridor_bounds` (default `1` — whether corridor pins can widen the map's fit-to-bounds zoom; no effect when `corridor_pins="0"`, since there's nothing to include either way), `markers` (default `1` — render individual site pins; `0` for a corridor-pins-only view). Clustering is greedy: markers sorted by impact score (kg + bags×2), each joins nearest anchor within radius. Hero uses `limit="5" cluster_radius="10" corridors="1" corridor_pins="0"` — site pins plus river lines, no gold pins (see Front Page for why); archive uses `limit="7" cluster_radius="10" corridors="1" markers="0"` — corridor pins (lines + pins) only, no site pins. |
+| `[glc_map]` | Leaflet map. Attrs: `height`, `post_id` (single-event mode), `limit` (markers per cluster), `cluster_radius` (km), `corridors` (river corridor lines, see below), `corridor_pins` (default `1` — the gold cumulative-impact pins that come with `corridors`; `0` = lines only, no extra marker layer), `corridor_bounds` (default `1` — whether corridor pins can widen the map's fit-to-bounds zoom; no effect when `corridor_pins="0"`, since there's nothing to include either way), `markers` (default `1` — render individual site pins; `0` for a corridor-pins-only view), `author` (restrict to one account's cleanups — the cleaner-profile map; all-events mode only, and `0` means "no filter", not "the anonymous author"), `zoom_offset` (default `1` — how many levels tighter than the guaranteed-fit zoom the multi-marker view opens at; the hero passes `2`, see Front Page). Clustering is greedy: markers sorted by impact score (kg + bags×2), each joins nearest anchor within radius. Hero uses `limit="5" cluster_radius="10" corridors="1" corridor_pins="0" zoom_offset="2"` — site pins plus river lines, no gold pins, one extra zoom level (see Front Page for why); archive uses `limit="7" cluster_radius="10" corridors="1" markers="0"` — corridor pins (lines + pins) only, no site pins. |
 | `[glc_archive]` | Paginated cleanup archive |
 | `[glc_submit_form]` | Community submission form |
 | `[glc_gallery]` | Photo gallery — year tabs + lightbox. Only images flagged `_glc_gallery=1` appear. Global meta query finds all flagged attachments regardless of `post_parent` — images inserted from the Media Library (which keep `post_parent=0`) are included. Within each year, photos sort by `sort_date` (cleanup date if known, upload date as fallback). Attr: `limit` (default `0` = full year-tabbed gallery; `>0` drops the tabs and shows only the newest N in one grid — the Crew at Work wall). |
@@ -168,16 +168,18 @@ Email-only — no CPT, no admin review queue. Reports go directly to `info@great
 | `[glc_join_crew]` | Email signup, AJAX, rate-limited (3/10 min per IP), honeypot + nonce. No CPT. |
 | `[glc_wildlife_log]` | Chronological wildlife sightings list. Superseded by `page-stats.php` wildlife cards but still usable. |
 | `[glc_event_rsvp]` | Event RSVP form — see `glc_event` CPT section. Attr: `post_id` (defaults to current post). Returns empty for past/non-event posts. |
+| `[glc_account]` | The whole `/account/` surface — sign-in request, welcome, and dashboard. See **Community accounts** below. |
 
 ---
 
 ### Public form security — `includes/security.php`
 
-Four entry points accept input from anyone, with no login: `[glc_submit_form]`
+Five entry points accept input from anyone, with no login: `[glc_submit_form]`
 (creates a pending post + uploads photos), `[glc_report_form]` (emails info@ with
-attachments), `[glc_join_crew]` and `[glc_event_rsvp]` (both email info@).
+attachments), `[glc_join_crew]` and `[glc_event_rsvp]` (both email info@), and
+`[glc_account]` (creates a user and emails **the visitor** — see below).
 `security.php` holds every guard they share — **fix things there, not in one
-form**, or the four drift apart.
+form**, or the five drift apart.
 
 | Helper | Use |
 |---|---|
@@ -214,11 +216,20 @@ Invariants worth not re-breaking:
   valid JSON-LD; the flag would let a `</script>` in a post title close the block
   and run the rest as markup.
 
-Email safety: all four forms send to a **hardcoded** address — there is no
-user-controlled recipient anywhere. Attacker-supplied values only reach the
+Email safety: four of the five forms send to a **hardcoded** address — there is
+no user-controlled recipient there. Attacker-supplied values only reach the
 subject, body, and `Reply-To`, and `sanitize_text_field` / `sanitize_email` strip
 newlines, so header injection is not reachable. Keep it that way: never build a
 `To:` from input, and never pass a raw `$_POST` value into `$headers`.
+
+`[glc_account]` is the **one exception, and the only user-addressed mail on the
+site**. Its recipient must always be `$user->user_email`, read back off the
+account record we just looked up — never the `$_POST` value, even though they
+are usually the same string. Taking it from the POST body turns the sign-in form
+into an open relay for arbitrary text.
+
+Rate-limit buckets: `sub` / `rep` / `crew` / `rsvp` as before, plus `login`
+(3 per IP / 10 min, 60/h global) and `acct` (2 per IP / 10 min, 20/h global).
 
 **Response headers are the host's, not the theme's.** Production serves
 `Strict-Transport-Security`, a `Content-Security-Policy` (allowlisting
@@ -255,11 +266,24 @@ login slugs through two default channels, and a live check found both open
 (`/wp-json/wp/v2/users` returned the full list; `/?author=1` 301'd to
 `/author/<slug>/`). Usernames are half a credential-stuffing attempt and
 `wp-login.php` is public, so the `rest_endpoints` filter drops the users
-collection for logged-out visitors (logged-in editors keep it — the block editor
-needs it) and `template_redirect` at **priority 0** 404s author archives. The
-priority matters: `redirect_canonical()` is itself on `template_redirect`, and it
-is what performs the leaking redirect, so this has to answer first. Nothing on
-the site links to an author archive.
+collection for everyone who can't `edit_posts` and `template_redirect` at
+**priority 0** 404s author archives. The priority matters:
+`redirect_canonical()` is itself on `template_redirect`, and it is what performs
+the leaking redirect, so this has to answer first. Nothing on the site links to
+an author archive.
+
+**The REST gate is a capability, and must stay one.** It was
+`is_user_logged_in()` through theme 1.5.2 — safe only by accident, because every
+account on this site is staff, so "logged in" and "trusted" happened to coincide.
+A public-signup role (`read` only — see `plan.md` §1) would have inherited the
+entire user list and undone this whole fix. Tightened to a capability in 1.5.3.
+`edit_posts` rather than `list_users` because the unset happens *before* core's
+own permission check: `list_users` is administrator-only, so gating on it would
+strip the route from editors and break the block editor's author field, which is
+the one case this exception exists for. Leaving the route registered for content
+roles defers the decision to core, which still requires `list_users` for the full
+listing — an editor gets the author lookup, not the roster. **Never widen this
+back to "logged in."**
 
 ### `site_audit.py` — live checks against production
 
@@ -276,7 +300,12 @@ python site_audit.py --base http://localhost:8080
 **Passive** covers header hygiene (including *duplicate* headers, which is how
 the 1.5.0/1.5.1 problem was caught), HSTS and the HTTPS redirect, exposed files,
 username enumeration, the REST surface, `corridors.geojson` gzip/caching, page
-health, and rendered-HTML encoding.
+health, rendered-HTML encoding, and the accounts surface: `/account/` plus its
+nonce field, open registration closed, `/cleaners/<unknown>/` 404, and — for a
+profile slug **discovered** from the archive rather than hardcoded — that the
+profile renders, that `/{slug}` 301s to the canonical URL, and that the page
+leaks no `cleaner_…` login slug and no `/author/` link. That last one is the
+regression guard the whole accounts section exists for.
 
 **`--post` has real side effects** — pending posts in the database and mail in
 info@ — so it is off by default, every payload is tagged `GLC-AUDIT-TEST` plus a
@@ -285,6 +314,13 @@ stops a second run. That guard exists because **piping the script through
 `head`/`sed` re-runs it from the top and fires the POSTs again** — which is
 exactly how the first session produced three sets of test data. Redirect to a
 file instead; `--force` overrides.
+
+`--post --only signin` is the account-oracle test: it POSTs the same address
+twice (creating, then finding) and asserts the rendered reply is byte-identical,
+then confirms the fourth request inside ten minutes is throttled. It creates real
+unverified accounts named `GLC-AUDIT-TEST <stamp>` addressed at `example.com`
+(RFC 2606 — nothing reaches a real person); the plugin's own cron sweeps them
+after 7 days.
 
 The most valuable single check is the **spoofed-upload test**: it submits a PDF
 with `Content-Type: image/jpeg` and then confirms via the media REST endpoint
@@ -324,6 +360,245 @@ duplicate `X-Frame-Options` / `X-Content-Type-Options`, the same bug theme
 1.5.0/1.5.1 had, found by the same check and now filed in that `bug.md`.
 
 
+
+---
+
+## Community Accounts & Cleaner Profiles — `includes/accounts.php`
+
+**Live as of plugin 1.5.0 / theme 1.6.0.** An **optional** account for people who
+submit cleanups. The anonymous path through `[glc_submit_form]` is unchanged and
+stays the default — nobody is ever required to have an account. Everything lives
+in one plugin file (role, magic-link auth, slug validation, routing,
+`[glc_account]`, dashboard writes, cron sweep) plus two theme templates.
+
+Deliberate non-goals: comments, following, messaging, leaderboards, points, or
+any writeable surface beyond the cleanup form that already existed. Each of
+those is a moderation obligation, and the org is one person.
+
+### Identity model — this is what everything else hangs off
+
+| Concern | Value | Why |
+|---|---|---|
+| `user_login` | `cleaner_` + 12 hex, generated, **never shown** | A login slug that is never published cannot be enumerated or stuffed. Keeps the enumeration fix true by construction, not by filter |
+| `user_nicename` | the same opaque value | It is what an author archive would expose. If author archives are ever re-enabled by accident, they leak nothing |
+| Sign-in identifier | email address | Core already authenticates by email |
+| Public handle | `glc_profile_slug` user meta | Fully decoupled from any credential; renameable without touching the account |
+| Password | a 64-char random one nobody ever learns | WordPress requires the column. Sign-in is by emailed link, so there is nothing to phish, reset, or stuff |
+
+**INVARIANT: the profile slug and the login are two different strings and must
+never be derived from one another.** `sanitize_title( $display_name )` for the
+slug is fine; `sanitize_user( $email )` for the login is not.
+
+**`users_can_register` is forced off** by `add_filter( 'pre_option_users_can_register', '__return_zero' )`.
+Not a note in the docs, a filter, because it is the one setting whose accidental
+flip silently undoes all of the above: it opens a second sign-up route at
+`wp-login.php?action=register` with no honeypot, no rate limit, an emailed
+password, and a login slug derived from the email. The Settings → General
+checkbox still renders; it just has no effect. `site_audit.py` asserts the route
+is closed.
+
+### Magic-link sign-in
+
+One email field, and the reply is **byte-identical** whether the address is
+brand new or already has an account — the form must never become an
+account-existence oracle. `site_audit.py --post --only signin` asserts exactly
+that by POSTing the same address twice and diffing the rendered result.
+
+- Selector + token: the URL carries `?glc_login=<16 hex selector>&t=<32-char token>`;
+  only `hash_hmac( 'sha256', $token, wp_salt('auth') )` is stored. A database
+  read never yields a usable link, and issuing a new link invalidates the old.
+- **Single use, spent on sight.** The three metas are deleted *before* the token
+  is compared, so a wrong guess can't be retried against the same selector.
+- 15 minutes, then dead.
+- On consumption: `wp_set_auth_cookie()`, then **redirect to a clean `/account/`**
+  so the token never sits in history or a `Referer`. Anything the new session
+  needs to say (welcome, claim count, failure reason) travels in a short
+  transient, never a query arg.
+
+**Both rate-limit buckets are checked on every request; only the relevant one is
+hit.** That asymmetry is load-bearing: if `acct` were checked only when a
+creation was actually needed, a throttled reply would itself reveal that the
+address was new. The price is that two account creations from one IP also pause
+sign-ins from that IP for ten minutes — the right trade.
+
+**A magic link is never issued for an account that isn't a `glc_cleaner`.** Staff
+sign in at `wp-login.php`. A passwordless 15-minute link for an account that can
+edit the site turns read access to an inbox into full control of the site. That
+branch returns the same `'sent'` and charges the same rate limit, so it is
+invisible from outside — keep it that way, or it becomes an oracle for which
+addresses are staff addresses.
+
+### Role and admin lockout
+
+`add_role( 'glc_cleaner', 'Cleaner', [ 'read' => true ] )` — `read` and nothing
+else. **Deliberately no `edit_posts`:** `glc_submission` is `capability_type => 'post'`,
+so granting it would drop the entire submission queue — other people's names,
+emails and phone numbers — into a self-registered visitor's wp-admin, and
+`edit_posts` is also the capability the REST users-collection filter is gated on,
+so handing it out would undo the enumeration fix.
+
+Registered on `init` (guarded by `get_role()`) rather than only on activation, so
+a file-only update can't leave accounts whose role no longer exists. Role removal
+is **not** hooked to deactivation — pulling it would strip every account's
+capabilities during a routine plugin update.
+
+Three locks: `show_admin_bar` off below `edit_posts`; an `admin_init` redirect to
+`/account/`; and a `login_redirect` that never lands a cleaner in wp-admin.
+**The `admin_init` redirect must keep exempting `admin-post.php` and
+`admin-ajax.php`** — both fire `admin_init`, and `admin-post.php` is exactly
+where the dashboard writes go. Detected via `$GLOBALS['pagenow']` with a
+`SCRIPT_NAME` fallback.
+
+### Attribution — `post_author` on `glc_submission`
+
+The canonical link is **`post_author`**, not a `glc_user_id` meta key: it is an
+indexed column `WP_Query`'s `author` arg reads directly, and (with `'author'` in
+`supports`) it gives an admin dropdown for fixing a mis-attribution by hand.
+
+| Case | Behaviour |
+|---|---|
+| Signed in, credit (default) | `post_author` = the account; name/email prefilled read-only |
+| Signed in, "post without credit" | `post_author` = 0, `glc_credit_anonymous` = `'1'`; `glc_submitter_name` still recorded for the org, but every public byline reads "Community member" |
+| Signed out | Exactly today's behaviour, plus one quiet line offering an account |
+
+**`wp_insert_post()` / `wp_update_post()` treat `post_author => 0` as "not
+supplied" and substitute `get_current_user_id()`.** So `glc_set_post_author()`
+writes the column directly via `$wpdb` — without it, a signed-in visitor who
+ticked "post without credit" would be credited anyway, and orphaning a deleted
+account's cleanups would silently reassign them to whoever ran the deletion.
+
+**Read-only is markup, not a guard.** The handler takes name and email off the
+user record, never the POST body, so a scripted post can't file a third party's
+name against an account.
+
+**Bylines** go through `glc_submission_credit( $post_id )` → `[ name, url ]`,
+which handles all four cases in order (opt-out → owned+visible → owned+hidden →
+plain anonymous). `archive-cleanup_event.php`, `single-glc_submission.php` **and
+`header.php`'s meta description** all use it — the meta description matters, or
+an opt-out's real name reappears in search results.
+
+**Claiming.** On first verification, published or pending submissions whose
+`glc_email` matches (lowercased) and whose `post_author` is 0 are auto-claimed.
+The address was just proven, so a confirmation prompt would be pure friction. A
+submission carrying `glc_credit_anonymous = '1'` is **skipped** — that opt-out
+was a decision about the public page, and verifying an address later doesn't
+reverse it.
+
+### Deleting an account — two separate hazards
+
+**Neither is optional, and only one is covered by the CPT flag.**
+
+1. **The posts.** `'delete_with_user' => false` on `glc_submission`. Without it,
+   `wp_delete_user()` with a null `$reassign` **destroys published cleanup
+   records** that every public total counts. Note that leaving the key *unset* is
+   not the same as `false`: core deletes a post type with `delete_with_user`
+   null that supports `'author'` — which `glc_submission` now does.
+2. **The photos.** `attachment` is a core post type that **is** deleted with its
+   author, and a signed-in cleaner's uploads are authored by them. So
+   `glc_orphan_user_submissions()` (on the `delete_user` action, which fires
+   *before* core's own sweep) hands both the submissions and the attachments to
+   author 0. Without the attachment half, deleting an account strips the images
+   off cleanup records that themselves survive.
+
+Result: cleanups stay published, `post_author` resets to 0, name and email are
+cleared, cards read "Community member", and the cleanup keeps counting. The
+dashboard says that in plain language next to the delete button, and the privacy
+policy repeats it.
+
+### Routing
+
+Canonical: **`/cleaners/{slug}/`**, a real rewrite rule added with `'top'`.
+
+Because the rewrite hands WP a query var with no post query behind it, three
+things have to be corrected or the route misbehaves in non-obvious ways:
+
+- `parse_query` sets `is_home = false` and `post__in => [0]` — otherwise the main
+  query falls through to the **blog home**, loading ten posts for nothing.
+- `redirect_canonical` is disabled for the route — with `is_home()` true it will
+  happily bounce `/cleaners/meg/` to the front page.
+- `template_redirect` (priority 2) restores `status_header( 200 )`, because
+  `WP::handle_404()` has already 404'd a query that found no posts.
+
+**A miss, or a hidden profile seen by anyone but its owner, is a 404 — not a
+redirect, and not a "this profile is private" page.** Either of those confirms
+the slug exists, which is the same enumeration leak closed for usernames.
+
+**`/meg` → 301 → `/cleaners/meg/` is a 404-time redirect, never a rewrite rule.**
+A root-level `^([a-z0-9-]+)/?$` rule would shadow every page on the site: WP's
+own page rule is the catch-all `(.?.+?)/?$` at the very bottom of the rules
+array, so a rule added with `'bottom'` never fires and one added with `'top'`
+swallows `/photos/`, `/stats/`, `/join-crew/` and the rest. There is no priority
+that threads that needle. The hook runs at default priority — **after** the
+theme's author-archive 404 at priority 0 — and only ever on a request that was
+already going to 404.
+
+**Reserved slugs** (`glc_reserved_profile_slugs()`) cover the site's own routes,
+the WordPress surface, and org-impersonating names (`glc`, `greatlakecleaners`,
+`official`, `staff`, `team`). Validation also rejects anything that is currently
+a published page slug (a live `get_page_by_path()` check) and anything another
+cleaner holds. Shape: 3–30 chars, `[a-z0-9-]`, no leading/trailing hyphen, no
+`--`, not all-numeric (keeps `/cleaners/2026/` from reading like an archive).
+The live availability hint on the dashboard is `wp_ajax_glc_check_slug` —
+**`wp_ajax_` only, never `wp_ajax_nopriv_`** — and is a hint: the save handler
+re-validates from scratch and is the only thing that decides.
+
+### Templates and data
+
+| File | Holds |
+|---|---|
+| `glc-profile.php` (theme) | The public profile design. Found via `locate_template()` |
+| `templates/profile-fallback.php` (plugin) | Deliberately plain fallback for another theme. A change made only there will never be seen on the live site |
+| `page-account.php` (theme) | Template Name **Account**; renders `[glc_account]` in `page-submit-cleanup.php`'s two-column shell |
+
+`glc_user_cleanups( $user_id, $statuses )` is scoped by `author` —
+**deliberately not `glc_get_all_cleanups()`**, which pulls every cleanup on the
+site with `posts_per_page => -1`. `$user_id <= 0` returns `[]`, because
+`author => 0` means "no author filter" to `WP_Query` and would return everyone's.
+
+`glc_user_impact_stats()` returns `glc_get_impact_stats()`'s shape plus
+`corridor_names` for the header badges. **Do not give `glc_get_impact_stats()` an
+author argument** — the footer strip and the archive both call it, and it is the
+one place site-wide totals are defined.
+
+Only `glc_submission` posts appear (`glc_profile_post_types()`, a constant so
+widening it later is one edit). `cleanup_event` posts are org-run outings
+authored by an admin with no participant list; crediting a crew member on one
+would need a whole participants model.
+
+Public profile: `publish` only. Owner viewing their own: `publish` + `pending`,
+with pending rows marked "Awaiting review" and **excluded from the totals** — a
+personal page is not the place to diverge from the public numbers.
+
+Profile map: `[glc_map author="N" corridors="1" corridor_pins="0"]` — corridor
+**lines** for context, corridor **pins** off, for the same reason the front-page
+hero turns them off: a gold cumulative-impact pin on a personal page summarises
+somebody else's work.
+
+**No `noindex`** — profiles are public pages we want found, so `header.php` gives
+them a real meta description and `document_title_parts` a real title (the
+query-var route produces neither on its own). `/account/` *is* `noindex`.
+
+### Meta keys
+
+**User meta:** `glc_profile_slug`, `glc_profile_public` (`'1'`/`'0'`, default
+`'1'`), `glc_email_verified`, `glc_login_selector`, `glc_login_token` (an HMAC,
+never the token), `glc_login_expires`, `glc_joined_date`.
+
+**On `glc_submission`:** owning account is `post_author` (0 = anonymous);
+`glc_credit_anonymous` is `'1'` when a signed-in user chose no credit. **No new
+*shared* keys**, so nothing in `glc_get_impact_stats()`,
+`[glc_impact_highlights]` or the `?impact=` filter needed touching.
+
+### Deploying
+
+Needs a WP page: **Account**, slug `account`, template "Account", blank body. The
+header icon, footer link, nav fallback and `glc_account_url()` all check that the
+page exists first, so the feature degrades to invisible until it is created.
+Then **deactivate and reactivate the plugin** — `/cleaners/…` 404s until the
+rewrite flush fires.
+
+A daily cron (`glc_sweep_unverified_accounts`) deletes cleaner accounts older
+than 7 days that never consumed a link and own nothing.
 
 ---
 
@@ -412,6 +687,53 @@ SVG viewBox `0 0 1200 80`. Three paths: `#5a9fc0` at 45% opacity (lightest, high
 
 `isolation: isolate` on all three map wrapper classes — must be preserved. Leaflet's internal pane z-indices (200–600) must be contained within a stacking context to prevent overlapping the sticky header.
 
+**Every multi-marker map is centred on Guelph (`43.545, -80.248`), never on the
+fitted bounds.** GLC's sites are overwhelmingly local, and one outlier (Duchesnay
+Creek in North Bay, Bayfield on Lake Huron) is enough to drag a bounds centre
+halfway to Georgian Bay — the map then opened with every actual cleanup crowded
+into a corner. Home base in the middle with a far pin off the edge reads far
+better; the map still pans and zooms to reach it. Applies to `[glc_map]`
+(`shortcodes.php`) and the `/stats/` wildlife map (`page-stats.php`), which each
+keep their own `GLC_HOME` constant. The single-marker branch (`length === 1`,
+i.e. a single-event map) still centres on its own pin.
+
+**Use `getBoundsZoom()`, not `fitBounds()`, to pick that zoom** — one
+`setView( GLC_HOME, getBoundsZoom(...) + zoomOffset )` and nothing else:
+
+```js
+var fitZoom = map.getBoundsZoom( L.latLngBounds( pts ), false, L.point( 80, 80 ) );
+map.setView( GLC_HOME, fitZoom + zoomOffset );  // zoomOffset = [glc_map]'s zoom_offset attr, default 1
+```
+
+`zoom_offset` defaults to `1` (one level tighter than the guaranteed fit — still
+inside the padding). The front-page hero passes `2`: its marker spread (North Bay
+to Long Point) is wide enough that `+1` still opens too far out to read as a
+Guelph map. Bumping the offset only tightens the zoom; the centre stays
+`GLC_HOME`, so far pins just move further off the edge.
+
+`getBoundsZoom()` is the identical calculation `fitBounds()` runs internally, but
+it only computes — it never moves the map. Two separate traps make that matter,
+both of which the obvious fit-then-pan-back version walks straight into:
+
+- **`fitBounds()` doesn't apply its zoom synchronously.** When the zoom delta is
+  within `zoomAnimationThreshold` (4 by default), Leaflet defers `_animateZoom()`
+  to a `requestAnimationFrame`, so `map.getZoom()` on the very next line still
+  returns the *old* zoom. The long-standing `map.setZoom( map.getZoom() + 1 )`
+  tighten was therefore adding 1 to a stale reading — measured: bounds zoom 11,
+  `getZoom()` still 12, map settling at **13**, two levels tighter than the "+1"
+  the comment claimed. It only looked right because the archive map's spread
+  (Guelph → North Bay) is a 6-level jump, over the threshold and so synchronous.
+- **Panning back to Guelph lands ~a pixel off.** `setView()` routes a short move
+  through `panBy()`, which does `offset.round()` — the centre came out ≈390 m
+  from `GLC_HOME` at zoom 6. Sub-pixel, but it means the centre isn't literally
+  home base.
+
+**Padding is the *total*, not per-side.** `fitBounds( pts, { padding: [40, 40] } )`
+adds 40 to each of the four sides, so the equivalent `getBoundsZoom()` argument is
+`L.point( 80, 80 )`. `[glc_map]` uses 40/side → `[80, 80]`; the wildlife map uses
+50/side → `[100, 100]`. Halving these by mistake silently zooms every map in a
+level.
+
 ### Front Page
 
 **Hours display on cards:** values under 1 hour display as minutes (`30 min`); at or above display as `1.5 h`. Applied in `front-page.php` and `archive-cleanup_event.php`.
@@ -419,6 +741,8 @@ SVG viewBox `0 0 1200 80`. Three paths: `#5a9fc0` at 45% opacity (lightest, high
 **Portrait photos:** `object-position: center top` inline on the "Get Involved" photo keeps the volunteer's face in frame.
 
 **Hero map shows river lines, but no gold corridor pins** — `[glc_map ... corridors="1" corridor_pins="0"]`. First attempt used plain `corridors="1"` with `corridor_bounds="0"`: gold corridor pins mixed with the navy site pins read as cluttered, and `corridor_bounds="0"` alone didn't fully fix it since the hero's own site markers (`limit="5" cluster_radius="10"`) can already span a wide area on their own when a recent high-impact cleanup happens to be far away — corridor pins on top of an already-wide view just added more noise regardless of whether they could *widen* it further. Dropped corridors entirely for one iteration, then brought back just the lines (`corridor_pins="0"`) once it was clear the actual complaint was the extra marker layer, not the rivers themselves — the lines alone read as context, not clutter.
+
+**Hero map opens one zoom level tighter** — `zoom_offset="2"` (the shared default is `1`). The hero's marker spread runs North Bay down to Long Point, so the default `fitZoom + 1` still opened far enough out to show Michigan and Ottawa, and Guelph didn't read as the subject. The centre is unchanged (`GLC_HOME`); the extra level just pushes the outliers off the edge. See the Maps section for `zoom_offset`.
 
 ### Archive Page (`/cleanups/`)
 
@@ -570,6 +894,7 @@ The video gallery reuses the photo CSS wholesale (`.glc-gallery-wrap`, `-tabs`, 
 | Privacy Policy | `privacy-policy` | (default) | Blank — template handles content |
 | Report an Issue | `report-issue` | (default) | Blank — template handles layout |
 | Join our Crew | `join-crew` | Join our Crew | Blank — template handles layout |
+| Account | `account` | Account | Blank — template calls `[glc_account]`. Required before the accounts feature is reachable at all |
 
 **Do not create a page with slug `events`** — it collides with the `glc_event` archive rewrite.
 
@@ -586,11 +911,31 @@ The video gallery reuses the photo CSS wholesale (`.glc-gallery-wrap`, `-tabs`, 
 
 ## Next Steps
 
-- [ ] **Deploy plugin 1.4.1** — theme 1.5.2 is live and verified; the plugin is
-  not. Until it ships, `/submit-cleanup/` still renders the geolocation button as
-  `Detectingu2026` (see the `esc_js` note above). Drop-in re-upload, no rewrite
-  flush, no DB migration. `python site_audit.py` should then finish with zero
-  failures — that one encoding FAIL is the only thing left in the run.
+- [ ] **Deploy plugin 1.5.0 + theme 1.6.0** — the plugin has never shipped since
+  1.4.0, so this release carries three things at once:
+  - **1.4.1 / 1.4.2 backlog.** Until it ships, `/submit-cleanup/` still renders
+    the geolocation button as `Detectingu2026` (the `esc_js` note above), and the
+    maps still centre on their fitted bounds instead of Guelph.
+  - **1.5.0 / 1.6.0 — community accounts and cleaner profiles.** Built in full;
+    see the *Community Accounts & Cleaner Profiles* section.
+
+  Deploy order, and it matters:
+  1. Upload both zips.
+  2. **Create the WP page** — title *Account*, slug `account`, template
+     *Account*, blank body. Every entry point checks the page exists first, so
+     until this step the feature is simply invisible rather than broken.
+  3. Add an **Account** item to the primary menu if you want it in the nav
+     (`glc_nav_fallback()` already includes it, labelled by sign-in state).
+  4. **Deactivate and reactivate the plugin** — `/cleaners/…` 404s until the
+     rewrite flush fires.
+  5. `python site_audit.py` should finish with zero failures; the accounts
+     section reports INFO (not FAIL) until somebody has a public profile.
+     `python site_audit.py --post --only signin > audit.txt 2>&1` exercises the
+     sign-in surface for real — it creates `GLC-AUDIT-TEST` accounts.
+
+  No DB migration. Existing anonymous submissions are untouched and keep
+  counting; they gain an owner only if someone claims them by verifying the
+  matching email.
 - [x] ~~Videos + Crew at Work rollout~~ — **done.** `/videos/` serves 10 flagged
   clips, `/see-us-in-action/` is titled "Crew at Work" in both the `<h1>` and
   the nav, and the slug stayed `see-us-in-action`. Verified live 2026-08-30.

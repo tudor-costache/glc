@@ -6,7 +6,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.5.2' );
+define( 'GLC_THEME_VERSION', '1.6.1' );
 
 // PayPal Pool fundraiser — cigarette butt dispensers at trail heads.
 // Used by the header + footer donate icons and the NGO JSON-LD DonateAction.
@@ -46,11 +46,26 @@ define( 'GLC_DONATE_URL', 'https://www.paypal.com/pools/c/9rTJrg2a4B' );
 //
 // Usernames are half of a credential-stuffing attempt, and wp-login.php is
 // public. Nothing on this site uses author archives or needs the users
-// collection anonymously, so both are closed to logged-out visitors.
+// collection anonymously, so both are closed to everyone who has no business
+// with them.
+//
+// ⚠ The gate is a capability, NOT is_user_logged_in(). It used to be the latter,
+// which was only ever safe by accident: every account on this site is staff, so
+// "logged in" and "trusted" happened to mean the same thing. They stop meaning
+// the same thing the day anyone can register — a public sign-up role holds `read`
+// and nothing else, and would have inherited the entire user list, undoing this
+// whole section. `edit_posts` is the narrowest capability that still covers the
+// block-editor case this exception exists for, and no self-registered account
+// should ever be given it. See plan.md §1 (community accounts).
 
 add_filter( 'rest_endpoints', function( $endpoints ) {
-    // Logged-in editors keep the collection — the block editor needs it.
-    if ( is_user_logged_in() ) return $endpoints;
+    // Content editors keep the route — the block editor's author field needs it.
+    // Leaving the route registered for them hands the decision back to core,
+    // which applies its own check per request: the full listing still requires
+    // list_users (administrators), so an editor gets the author lookup and not
+    // the roster. Anyone below that — subscribers, and any future public
+    // account — never sees the route at all.
+    if ( current_user_can( 'edit_posts' ) ) return $endpoints;
 
     unset( $endpoints['/wp/v2/users'] );
     unset( $endpoints['/wp/v2/users/(?P<id>[\d]+)'] );
@@ -161,6 +176,18 @@ function glc_nav_fallback() {
         echo '<li><a href="' . esc_url( get_permalink( $about ) ) . '">'
             . esc_html__( 'About', 'great-lake-cleaners' ) . '</a></li>';
     }
+
+    // Community accounts (plugin: includes/accounts.php). Guarded on the page
+    // existing so the link never points at a 404 on an install that hasn't
+    // created it, and labelled by sign-in state.
+    $account = get_page_by_path( 'account' );
+    if ( $account ) {
+        $label = function_exists( 'glc_current_cleaner' ) && glc_current_cleaner()
+            ? __( 'Your Account', 'great-lake-cleaners' )
+            : __( 'Sign In', 'great-lake-cleaners' );
+        echo '<li><a href="' . esc_url( get_permalink( $account ) ) . '">'
+            . esc_html( $label ) . '</a></li>';
+    }
     echo '</ul>';
 }
 
@@ -241,6 +268,14 @@ add_filter( 'body_class', function( $classes ) {
     }
     if ( is_post_type_archive( 'glc_event' ) ) {
         $classes[] = 'glc-archive-event';
+    }
+    // Cleaner profiles are a query-var route, not a post type — get_query_var()
+    // is the only tell, and it returns '' when the plugin is inactive.
+    if ( get_query_var( 'glc_cleaner' ) ) {
+        $classes[] = 'glc-profile';
+    }
+    if ( is_page( 'account' ) ) {
+        $classes[] = 'glc-account';
     }
     return $classes;
 } );
