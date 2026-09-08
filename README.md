@@ -11,10 +11,15 @@ A WordPress plugin and theme for [greatlakecleaners.ca](https://greatlakecleaner
 ```
 great-lake-cleaners/          — WordPress plugin
 great-lake-cleaners-theme/    — WordPress theme
-tracker_to_csv.py             — Data pipeline: Google Sheets → WordPress
-remove_background.py          — Logo/badge background removal utility
 CLAUDE.md                     — Developer context (architecture decisions, conventions)
+background_and_tooling.readme — Hosting, deployment, spam protection, data model
 ```
+
+Support tooling — the outing-tracker CSV pipeline, the site audit, asset prep,
+the monthly infographic, the river-corridor geometry fetch — lives in a separate
+repo, **`SupportScripts`** (sibling directory `../SupportScripts`). See its
+`README.md`. A couple of those scripts still write into this repo's tree (see
+[Data Pipeline](#data-pipeline) below).
 
 ---
 
@@ -132,72 +137,31 @@ These live in the WordPress database and must be re-done after a fresh install:
 
 ---
 
-## Data Pipeline: `tracker_to_csv.py`
+## Data Pipeline
 
-Pulls cleanup data from a Google Sheet and exports a CSV for WordPress import.
+`tracker_to_csv.py` — the Google Sheet → import-CSV pipeline — now lives in the
+**`SupportScripts`** repo (`../SupportScripts`), along with its `config.toml` and
+(gitignored) `credentials.json`. See that repo's `README.md` for setup and usage.
 
-### Setup
-
-**`config.toml`** (not committed — create locally):
-```toml
-spreadsheet_id   = "your-sheet-id-from-url"
-credentials_file = "credentials.json"
-```
-
-**`credentials.json`** — Google service account key. Add to `.gitignore`. Share the Sheet with the service account's `client_email` as Viewer.
-
-> **Never commit `credentials.json` or `config.toml` to version control.**
-
-### Usage
+The one integration point with this repo: it writes the importable CSV to
+`cleanups/cleanups.csv` (still gitignored here) when run from this directory or
+pointed at it with `-o`:
 
 ```bash
-python tracker_to_csv.py                    # pull from Google Sheets
-python tracker_to_csv.py --no-sheets        # use local xlsx fallback
-python tracker_to_csv.py --xlsx my.xlsx     # specific local file
-python tracker_to_csv.py -o out.csv         # custom output path
+cd ../SupportScripts
+python tracker_to_csv.py -o ../glc/cleanups/cleanups.csv
 ```
 
-### Sync Workflow
+Then in WordPress: **Tools → Import Cleanups CSV → upload**. Duplicate date + site
+pairs are skipped by the importer.
 
-1. Log outings in the Google Sheet (`Daily Log` tab)
-2. Run `python tracker_to_csv.py` → writes `cleanups/cleanups.csv`
-3. WP Admin → Tools → Import Cleanups CSV → upload
-4. Duplicate date + site pairs are skipped automatically
+The outing-tracker column layout (the shared data-model contract) is documented in
+`background_and_tooling.readme` under **Outing Tracker**.
 
-### Spreadsheet Column Layout
-
-| Col | Field | Notes |
-|---|---|---|
-| A | Date | Store as date value, not text |
-| B | Location / Corridor | Must match exactly for same-site merging |
-| C | Duration (min) | |
-| D | Bags (#) | |
-| E | Weight (kg) | |
-| F | Notes | Imported as post body |
-| G | Cans (#) | |
-| H | Bottles (#) | |
-| I–L | Scrap Metal | Not exported |
-| M | Number of people | |
-| N | Notable Finds | |
-| O | Latitude | Enter once per new site |
-| P | Longitude | Negative for Ontario |
-| Q | Instagram Post URL | Field log link |
-
----
-
-## Utilities
-
-### `remove_background.py`
-
-Removes solid or textured backgrounds from badge/logo images, producing a transparent PNG.
-
-```bash
-python remove_background.py input.png output.png [tolerance]
-```
-
-Tolerance guide: `15–20` clean white · `25–30` textured (default: 28) · `30–35` heavy noise
-
-Requires: Python 3, Pillow, NumPy
+`prepare_corridors_geojson.py` (also in `SupportScripts`) writes
+`plugin-dev/great-lake-cleaners/assets/corridors.geojson` and **must be run with
+this repo as the working directory** — its output path is hard-coded and
+cwd-relative.
 
 ---
 
@@ -215,16 +179,16 @@ The site is developed locally using [WPLocal](https://localwp.com/) on Windows a
 
 ---
 
-## `.gitignore` Recommendations
+## `.gitignore`
 
 ```
-credentials.json
-config.toml
-*.csv
 __pycache__/
-*.pyc
-.DS_Store
+.claude/settings.local.json
+cleanups/cleanups.csv        # tracker_to_csv.py output, when pointed here
 ```
+
+Secrets (`credentials.json`) and the Python tooling that needed them moved to the
+`SupportScripts` repo, which has its own ignore rules.
 
 ---
 

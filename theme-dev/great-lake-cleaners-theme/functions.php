@@ -6,7 +6,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.6.1' );
+define( 'GLC_THEME_VERSION', '1.6.3' );
 
 // PayPal Pool fundraiser — cigarette butt dispensers at trail heads.
 // Used by the header + footer donate icons and the NGO JSON-LD DonateAction.
@@ -84,6 +84,85 @@ add_action( 'template_redirect', function() {
     status_header( 404 );
     nocache_headers();
 }, 0 );
+
+// Closing the same leak on two routes the two fixes above never touched. Both
+// were found open by site_audit.py on 2026-09-07, each disclosing `tudor`.
+//
+// The trap in both: the author archive itself 404s, so it *looks* handled. What
+// leaks is the name inside the URL these routes print, and a username is half a
+// credential-stuffing attempt against a public wp-login.php. Fixing the archive
+// was never the same thing as fixing the disclosure.
+//
+// This matters more since community accounts shipped. A `cleaner_<hex>` login
+// stays out of both routes today only because glc_submission is registered
+// `public => false`: core's users sitemap lists authors with published posts in
+// `public => true` types, and oEmbed answers for any *viewable* post. Setting
+// that one flag — an innocuous-looking change to get submissions into site
+// search — would start publishing every cleaner's login slug through both at
+// once. site_audit.py asserts both continuously so it cannot land quietly.
+
+// oEmbed hands back author_url => get_author_posts_url(), built straight from
+// user_nicename, on a public unauthenticated route (both format=json and
+// format=xml). author_name goes too: for the staff account the display name is
+// "Tudor" and the login is "tudor", so leaving it is the same disclosure one
+// sanitize_title() away. Both fields are optional in the oEmbed spec — dropping
+// them costs a byline on an embed card elsewhere and nothing else.
+add_filter( 'oembed_response_data', function( $data ) {
+    unset( $data['author_url'], $data['author_name'] );
+    return $data;
+} );
+
+// Core's users sitemap prints one <loc>/author/<slug>/</loc> per eligible
+// author. Returning anything that is not a WP_Sitemaps_Provider stops the
+// provider being registered at all, so the route stops existing rather than
+// serving an empty document. Nothing on this site links to an author archive,
+// so there is no sitemap worth keeping here.
+add_filter( 'wp_sitemaps_add_provider', function( $provider, $name ) {
+    return 'users' === $name ? false : $provider;
+}, 10, 2 );
+
+// ── Sitemaps must answer 200, not 404 ────────────────────────────────────────
+//
+// Every sitemap URL on this site was serving a perfectly valid document with an
+// HTTP 404 status. Measured 2026-09-07, before any of this was touched:
+//
+//   wp-sitemap.xml                 404   valid <sitemapindex>
+//   wp-sitemap-posts-page-1.xml    404   valid <urlset>, 13 URLs
+//   wp-sitemap.xsl                 200   (stylesheet route, unaffected)
+//   ?foo=bar  /  ?paged=1          200   (any other fall-through query)
+//
+// A crawler reads 404 as "this sitemap does not exist" and discards it, so
+// robots.txt was advertising a Sitemap: URL that told Google nothing — the
+// site effectively had no sitemap at all.
+//
+// Cause: WP_Sitemaps::render_sitemaps() contains no status_header( 200 ). It
+// renders and exits, inheriting whatever status the request already carried,
+// and WP::handle_404() had already stamped a 404 on it — the sitemap query
+// matches no posts, and this site's front page is static, so nothing else in
+// the request said otherwise. Core's own two status_header() calls in that file
+// are both 404s (sitemaps disabled, empty URL list), and both still work,
+// because they run after this filter and set the status explicitly.
+//
+// pre_handle_404 is the documented short-circuit for precisely this. Scoped to
+// a sitemap that will actually render: `index`, or a provider that is really
+// registered. Bypassing unconditionally would turn ?sitemap=anything-at-all
+// into a soft 404 — a 200 with the theme's 404 page attached, which is worse
+// for a crawler than the bug being fixed.
+add_filter( 'pre_handle_404', function( $bypass, $query ) {
+    if ( false !== $bypass ) return $bypass;
+
+    $sitemap = $query instanceof WP_Query ? $query->get( 'sitemap' ) : '';
+    if ( ! $sitemap ) return $bypass;
+
+    if ( 'index' === $sitemap ) return true;
+
+    if ( function_exists( 'wp_sitemaps_get_server' ) ) {
+        $server = wp_sitemaps_get_server();
+        if ( $server && $server->registry->get_provider( $sitemap ) ) return true;
+    }
+
+    return $bypass;
+}, 10, 2 );
 
 // The generator tag reports the exact WordPress version to anyone who views
 // source. Removing it is cosmetic on its own — readme.html and the ?ver= strings

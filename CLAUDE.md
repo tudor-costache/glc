@@ -30,6 +30,31 @@ The fundraiser URL is **not** a `sameAs` entry (it isn't a profile identifying t
 
 ---
 
+## Support tooling — the `SupportScripts` repo
+
+The Python tooling for this project lives in a **separate repo**, `SupportScripts`
+(sibling directory `../SupportScripts`, i.e.
+`C:\Users\Tudor\Documents\GitHub\SupportScripts`). Full docs are in that repo's
+`README.md` / `CLAUDE.md`; this is the index.
+
+| Script | Job | Where it runs |
+|---|---|---|
+| `tracker_to_csv.py` | Google Sheet (`Daily Log`) → `cleanups/cleanups.csv` for **Tools → Import Cleanups CSV**. Config + `credentials.json` live in `SupportScripts`. | Run from `SupportScripts`; `-o ../glc/cleanups/cleanups.csv` to land the file here. |
+| `monthly_infographic.py` | Monthly impact infographic for Instagram (HTML template → headless-Chromium screenshot). Reads the **raw** tracker CSV. | Self-contained in `SupportScripts` (assets + output next to the script). |
+| `prepare_wildlife_asset.py` | Background-removal + crop for `/stats/` wildlife card images and `_s.png` map-pin crops; also the plain tire/bike/cart icons. | Anywhere — takes explicit `input`/`output` paths. |
+| `prepare_corridors_geojson.py` | Offline fetch of river/creek geometry (OHN + OSM) → `plugin-dev/great-lake-cleaners/assets/corridors.geojson`. | **Must run with this repo as the working directory** — output path is hard-coded, cwd-relative, no override flag. |
+| `site_audit.py` | Read-only security/health audit of production; `--post` exercises the public forms. Run after every deploy. | Anywhere (`--base` sets the target). The invariants it guards are documented throughout this file. |
+| `resize_uploads.py` | Batch-downscale images in a directory, in place. | Anywhere — takes a directory arg. |
+
+`cleanup_report.py` (the old single-event card generator) was never used and was
+dropped in this move.
+
+**When the site changes what it guarantees, `site_audit.py`'s checks are the
+regression tests that must be updated to match** — the script is in the other
+repo but its spec is here.
+
+---
+
 ## WordPress Plugin: `great-lake-cleaners`
 
 **Prefix:** functions/constants `glc_` / `GLC_`, CSS classes `.glc-`  
@@ -261,8 +286,10 @@ A theme-side CSP is still off the table regardless: the theme and plugin emit
 inline `<script>` throughout, so a restrictive policy needs nonces threaded
 through all of them first.
 
-**Username enumeration is closed in `functions.php`.** WordPress leaks account
-login slugs through two default channels, and a live check found both open
+**Username enumeration is closed in `functions.php` — on four channels, not
+two.** The first two are below; the other two, found open later, are in the
+block after them. WordPress
+leaks account login slugs through two default channels, and a live check found both open
 (`/wp-json/wp/v2/users` returned the full list; `/?author=1` 301'd to
 `/author/<slug>/`). Usernames are half a credential-stuffing attempt and
 `wp-login.php` is public, so the `rest_endpoints` filter drops the users
@@ -285,27 +312,115 @@ roles defers the decision to core, which still requires `list_users` for the ful
 listing — an editor gets the author lookup, not the roster. **Never widen this
 back to "logged in."**
 
-### `site_audit.py` — live checks against production
+**⚠ Two more routes republished the same author archive URL** — found open by
+`site_audit.py` on 2026-09-07, each disclosing `tudor`, and closed in **theme
+1.6.2**. Neither was touched by the `rest_endpoints` filter or the
+author-archive 404, and that is the trap: the archive they point at 404s, so it
+*looked* handled, but the **name inside the URL** was handed out anyway — which
+is the entire thing those two fixes exist to prevent. Fixing the archive was
+never the same thing as fixing the disclosure.
 
-One script at the repo root replaces the ad-hoc curl loops. Run it after every
-deploy; the exit code is 1 if anything failed, so it can gate one.
+| Route | Was | Fix (both in `functions.php`) |
+|---|---|---|
+| `wp-json/oembed/1.0/embed?url=<any post>` | 200, public, unauthenticated; `author_url: …/author/tudor/` + `author_name`, in `format=json` **and** `format=xml` | `oembed_response_data` unsets both fields |
+| `wp-sitemap-users-1.xml` | body served (404 status); `<loc>…/author/tudor/</loc>` | `wp_sitemaps_add_provider` returns `false` for `users`, so the route stops existing rather than serving an empty document |
+
+`author_name` goes along with `author_url` because for the staff account the
+display name is `Tudor` and the login is `tudor` — leaving it is the same
+disclosure one `sanitize_title()` away. Both fields are optional in the oEmbed
+spec; dropping them costs a byline on an embed card elsewhere and nothing else.
+
+**This is why the accounts work made them worth chasing.** A `cleaner_<hex>`
+login stayed out of both routes only because `glc_submission` is registered
+`public => false`: core's users sitemap lists authors with published posts in
+`public => true` types, and oEmbed answers for any *viewable* post. Flipping
+that one flag — an innocuous-looking change to get submissions into site search
+— would have started publishing every cleaner's login slug through both routes
+at once. The audit asserts both continuously so that can't land quietly.
+
+**Sitemaps must answer 200, not 404 — theme 1.6.3.** Every sitemap URL on the
+site was serving a valid document with an HTTP 404 status (measured 2026-09-07,
+before any of that day's work):
 
 ```
-python site_audit.py                       # passive, read-only
-python site_audit.py --post                # + one real submission per form
-python site_audit.py --post --only report  # just one surface
-python site_audit.py --base http://localhost:8080
+wp-sitemap.xml                 404   valid <sitemapindex>
+wp-sitemap-posts-page-1.xml    404   valid <urlset>, 13 URLs
+wp-sitemap.xsl                 200   stylesheet route, unaffected
+?foo=bar  /  ?paged=1          200   any other fall-through query
+```
+
+A crawler reads 404 as "this does not exist" and discards the document, so
+`robots.txt` was advertising a `Sitemap:` URL that told Google nothing — the
+site effectively had no sitemap, which also would have silently swallowed the
+new cleaner-profile sitemap.
+
+**`WP_Sitemaps::render_sitemaps()` contains no `status_header( 200 )`** — it
+renders and exits on whatever status the request already carried, and
+`WP::handle_404()` had stamped a 404 on it first (the sitemap query matches no
+posts, and the front page here is static, so nothing else in the request said
+otherwise). Both `status_header()` calls in that core file are 404s (sitemaps
+disabled, empty URL list) and both still work, because they run *after* the
+filter below and set the status explicitly.
+
+The fix is a `pre_handle_404` short-circuit, **scoped to a sitemap that will
+actually render** — `index`, or a provider genuinely in the registry. Bypassing
+unconditionally would turn `?sitemap=anything` into a soft 404 (a 200 serving
+the theme's 404 page), which is worse for a crawler than the original bug.
+`site_audit.py`'s **Sitemaps** section is the regression test: it walks the
+index, and any body that parses as a sitemap must come back 200. It judges by
+content, not URL, so a legitimately absent or empty sitemap can still 404.
+
+### `site_audit.py` — live checks against production
+
+One script (in the `SupportScripts` repo — `../SupportScripts/site_audit.py`)
+replaces the ad-hoc curl loops. Run it after every deploy; the exit code is 1 if
+anything failed, so it can gate one. It is location-independent — the default
+target is production; `--base` overrides.
+
+```
+python ../SupportScripts/site_audit.py                       # passive, read-only
+python ../SupportScripts/site_audit.py --post                # + one real submission per form
+python ../SupportScripts/site_audit.py --post --only report  # just one surface
+python ../SupportScripts/site_audit.py --base http://localhost:8080
 ```
 
 **Passive** covers header hygiene (including *duplicate* headers, which is how
 the 1.5.0/1.5.1 problem was caught), HSTS and the HTTPS redirect, exposed files,
-username enumeration, the REST surface, `corridors.geojson` gzip/caching, page
-health, rendered-HTML encoding, and the accounts surface: `/account/` plus its
-nonce field, open registration closed, `/cleaners/<unknown>/` 404, and — for a
-profile slug **discovered** from the archive rather than hardcoded — that the
-profile renders, that `/{slug}` 301s to the canonical URL, and that the page
-leaks no `cleaner_…` login slug and no `/author/` link. That last one is the
-regression guard the whole accounts section exists for.
+username enumeration, the REST surface, sitemap status codes,
+`corridors.geojson` gzip/caching, page health, rendered-HTML encoding, and the
+accounts surface.
+
+*Username enumeration* is four checks, not two: the REST users collection and
+`/?author=1` as before, plus **oEmbed** (`find_post_url()` discovers a real post
+to ask about, then both `format=json` and `format=xml` are scanned for an
+`/author/…` URL — the JSON body's escaped slashes are unescaped first) and the
+**users sitemap** (fetched directly *and* via the index, because these routes
+answer with a 404 status while still serving the real document, so an index that
+looks like it failed proves nothing). Every slug any of the four discloses lands
+in one `leaked` set, which the closing WARN reports together.
+
+*Accounts* covers `/account/` plus its nonce field, that it is `noindex` and not
+publicly cacheable, open registration closed, `/cleaners/<unknown>/` 404, that
+reserved handles (`admin`, `glc`, `official`, …) do not resolve, that an unknown
+root slug stays a 404 rather than becoming a redirect, and that `/photos` is not
+shadowed by the `/{slug}` shortcut. Two forged magic links (an unknown 16-hex
+selector and a malformed one) must each end in a redirect that sets **no
+`wordpress_logged_in` cookie** and **drops the token** — the handler must never
+leave a live token in history or a `Referer`. Both anonymous-write surfaces are
+probed by GET (nothing is registered to run, so it stays read-only):
+`admin-ajax.php?action=glc_check_slug` and
+`admin-post.php?action=glc_account_save` must both ignore the caller — a
+redirect to `/account/` from the latter would mean the handler actually ran.
+
+Then, for a profile slug **discovered** from the archive rather than hardcoded:
+that the profile renders, that `/{slug}` 301s to the canonical URL, that it is
+*not* `noindex` (the mirror of `/account/`, which must be), that it renders no
+email address outside the org's own domain, and that the page leaks no
+`cleaner_…` login slug and no `/author/` link. That last one is the regression
+guard the whole accounts section exists for.
+
+Everything account-shaped degrades to INFO while `/account/` is still a 404, so
+the script stays useful before the rollout ships.
 
 **`--post` has real side effects** — pending posts in the database and mail in
 info@ — so it is off by default, every payload is tagged `GLC-AUDIT-TEST` plus a
@@ -321,6 +436,21 @@ then confirms the fourth request inside ten minutes is throttled. It creates rea
 unverified accounts named `GLC-AUDIT-TEST <stamp>` addressed at `example.com`
 (RFC 2606 — nothing reaches a real person); the plugin's own cron sweeps them
 after 7 days.
+
+Three more probes run **first**, and they are free — `glc_request_signin()`
+answers each one before it creates an account, sends mail, or charges a
+rate-limit slot, so the throttle sequence after them still starts from zero.
+Keep that ordering if any of them moves:
+
+| Probe | Asserts |
+|---|---|
+| Honeypot filled (`glc_url`) | the reply is byte-identical to the genuine "sent" copy from step 1 — a distinguishable answer tells a bot which field to leave alone |
+| `glc_account_nonce=deadbeef` | the one signed-out write on the site is not nonce-free |
+| `…@example.com\r\nBcc: …` in the address | rejected outright. This is the site's only *user-addressed* mail, so a newline surviving into the recipient or headers is the difference between a sign-in form and an open relay |
+
+`outcome()` therefore recognises three result shapes, not two: the success div,
+the `.glc-form-error-banner`, and the inline `.glc-field-error` span a
+*field*-level error renders instead (the invalid-address case).
 
 The most valuable single check is the **spoofed-upload test**: it submits a PDF
 with `Content-Type: image/jpeg` and then confirms via the media REST endpoint
@@ -578,6 +708,40 @@ somebody else's work.
 them a real meta description and `document_title_parts` a real title (the
 query-var route produces neither on its own). `/account/` *is* `noindex`.
 
+**Sitemap — `GLC_Cleaner_Sitemap_Provider` (plugin 1.5.1).** Not being
+`noindex` was never the same as being *discoverable*: `/cleaners/{slug}/` is a
+rewrite onto a query var, not a post type, so core generates nothing for it, and
+a profile was findable only by crawling a byline link on `/cleanups/` — in
+practice the handful near the top of page 1. The provider publishes them at
+`wp-sitemap-cleaners-1.xml`.
+
+**Keep the two sitemap changes straight — they point opposite ways on purpose.**
+The theme drops core's `users` provider because it published
+`/author/<login slug>/`, the **credential-side** identifier. This one adds
+`/cleaners/{handle}/`, the **identity-side** one the cleaner chose. A profile
+being discoverable and a login being opaque are different namespaces, not a
+contradiction. Anyone later "tidying up" one of these by reverting the other has
+misread it.
+
+`glc_sitemap_profile_urls()` lists a profile only when it has **at least one
+published cleanup** (a thin page is not worth submitting, and it also keeps
+never-verified accounts out without testing for them), is not hidden (filtered
+through `glc_profile_is_public()`, never a re-stated `meta_query` — "public"
+means the meta is not `'0'`, *including* the usual case where no row exists),
+and has a handle at all (`glc_profile_url()` returns `''` without one, which is
+also what excludes an admin who authored a submission by hand). `sort()` before
+returning, so page 2 means the same thing on two consecutive requests.
+
+`get_max_num_pages()` returns **0** while nobody qualifies, which keeps the
+provider out of the index entirely — core 404s an empty sitemap, so advertising
+one would be worse than advertising none. **No rewrite flush needed:** core's
+sitemap rules already match any provider name
+(`^wp-sitemap-([a-z]+?)-(\d+?)\.xml$`).
+
+`site_audit.py` asserts both halves together — that the profiles sitemap exists
+and lists the profile slug it discovered from the archive, and that it contains
+no `/author/` URL and no `cleaner_…` login slug.
+
 ### Meta keys
 
 **User meta:** `glc_profile_slug`, `glc_profile_public` (`'1'`/`'0'`, default
@@ -755,7 +919,7 @@ Fetches all `cleanup_event` + published `glc_submission` posts, merges, sorts by
 **River corridor overlay:** `[glc_map ... corridors="1"]` draws river/creek lines, plus (unless `corridor_pins="0"`) one gold diamond pin per corridor showing cumulative bags/kg/items recycled and a "View cleanups on the {corridor}" link to `/cleanups/?corridor={slug}`. `#cleanups-map` uses the full thing with `markers="0"` (corridor pins carry the summary, individual site pins are hidden entirely — see `markers` below); the front-page hero uses `corridor_pins="0"` (lines only, alongside its normal site pins — see Front Page for why); not passed on single-event maps or `glc_event` maps.
 
 - **Corridor table:** `glc_corridor_table()` in `shortcodes.php` is the single source of truth for known corridor slugs — free-text `corridor` (`cleanup_event`) / `glc_corridor` (`glc_submission`) meta is matched against it via `glc_corridor_slug()` (trim/case/apostrophe-normalized), same spirit as `glc_stats_wildlife_img()`'s text-to-bucket matching. Add a new corridor by adding one row here **and** one row in `prepare_corridors_geojson.py`'s `CORRIDORS` list — the `slug` must match exactly in both places. Grand River is deliberately absent from this table (see below).
-- **Line geometry** lives in `plugin-dev/great-lake-cleaners/assets/corridors.geojson`, prepared offline by `prepare_corridors_geojson.py` (repo root) — not a live dependency. Re-fetch one or a few corridors without re-querying (and re-rate-limiting against) everything else: `python prepare_corridors_geojson.py speed-river eramosa-river` — this patches just those slugs into the existing file.
+- **Line geometry** lives in `plugin-dev/great-lake-cleaners/assets/corridors.geojson`, prepared offline by `prepare_corridors_geojson.py` (in the `SupportScripts` repo) — not a live dependency. Its output path is hard-coded and cwd-relative, so **run it from this repo's root**: `python ../SupportScripts/prepare_corridors_geojson.py speed-river eramosa-river` — passing slugs patches just those into the existing file without re-querying (and re-rate-limiting against) everything else.
 - **`fetch_corridor()` always queries both sources and keeps whichever is richer** (by total coordinate points), rather than stopping at the first source that returns *anything*. This isn't optional polish — OHN returning a technically-non-empty but nearly useless match (a single 2-point stub for Big Creek; a rural-only fragment for Speed/Eramosa that misses the urban core entirely) and the code stopping there was a real, recurring bug. `osm_only: True` on a corridor just skips a known-always-empty OHN call as an optimization; it doesn't change the "richer wins" comparison.
   - **OHN** (Ontario Hydro Network Watercourse, ArcGIS REST, Open Government Licence – Ontario) is queried by exact official name near a known cleanup-site GPS anchor, radius expanding tight → wide until something matches. Its official naming is sparse — most segments, even along clearly-named creeks, carry no name at all, and a river can be named upstream but not through the stretch that actually matters.
   - **OSM** (Overpass API) is queried the same way but **widest-first**: many rivers are digitized as several disconnected ways rather than one relation (Nine Mile River, Ausable River), so stopping at the *first* radius that returns anything tends to grab an incomplete fragment, not the full river. A wider bbox costs nothing extra in false-positive risk for a name-filtered query, so search wide → narrow and keep the first success; narrower boxes only get tried as a fallback when the wide query times out under Overpass's (frequent) server load.
@@ -800,13 +964,15 @@ Fetches all `cleanup_event` + published `glc_submission` posts, merges, sorts by
 
 **Wildlife card height:** `.wfig` uses `height: 160px` (fixed, not `min-height`) — all cards are uniform regardless of image proportions. `.wfig img` uses `width: auto; max-width: 250px; height: auto; max-height: 100%`. The `width: auto` is required — CSS proportional scaling only kicks in when both width and height are `auto`; a fixed `width: 90%` with `max-height` would squish tall images instead of scaling them.
 
-**Adding a new wildlife image — full workflow:**
-1. Prepare the asset: `python prepare_wildlife_asset.py input.png theme-dev/great-lake-cleaners-theme/assets/images/name.png --pin`
+**Adding a new wildlife image — full workflow** (`prepare_wildlife_asset.py` is in
+the `SupportScripts` repo; it takes explicit paths, so run it from anywhere and
+point the output at this repo's theme assets):
+1. Prepare the asset: `python ../SupportScripts/prepare_wildlife_asset.py input.png theme-dev/great-lake-cleaners-theme/assets/images/name.png --pin`
    - Outputs `name.png` (600px wide card image) + `name_s.png` (200×200px map pin crop)
    - Defaults: `--tolerance 28 --width 600 --pad 20 --pin-anchor right --pin-pad 8`
    - `--pin-anchor left` for left-facing animals; `--pin-anchor center` for symmetric subjects (e.g. nest/eggs)
    - `--pin-pad` = breathing room on the nose side in output pixels (default 8 ≈ 2px at 48px display); increase if the face feels cramped
-2. Re-crop an existing asset's pin only: `python prepare_wildlife_asset.py name.png name.png --pin-only`
+2. Re-crop an existing asset's pin only: `python ../SupportScripts/prepare_wildlife_asset.py name.png name.png --pin-only`
    - Skips bg removal and resize; autocrop + pin crop only. Add `--pin-anchor` / `--pin-pad` as needed.
 3. Add a keyword match in `page-stats.php:glc_stats_wildlife_img()` — e.g. `if ( strpos( $obs, 'nest' ) !== false ) return 'nest.png';`
 4. Run `repack.ps1`
@@ -911,13 +1077,27 @@ The video gallery reuses the photo CSS wholesale (`.glc-gallery-wrap`, `-tabs`, 
 
 ## Next Steps
 
-- [ ] **Deploy plugin 1.5.0 + theme 1.6.0** — the plugin has never shipped since
-  1.4.0, so this release carries three things at once:
-  - **1.4.1 / 1.4.2 backlog.** Until it ships, `/submit-cleanup/` still renders
-    the geolocation button as `Detectingu2026` (the `esc_js` note above), and the
-    maps still centre on their fitted bounds instead of Guelph.
-  - **1.5.0 / 1.6.0 — community accounts and cleaner profiles.** Built in full;
-    see the *Community Accounts & Cleaner Profiles* section.
+- [x] ~~**Deploy plugin 1.5.1 + theme 1.6.2**~~ — **uploaded and verified live
+  2026-09-07.** Carried the 1.4.1/1.4.2 backlog (`Detectingu2026`, map centring),
+  the accounts/profiles code, the cleaner-profile sitemap provider, and the
+  oEmbed + users-sitemap username leaks. `python site_audit.py` went from 3
+  FAIL to **0 FAIL / 0 WARN**, and each leak was re-checked by mechanism rather
+  than by the audit's own pass condition: oEmbed still answers 200 with a
+  working embed card, just without `author_url` / `author_name`; the users
+  sitemap is gone from the index and its URL now returns the theme's real 404
+  page.
+
+- [ ] **Deploy theme 1.6.3** — the sitemap 404-status bug. Pre-existing and
+  unrelated to the accounts work: every sitemap served a valid document with a
+  404 status, so no crawler has ever read one, and the new cleaner-profile
+  sitemap would have inherited the same fate. See *Sitemaps must answer 200*
+  above. Theme only — the plugin is unchanged at 1.5.1. `site_audit.py`'s
+  **Sitemaps** section reports 4 failures until it lands and should reach zero
+  after.
+
+- [ ] **Finish the accounts rollout** — the code is live but the feature is not:
+  `/account/` still 404s, so nothing is reachable yet and the profile sitemap
+  has nothing to list. Steps 2–5 below are what remain.
 
   Deploy order, and it matters:
   1. Upload both zips.
@@ -928,10 +1108,11 @@ The video gallery reuses the photo CSS wholesale (`.glc-gallery-wrap`, `-tabs`, 
      (`glc_nav_fallback()` already includes it, labelled by sign-in state).
   4. **Deactivate and reactivate the plugin** — `/cleaners/…` 404s until the
      rewrite flush fires.
-  5. `python site_audit.py` should finish with zero failures; the accounts
-     section reports INFO (not FAIL) until somebody has a public profile.
-     `python site_audit.py --post --only signin > audit.txt 2>&1` exercises the
-     sign-in surface for real — it creates `GLC-AUDIT-TEST` accounts.
+  5. `python ../SupportScripts/site_audit.py` should finish with zero failures;
+     the accounts section reports INFO (not FAIL) until somebody has a public
+     profile. `python ../SupportScripts/site_audit.py --post --only signin >
+     audit.txt 2>&1` exercises the sign-in surface for real — it creates
+     `GLC-AUDIT-TEST` accounts.
 
   No DB migration. Existing anonymous submissions are untouched and keep
   counting; they gain an owner only if someone claims them by verifying the

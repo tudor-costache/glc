@@ -1,7 +1,7 @@
-credentials.json
-
 __pycache__/
 .claude/settings.local.json
+
+# Support scripts (tracker_to_csv.py, site_audit.py, monthly_infographic.py, …)
+# now live in the SupportScripts repo. tracker_to_csv.py can still be pointed
+# here with `-o cleanups/cleanups.csv` for a WordPress import.
 cleanups/cleanups.csv
-.claude/settings.local.json
-.site_audit_last_post

@@ -1343,3 +1343,120 @@ function glc_sweep_unverified_accounts() {
         wp_delete_user( (int) $uid );
     }
 }
+
+
+// ── 15. Sitemap: making /cleaners/{slug}/ discoverable ────────────────────────
+
+/**
+ * Public profile URLs for the sitemap, ordered and deduplicated.
+ *
+ * Only profiles worth submitting to a search engine:
+ *
+ *   - at least one PUBLISHED cleanup. A profile with nothing on it is a thin
+ *     page, and an unverified account that never consumed its link has nothing
+ *     by definition -- so this also keeps the 7-day sweep's leftovers out
+ *     without needing to test for them.
+ *   - not hidden. Filtered through glc_profile_is_public() rather than a
+ *     meta_query, because "public" means "the meta is not '0'", including the
+ *     common case where the row does not exist at all. Restating that as a
+ *     query is how the two definitions drift apart.
+ *   - actually has a handle. glc_profile_url() returns '' without one, which is
+ *     also what quietly excludes an admin who authored a submission by hand:
+ *     staff accounts have no glc_profile_slug.
+ *
+ * One query for the authors, then per-user meta reads that are already primed
+ * for anything the page renders. Cached per request because the index and the
+ * sitemap itself both ask.
+ *
+ * @return string[] Canonical profile URLs.
+ */
+function glc_sitemap_profile_urls() {
+    static $cache = null;
+    if ( null !== $cache ) return $cache;
+
+    global $wpdb;
+
+    $types = glc_profile_post_types();
+    $slots = implode( ',', array_fill( 0, count( $types ), '%s' ) );
+
+    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $slots is
+    // a generated list of %s placeholders, and $types is passed to prepare().
+    $author_ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT DISTINCT post_author FROM {$wpdb->posts}
+          WHERE post_status = 'publish'
+            AND post_author > 0
+            AND post_type IN ( $slots )",
+        $types
+    ) );
+
+    $urls = [];
+    foreach ( $author_ids as $uid ) {
+        $uid = (int) $uid;
+        if ( ! glc_profile_is_public( $uid ) ) continue;
+        $url = glc_profile_url( $uid );
+        if ( $url ) $urls[ $url ] = true;
+    }
+
+    $urls = array_keys( $urls );
+    sort( $urls );   // a stable order, so page 2 means the same thing twice
+
+    return $cache = $urls;
+}
+
+/**
+ * A sitemap provider for public cleaner profiles.
+ *
+ * /cleaners/{slug}/ is a rewrite onto a query var, not a post type, so core
+ * generates nothing for it -- profiles were reachable only by crawling a byline
+ * link on /cleanups/, which in practice means the ones near the top of page 1.
+ * This publishes them properly, at wp-sitemap-cleaners-1.xml.
+ *
+ * Note what this is NOT: the theme drops core's `users` provider, which emitted
+ * /author/<login slug>/ URLs. That is the credential-side identifier and stays
+ * unpublished. This provider emits the identity-side one -- a handle the cleaner
+ * chose, on a page built to be shared. Two different namespaces; the profile
+ * being discoverable and the login being opaque are not in tension.
+ *
+ * No rewrite flush needed: core's sitemap rules already match any provider name
+ * (^wp-sitemap-([a-z]+?)-(\d+?)\.xml$).
+ */
+if ( class_exists( 'WP_Sitemaps_Provider' ) ) :
+
+class GLC_Cleaner_Sitemap_Provider extends WP_Sitemaps_Provider {
+
+    public $name        = 'cleaners';
+    public $object_type = 'cleaner';
+
+    public function get_url_list( $page_num, $object_subtype = '' ) {
+        $per_page = wp_sitemaps_get_max_urls( $this->object_type );
+        $slice    = array_slice(
+            glc_sitemap_profile_urls(),
+            ( max( 1, (int) $page_num ) - 1 ) * $per_page,
+            $per_page
+        );
+
+        $list = [];
+        foreach ( $slice as $url ) {
+            $list[] = [ 'loc' => $url ];
+        }
+        return $list;
+    }
+
+    public function get_max_num_pages( $object_subtype = '' ) {
+        $total = count( glc_sitemap_profile_urls() );
+        // 0 keeps the provider out of the index entirely while nobody has a
+        // public profile yet -- core 404s an empty sitemap, so advertising one
+        // would be worse than advertising none.
+        if ( ! $total ) return 0;
+
+        return (int) ceil( $total / wp_sitemaps_get_max_urls( $this->object_type ) );
+    }
+}
+
+add_action( 'init', function () {
+    if ( function_exists( 'wp_register_sitemap_provider' ) ) {
+        wp_register_sitemap_provider( 'cleaners', new GLC_Cleaner_Sitemap_Provider() );
+    }
+}, 20 );
+
+endif;
