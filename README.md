@@ -11,8 +11,7 @@ A WordPress plugin and theme for [greatlakecleaners.ca](https://greatlakecleaner
 ```
 great-lake-cleaners/          — WordPress plugin
 great-lake-cleaners-theme/    — WordPress theme
-CLAUDE.md                     — Developer context (architecture decisions, conventions)
-background_and_tooling.readme — Hosting, deployment, spam protection, data model
+CLAUDE.md                     — Developer context (architecture decisions, conventions, data model)
 ```
 
 Support tooling — the outing-tracker CSV pipeline, the site audit, asset prep,
@@ -156,7 +155,7 @@ Then in WordPress: **Tools → Import Cleanups CSV → upload**. Duplicate date 
 pairs are skipped by the importer.
 
 The outing-tracker column layout (the shared data-model contract) is documented in
-`background_and_tooling.readme` under **Outing Tracker**.
+`CLAUDE.md` under **Outing Tracker — the data-model contract**.
 
 `prepare_corridors_geojson.py` (also in `SupportScripts`) writes
 `plugin-dev/great-lake-cleaners/assets/corridors.geojson` and **must be run with

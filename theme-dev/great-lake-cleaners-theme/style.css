@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.6.3
+Version:     1.6.4
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -4087,7 +4087,7 @@ a.glc-ih-card:focus-visible .glc-ih-value {
    the dashboard. What is left is spacing, the slug field, and the delete block.
 ═════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Public profile (/cleaners/{slug}/) ──────────────────────────────────── */
+/* ── Public profile (/crew/{slug}/) ──────────────────────────────────────── */
 .glc-profile-wrap {
     max-width: 1100px;
     margin: 0 auto;
@@ -4246,7 +4246,7 @@ a.glc-ih-card:focus-visible .glc-ih-value {
     margin-right: 6px;
 }
 
-/* Slug field: the fixed /cleaners/ prefix sits inline with the input so it is
+/* Slug field: the fixed /crew/ prefix sits inline with the input so it is
    obvious the value is a URL segment, not a free-text name. */
 .glc-acct-slug-row {
     display: flex;

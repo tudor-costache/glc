@@ -48,6 +48,13 @@ function glc_register_submission_post_type() {
         // fixing a mis-attribution by hand. A parallel glc_user_id meta key
         // would be a second thing to keep in sync, and this codebase has
         // already paid that tax with the glc_-prefixed dual keys.
+        //
+        // ⚠ 'author' also renders the core Author metabox on EVERY submission,
+        // and wp_dropdown_users() has no entry for author 0 — so publishing an
+        // anonymous submission from the review queue would stamp the reviewing
+        // admin onto it. glc_normalize_submission_author() (accounts.php, on
+        // wp_insert_post_data) resets any non-glc_cleaner author back to 0 on
+        // every write path. Do not remove that filter while this stays here.
         'supports'        => [ 'title', 'editor', 'thumbnail', 'author' ],
         'capability_type' => 'post',
         // ⚠ NOT optional. wp_delete_user() with a null $reassign deletes every

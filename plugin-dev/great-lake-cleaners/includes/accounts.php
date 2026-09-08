@@ -4,9 +4,15 @@
  *
  * An OPTIONAL account for people who submit cleanups. The anonymous path
  * through [glc_submit_form] is untouched and stays the default; an account only
- * adds a public profile at /cleaners/{slug}/, automatic attribution of new
+ * adds a public profile at /crew/{slug}/, automatic attribution of new
  * submissions, and a claim of past ones made under the same (now verified)
  * email address.
+ *
+ * The public route is /crew/ (chosen over the earlier /cleaners/ before first
+ * deploy, so there is no redirect to carry). "cleaner" survives untouched as an
+ * internal word: the role is glc_cleaner, the query var is glc_cleaner, the
+ * helpers are glc_*_cleaner_*. Only the URL segment and the sitemap provider
+ * name are "crew".
  *
  * Three things in this codebase are load-bearing here and must not be re-broken:
  *
@@ -133,7 +139,7 @@ function glc_account_url() {
 function glc_profile_url( $user ) {
     $user_id = $user instanceof WP_User ? $user->ID : (int) $user;
     $slug    = (string) get_user_meta( $user_id, 'glc_profile_slug', true );
-    return $slug ? home_url( '/cleaners/' . $slug . '/' ) : '';
+    return $slug ? home_url( '/crew/' . $slug . '/' ) : '';
 }
 
 /** Hidden profiles 404 for everyone but their owner. Default is public. */
@@ -244,10 +250,10 @@ function glc_normalize_submission_author( $data, $postarr ) {
  */
 function glc_reserved_profile_slugs() {
     return [
-        'home', 'cleanups', 'events', 'cleaners', 'cleanup-submission', 'photos',
-        'videos', 'see-us-in-action', 'stats', 'submit-cleanup', 'report-issue',
-        'join-crew', 'privacy-policy', 'about', 'blog', 'feed', 'author',
-        'admin', 'login', 'logout', 'register', 'account', 'dashboard',
+        'home', 'cleanups', 'events', 'crew', 'cleaners', 'cleanup-submission',
+        'photos', 'videos', 'see-us-in-action', 'stats', 'submit-cleanup',
+        'report-issue', 'join-crew', 'privacy-policy', 'about', 'blog', 'feed',
+        'author', 'admin', 'login', 'logout', 'register', 'account', 'dashboard',
         'wp-admin', 'wp-login', 'wp-content', 'wp-includes', 'wp-json',
         'cleanup-best-practices', 'glc', 'greatlakecleaners', 'great-lake-cleaners',
         'official', 'staff', 'team', 'support', 'donate', 'contact',
@@ -269,7 +275,7 @@ function glc_validate_profile_slug( $slug, $user_id = 0 ) {
     if ( false !== strpos( $slug, '--' ) ) {
         return 'Two hyphens in a row are not allowed.';
     }
-    // An all-numeric handle reads like a date archive: /cleaners/2026/.
+    // An all-numeric handle reads like a date archive: /crew/2026/.
     if ( preg_match( '/^[0-9]+$/', $slug ) ) {
         return 'Your profile address needs at least one letter.';
     }
@@ -665,11 +671,11 @@ function glc_orphan_user_submissions( $user_id ) {
 }
 
 
-// ── 9. Routing: /cleaners/{slug}/ and the /{slug} shortcut ────────────────────
+// ── 9. Routing: /crew/{slug}/ and the /{slug} shortcut ────────────────────────
 
 add_action( 'init', function () {
     add_rewrite_rule(
-        '^cleaners/([a-z0-9][a-z0-9-]{1,28}[a-z0-9])/?$',
+        '^crew/([a-z0-9][a-z0-9-]{1,28}[a-z0-9])/?$',
         'index.php?glc_cleaner=$matches[1]',
         'top'
     );
@@ -771,7 +777,7 @@ add_filter( 'wp_robots', function ( $robots ) {
 } );
 
 /**
- * /meg -> 301 -> /cleaners/meg/
+ * /meg -> 301 -> /crew/meg/
  *
  * Why this is a 404-time redirect and never a rewrite rule: a root-level
  * ^([a-z0-9-]+)/?$ rule would shadow every page on the site. WP's own page rule
@@ -1122,7 +1128,7 @@ function glc_render_account_dashboard( WP_User $user ) {
                     <div class="glc-field glc-field--half">
                         <label for="glc_profile_slug"><span class="glc-label-text"><?php esc_html_e( 'Profile address', 'great-lake-cleaners' ); ?><span class="glc-required" aria-label="required">*</span></span></label>
                         <div class="glc-acct-slug-row">
-                            <span class="glc-acct-slug-prefix"><?php echo esc_html( home_url( '/cleaners/' ) ); ?></span>
+                            <span class="glc-acct-slug-prefix"><?php echo esc_html( home_url( '/crew/' ) ); ?></span>
                             <input type="text" id="glc_profile_slug" name="glc_profile_slug" required maxlength="30"
                                    pattern="[a-z0-9][a-z0-9-]{1,28}[a-z0-9]"
                                    value="<?php echo esc_attr( $slug ); ?>"
@@ -1384,7 +1390,7 @@ function glc_sweep_unverified_accounts() {
 }
 
 
-// ── 15. Sitemap: making /cleaners/{slug}/ discoverable ────────────────────────
+// ── 15. Sitemap: making /crew/{slug}/ discoverable ───────────────────────────
 
 /**
  * Public profile URLs for the sitemap, ordered and deduplicated.
@@ -1445,10 +1451,10 @@ function glc_sitemap_profile_urls() {
 /**
  * A sitemap provider for public cleaner profiles.
  *
- * /cleaners/{slug}/ is a rewrite onto a query var, not a post type, so core
+ * /crew/{slug}/ is a rewrite onto a query var, not a post type, so core
  * generates nothing for it -- profiles were reachable only by crawling a byline
  * link on /cleanups/, which in practice means the ones near the top of page 1.
- * This publishes them properly, at wp-sitemap-cleaners-1.xml.
+ * This publishes them properly, at wp-sitemap-crew-1.xml.
  *
  * Note what this is NOT: the theme drops core's `users` provider, which emitted
  * /author/<login slug>/ URLs. That is the credential-side identifier and stays
@@ -1463,8 +1469,10 @@ if ( class_exists( 'WP_Sitemaps_Provider' ) ) :
 
 class GLC_Cleaner_Sitemap_Provider extends WP_Sitemaps_Provider {
 
-    public $name        = 'cleaners';
-    public $object_type = 'cleaner';
+    // $name is the URL segment: wp-sitemap-crew-1.xml. It tracks the public
+    // route (/crew/), not the internal "cleaner" vocabulary.
+    public $name        = 'crew';
+    public $object_type = 'crew';
 
     public function get_url_list( $page_num, $object_subtype = '' ) {
         $per_page = wp_sitemaps_get_max_urls( $this->object_type );
@@ -1494,7 +1502,7 @@ class GLC_Cleaner_Sitemap_Provider extends WP_Sitemaps_Provider {
 
 add_action( 'init', function () {
     if ( function_exists( 'wp_register_sitemap_provider' ) ) {
-        wp_register_sitemap_provider( 'cleaners', new GLC_Cleaner_Sitemap_Provider() );
+        wp_register_sitemap_provider( 'crew', new GLC_Cleaner_Sitemap_Provider() );
     }
 }, 20 );
 

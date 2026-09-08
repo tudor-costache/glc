@@ -55,6 +55,51 @@ repo but its spec is here.
 
 ---
 
+## Outing Tracker — the data-model contract
+
+The shared spec for the Google Sheet that `tracker_to_csv.py` and
+`monthly_infographic.py` (both in `SupportScripts`) read. It lives **here**, not
+in that repo: the scripts own the code, this file owns the column meanings. The
+`COL_*` index constants at the top of both scripts mirror the table below — **if
+the Sheet grows a column, update all three.**
+
+**Primary source:** the Google Sheet, native format only (not an `.xlsx` parked in Drive).
+**Local backup:** `Great_Lake_Cleaners_Outing_Tracker.xlsx`.
+**Tab:** `Daily Log`.
+
+### Column layout (0-based)
+
+| Idx | Col | Field | Notes |
+|---|---|---|---|
+| 0 | A | Date | Store as a date value, not text; scripts normalise to `YYYY-MM-DD` |
+| 1 | B | Location / Corridor | Must match exactly for same-site merging |
+| 2 | C | Duration (min) | |
+| 3 | D | Bags (#) | Garbage |
+| 4 | E | Weight (kg) | Garbage |
+| 5 | F | Notes | Imported into `post_content` |
+| 6 | G | Cans (#) | Recycling |
+| 7 | H | Bottles (#) | Recycling |
+| 8 | I | Recyclables Weight (kg) | Cans + bottles; tracked separately, not added to debris weight |
+| 9 | J | Number of people | Volunteers |
+| 10 | K | Notable / Unusual Finds | |
+| 11 | L | Latitude | GPS — enter once per new site; blank = no map pin |
+| 12 | M | Longitude | Negative for Ontario |
+| 13 | N | Instagram Post URL | Field-log link |
+| 14 | O | Corridor | Matched against known corridor names for badge display |
+| 15 | P | Tires (#) | Car/truck tires only — feeds `[glc_impact_highlights]`. Bicycle tires were counted here until split to Bikes 2026-08 |
+| 16 | Q | Bikes (#) | Whole bicycles removed — feeds `[glc_impact_highlights]`. Column added 2026-08, after column P |
+
+**Volunteer hours** = duration × people (70 min × 2 people = 2.33 h).
+
+### Sheet rows → `cleanup_event` posts (`tracker_to_csv.py` merge)
+
+Same date + same location → one event, numeric fields summed. Same date +
+different location → separate events. Volunteer hours = Σ person-hours;
+Instagram URL and GPS = first non-empty. On upload, **Tools → Import Cleanups
+CSV** then skips any row whose date + site pair already exists as a post.
+
+---
+
 ## WordPress Plugin: `great-lake-cleaners`
 
 **Prefix:** functions/constants `glc_` / `GLC_`, CSS classes `.glc-`  
@@ -302,8 +347,9 @@ an author archive.
 **The REST gate is a capability, and must stay one.** It was
 `is_user_logged_in()` through theme 1.5.2 — safe only by accident, because every
 account on this site is staff, so "logged in" and "trusted" happened to coincide.
-A public-signup role (`read` only — see `plan.md` §1) would have inherited the
-entire user list and undone this whole fix. Tightened to a capability in 1.5.3.
+A public-signup role (the `glc_cleaner` account — `read` only) would have
+inherited the entire user list and undone this whole fix. Tightened to a
+capability in 1.5.3.
 `edit_posts` rather than `list_users` because the unset happens *before* core's
 own permission check: `list_users` is administrator-only, so gating on it would
 strip the route from editors and break the block editor's author field, which is
@@ -387,8 +433,9 @@ python ../SupportScripts/site_audit.py --base http://localhost:8080
 **Passive** covers header hygiene (including *duplicate* headers, which is how
 the 1.5.0/1.5.1 problem was caught), HSTS and the HTTPS redirect, exposed files,
 username enumeration, the REST surface, sitemap status codes,
-`corridors.geojson` gzip/caching, page health, rendered-HTML encoding, and the
-accounts surface.
+`corridors.geojson` gzip/caching, page health, rendered-HTML encoding, the
+accounts surface, and community-byline attribution (no staff name on a
+`glc_submission` card or single page).
 
 *Username enumeration* is four checks, not two: the REST users collection and
 `/?author=1` as before, plus **oEmbed** (`find_post_url()` discovers a real post
@@ -400,7 +447,7 @@ looks like it failed proves nothing). Every slug any of the four discloses lands
 in one `leaked` set, which the closing WARN reports together.
 
 *Accounts* covers `/account/` plus its nonce field, that it is `noindex` and not
-publicly cacheable, open registration closed, `/cleaners/<unknown>/` 404, that
+publicly cacheable, open registration closed, `/crew/<unknown>/` 404, that
 reserved handles (`admin`, `glc`, `official`, …) do not resolve, that an unknown
 root slug stays a 404 rather than becoming a redirect, and that `/photos` is not
 shadowed by the `/{slug}` shortcut. Two forged magic links (an unknown 16-hex
@@ -418,6 +465,20 @@ that the profile renders, that `/{slug}` 301s to the canonical URL, that it is
 email address outside the org's own domain, and that the page leaks no
 `cleaner_…` login slug and no `/author/` link. That last one is the regression
 guard the whole accounts section exists for.
+
+**Community byline never shows a staff name.** `check_submission_bylines()`
+walks the **whole** `/cleanups/` archive (not just page 1 — community
+submissions sit pages deep behind the org's own `cleanup_event` posts) plus
+every `/cleanup-submission/{slug}/` single page it links to, and scans the
+byline elements — `.glc-archive-card-submitter` on the card, `.glc-single-sub-byline`
+("Submitted by …") on the single page — for the staff display name `Tudor`
+(case-insensitive, the same sentinel the username-enumeration checks track as a
+login slug). A hit means a `glc_submission` row has a non-`glc_cleaner`
+`post_author` and either `glc_normalize_submission_author()` or the
+`glc_submission_credit()` role gate has regressed. FAIL, not WARN — a wrong
+byline on a community cleanup is exactly the credibility problem the accounts
+model was built to avoid. INFO (not FAIL) while the archive has no published
+community submission to check.
 
 Everything account-shaped degrades to INFO while `/account/` is still a 404, so
 the script stays useful before the rollout ships.
@@ -495,11 +556,21 @@ duplicate `X-Frame-Options` / `X-Content-Type-Options`, the same bug theme
 
 ## Community Accounts & Cleaner Profiles — `includes/accounts.php`
 
-**Live as of plugin 1.5.0 / theme 1.6.0.** An **optional** account for people who
-submit cleanups. The anonymous path through `[glc_submit_form]` is unchanged and
-stays the default — nobody is ever required to have an account. Everything lives
-in one plugin file (role, magic-link auth, slug validation, routing,
-`[glc_account]`, dashboard writes, cron sweep) plus two theme templates.
+**Built at plugin 1.5.0 / theme 1.6.0; public route renamed to `/crew/` at
+plugin 1.5.3 / theme 1.6.4, before first deploy.** An **optional** account for
+people who submit cleanups. The anonymous path through `[glc_submit_form]` is
+unchanged and stays the default — nobody is ever required to have an account.
+Everything lives in one plugin file (role, magic-link auth, slug validation,
+routing, `[glc_account]`, dashboard writes, cron sweep) plus two theme templates.
+
+**"crew" is the URL only.** The public profile lives at `/crew/{slug}/` and the
+sitemap provider is `crew` (`wp-sitemap-crew-1.xml`). Everything internal keeps
+the "cleaner" vocabulary it was built with — the `glc_cleaner` role, the
+`glc_cleaner` query var, `GLC_CLEANER_ROLE`, every `glc_*_cleaner_*` helper, the
+`.glc-profile` body class. Renaming those was considered and rejected as churn
+with no user-facing payoff (the role string can't change without migrating
+accounts anyway). A future session tidying "cleaner → crew" in the internals is
+misreading this — leave them.
 
 Deliberate non-goals: comments, following, messaging, leaderboards, points, or
 any writeable surface beyond the cleanup form that already existed. Each of
@@ -513,7 +584,8 @@ those is a moderation obligation, and the org is one person.
 | `user_nicename` | the same opaque value | It is what an author archive would expose. If author archives are ever re-enabled by accident, they leak nothing |
 | Sign-in identifier | email address | Core already authenticates by email |
 | Public handle | `glc_profile_slug` user meta | Fully decoupled from any credential; renameable without touching the account |
-| Password | a 64-char random one nobody ever learns | WordPress requires the column. Sign-in is by emailed link, so there is nothing to phish, reset, or stuff |
+| Display name | `display_name` — seeded from what they typed on the submit or sign-in form, editable from the dashboard | **No real-name requirement** — a first name or a pseudonym is equally fine. Shows on the profile and on every cleanup card they are credited on |
+| Password | a 64-char random one nobody ever learns | WordPress requires the column. Sign-in is by emailed link, so there is nothing to phish, reset, or stuff — and a real password would only add a stuffable credential to a site whose `wp-login.php` is public, plus a reset flow with its own tokens, for data that is a list of public cleanups. If one is ever wanted, add it *beside* the magic link, never as a replacement |
 
 **INVARIANT: the profile slug and the login are two different strings and must
 never be derived from one another.** `sanitize_title( $display_name )` for the
@@ -584,6 +656,10 @@ where the dashboard writes go. Detected via `$GLOBALS['pagenow']` with a
 The canonical link is **`post_author`**, not a `glc_user_id` meta key: it is an
 indexed column `WP_Query`'s `author` arg reads directly, and (with `'author'` in
 `supports`) it gives an admin dropdown for fixing a mis-attribution by hand.
+That same `'author'` support is also a landmine — see *`post_author` … is `0` or
+a `glc_cleaner`* below — so the two fixes that defuse it
+(`glc_set_post_author()` after the insert, `glc_normalize_submission_author()`
+on the write) are load-bearing, not tidy-up.
 
 | Case | Behaviour |
 |---|---|
@@ -653,7 +729,9 @@ policy repeats it.
 
 ### Routing
 
-Canonical: **`/cleaners/{slug}/`**, a real rewrite rule added with `'top'`.
+Canonical: **`/crew/{slug}/`**, a real rewrite rule added with `'top'`
+(`^crew/([a-z0-9][a-z0-9-]{1,28}[a-z0-9])/?$` → `index.php?glc_cleaner=$1`). The
+query var stays `glc_cleaner` — see *"crew" is the URL only* above.
 
 Because the rewrite hands WP a query var with no post query behind it, three
 things have to be corrected or the route misbehaves in non-obvious ways:
@@ -661,7 +739,7 @@ things have to be corrected or the route misbehaves in non-obvious ways:
 - `parse_query` sets `is_home = false` and `post__in => [0]` — otherwise the main
   query falls through to the **blog home**, loading ten posts for nothing.
 - `redirect_canonical` is disabled for the route — with `is_home()` true it will
-  happily bounce `/cleaners/meg/` to the front page.
+  happily bounce `/crew/meg/` to the front page.
 - `template_redirect` (priority 2) restores `status_header( 200 )`, because
   `WP::handle_404()` has already 404'd a query that found no posts.
 
@@ -669,7 +747,7 @@ things have to be corrected or the route misbehaves in non-obvious ways:
 redirect, and not a "this profile is private" page.** Either of those confirms
 the slug exists, which is the same enumeration leak closed for usernames.
 
-**`/meg` → 301 → `/cleaners/meg/` is a 404-time redirect, never a rewrite rule.**
+**`/meg` → 301 → `/crew/meg/` is a 404-time redirect, never a rewrite rule.**
 A root-level `^([a-z0-9-]+)/?$` rule would shadow every page on the site: WP's
 own page rule is the catch-all `(.?.+?)/?$` at the very bottom of the rules
 array, so a rule added with `'bottom'` never fires and one added with `'top'`
@@ -683,7 +761,10 @@ the WordPress surface, and org-impersonating names (`glc`, `greatlakecleaners`,
 `official`, `staff`, `team`). Validation also rejects anything that is currently
 a published page slug (a live `get_page_by_path()` check) and anything another
 cleaner holds. Shape: 3–30 chars, `[a-z0-9-]`, no leading/trailing hyphen, no
-`--`, not all-numeric (keeps `/cleaners/2026/` from reading like an archive).
+`--`, not all-numeric (keeps `/crew/2026/` from reading like an archive). The
+reserved list carries **both `crew` and `cleaners`** — `crew` because it is the
+route base, `cleaners` kept from the old scheme so a stale link or a future
+`/cleaners` page can't collide with a handle.
 The live availability hint on the dashboard is `wp_ajax_glc_check_slug` —
 **`wp_ajax_` only, never `wp_ajax_nopriv_`** — and is a hint: the save handler
 re-validates from scratch and is the only thing that decides.
@@ -718,23 +799,27 @@ personal page is not the place to diverge from the public numbers.
 Profile map: `[glc_map author="N" corridors="1" corridor_pins="0"]` — corridor
 **lines** for context, corridor **pins** off, for the same reason the front-page
 hero turns them off: a gold cumulative-impact pin on a personal page summarises
-somebody else's work.
+somebody else's work. Individual site pins are **exact**, as everywhere else on
+the site — aggregating one person's spots onto a single map was weighed as a
+privacy question and judged fine (these are public access points, already pinned
+on `/cleanups/`); revisit if anyone raises it.
 
 **No `noindex`** — profiles are public pages we want found, so `header.php` gives
 them a real meta description and `document_title_parts` a real title (the
 query-var route produces neither on its own). `/account/` *is* `noindex`.
 
-**Sitemap — `GLC_Cleaner_Sitemap_Provider` (plugin 1.5.1).** Not being
-`noindex` was never the same as being *discoverable*: `/cleaners/{slug}/` is a
-rewrite onto a query var, not a post type, so core generates nothing for it, and
-a profile was findable only by crawling a byline link on `/cleanups/` — in
-practice the handful near the top of page 1. The provider publishes them at
-`wp-sitemap-cleaners-1.xml`.
+**Sitemap — `GLC_Cleaner_Sitemap_Provider` (plugin 1.5.1; provider name `crew`
+since 1.5.3).** Not being `noindex` was never the same as being *discoverable*:
+`/crew/{slug}/` is a rewrite onto a query var, not a post type, so core generates
+nothing for it, and a profile was findable only by crawling a byline link on
+`/cleanups/` — in practice the handful near the top of page 1. The provider
+publishes them at `wp-sitemap-crew-1.xml` (its `$name` / `$object_type` are
+`crew`; the class name stays `GLC_Cleaner_Sitemap_Provider`).
 
 **Keep the two sitemap changes straight — they point opposite ways on purpose.**
 The theme drops core's `users` provider because it published
 `/author/<login slug>/`, the **credential-side** identifier. This one adds
-`/cleaners/{handle}/`, the **identity-side** one the cleaner chose. A profile
+`/crew/{handle}/`, the **identity-side** one the cleaner chose. A profile
 being discoverable and a login being opaque are different namespaces, not a
 contradiction. Anyone later "tidying up" one of these by reverting the other has
 misread it.
@@ -774,7 +859,7 @@ never the token), `glc_login_expires`, `glc_joined_date`.
 Needs a WP page: **Account**, slug `account`, template "Account", blank body. The
 header icon, footer link, nav fallback and `glc_account_url()` all check that the
 page exists first, so the feature degrades to invisible until it is created.
-Then **deactivate and reactivate the plugin** — `/cleaners/…` 404s until the
+Then **deactivate and reactivate the plugin** — `/crew/…` 404s until the
 rewrite flush fires.
 
 A daily cron (`glc_sweep_unverified_accounts`) deletes cleaner accounts older
@@ -1103,13 +1188,41 @@ The video gallery reuses the photo CSS wholesale (`.glc-gallery-wrap`, `-tabs`, 
   sitemap is gone from the index and its URL now returns the theme's real 404
   page.
 
-- [ ] **Deploy theme 1.6.3** — the sitemap 404-status bug. Pre-existing and
-  unrelated to the accounts work: every sitemap served a valid document with a
-  404 status, so no crawler has ever read one, and the new cleaner-profile
-  sitemap would have inherited the same fate. See *Sitemaps must answer 200*
-  above. Theme only — the plugin is unchanged at 1.5.1. `site_audit.py`'s
-  **Sitemaps** section reports 4 failures until it lands and should reach zero
-  after.
+- [ ] **Deploy plugin 1.5.3 + theme 1.6.4** — one combined upload carrying three
+  undeployed changes:
+
+  1. **Public route renamed `/cleaners/` → `/crew/`** (plugin 1.5.3 / theme
+     1.6.4). The four open questions that gated this were resolved 2026-09-08:
+     real names or a handle → whatever they typed on the form, pseudonyms fine
+     (already how it worked); exact GPS on the profile map → yes (already);
+     account unlocks nothing beyond the profile → correct (already);
+     **`/cleaners/` → `/crew/`** — the one that needed code. Done before first
+     deploy, so there is no redirect to carry. All of it is in
+     `accounts.php` (rewrite rule, `glc_profile_url()`, dashboard slug prefix,
+     reserved list gains `crew`, sitemap provider name → `crew` →
+     `wp-sitemap-crew-1.xml`) plus two doc comments in the theme. The internal
+     `glc_cleaner` query var / role / helpers are unchanged — see *"crew" is the
+     URL only*. `site_audit.py` was updated in the same pass (all `/cleaners/`
+     probes → `/crew/`, `sitemap-cleaners` → `sitemap-crew`) — **that lives in
+     the `SupportScripts` repo and needs its own commit.**
+  2. **Community-submission attribution regression** (was plugin 1.5.2, now
+     folded in). A published `glc_submission` showed a staff display name
+     ("Tudor") as its byline because the anonymous `[glc_submit_form]` insert
+     let `wp_insert_post()` substitute the logged-in admin for
+     `post_author => 0`, and the core Author dropdown re-stamped the reviewing
+     admin on publish. Fixes: `glc_set_post_author()` unconditional after the
+     insert; `glc_normalize_submission_author()` (`wp_insert_post_data`) resets
+     any non-`glc_cleaner` author to `0` on every write path;
+     `glc_submission_credit()` role-gates at read time. See *Attribution —
+     `post_author` on `glc_submission`*. Affected rows were repaired 2026-09-08.
+  3. **Sitemap 404-status bug** (was theme 1.6.3, now folded in). Every sitemap
+     served a valid document with a 404 status, so no crawler ever read one. See
+     *Sitemaps must answer 200*.
+
+  Deploy: `powershell -File repack.ps1`, upload both zips, **deactivate and
+  reactivate the plugin** (the `/crew/` rewrite rule needs the flush).
+  `site_audit.py` should go from its current failures (4 Sitemaps + any
+  `/cleaners/` account probes) to zero.
 
 - [ ] **Finish the accounts rollout** — the code is live but the feature is not:
   `/account/` still 404s, so nothing is reachable yet and the profile sitemap
@@ -1122,7 +1235,7 @@ The video gallery reuses the photo CSS wholesale (`.glc-gallery-wrap`, `-tabs`, 
      until this step the feature is simply invisible rather than broken.
   3. Add an **Account** item to the primary menu if you want it in the nav
      (`glc_nav_fallback()` already includes it, labelled by sign-in state).
-  4. **Deactivate and reactivate the plugin** — `/cleaners/…` 404s until the
+  4. **Deactivate and reactivate the plugin** — `/crew/…` 404s until the
      rewrite flush fires.
   5. `python ../SupportScripts/site_audit.py` should finish with zero failures;
      the accounts section reports INFO (not FAIL) until somebody has a public

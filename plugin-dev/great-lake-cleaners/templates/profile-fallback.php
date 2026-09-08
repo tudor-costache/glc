@@ -4,7 +4,7 @@
  *
  * Only used when the active theme ships no glc-profile.php. The real design
  * lives in the theme, the same way every other CPT template on this site does;
- * this exists so /cleaners/{slug}/ still renders something correct if the
+ * this exists so /crew/{slug}/ still renders something correct if the
  * plugin is running under a different theme.
  *
  * Anything added here should stay deliberately plain — a change made only in

@@ -6,7 +6,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.6.3' );
+define( 'GLC_THEME_VERSION', '1.6.4' );
 
 // PayPal Pool fundraiser — cigarette butt dispensers at trail heads.
 // Used by the header + footer donate icons and the NGO JSON-LD DonateAction.
@@ -56,7 +56,7 @@ define( 'GLC_DONATE_URL', 'https://www.paypal.com/pools/c/9rTJrg2a4B' );
 // and nothing else, and would have inherited the entire user list, undoing this
 // whole section. `edit_posts` is the narrowest capability that still covers the
 // block-editor case this exception exists for, and no self-registered account
-// should ever be given it. See plan.md §1 (community accounts).
+// should ever be given it. See CLAUDE.md -> Community Accounts & Cleaner Profiles.
 
 add_filter( 'rest_endpoints', function( $endpoints ) {
     // Content editors keep the route — the block editor's author field needs it.

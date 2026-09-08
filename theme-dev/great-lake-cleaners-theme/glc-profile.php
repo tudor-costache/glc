@@ -2,7 +2,7 @@
 /**
  * Great Lake Cleaners — glc-profile.php
  *
- * Public cleaner profile: /cleaners/{slug}/
+ * Public cleaner profile: /crew/{slug}/
  *
  * Not part of the WordPress template hierarchy — the plugin's accounts.php
  * routes here through template_include after resolving the glc_cleaner query
