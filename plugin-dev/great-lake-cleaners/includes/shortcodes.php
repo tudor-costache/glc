@@ -135,6 +135,7 @@ function glc_corridor_table() {
     return [
         'speed-river'     => 'Speed River',
         'eramosa-river'   => 'Eramosa River',
+        'irvine-creek'    => 'Irvine Creek',
         'hanlon-creek'    => 'Hanlon Creek',
         'laurel-creek'    => 'Laurel Creek',
         'big-creek'       => 'Big Creek',
@@ -454,7 +455,7 @@ function glc_shortcode_map( $atts ) {
                         style: { color: '#5a9fc0', weight: 3, opacity: 0.55 }
                     }).addTo(map).bringToBack();
                     map.attributionControl.addAttribution(
-                        'River corridors: <a href="https://geohub.lio.gov.on.ca/datasets/mnrf::ontario-hydro-network-ohn-watercourse" target="_blank" rel="noopener">Ontario Hydro Network</a>, MNRF, Open Government Licence – Ontario'
+                        'River corridors: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, ODbL'
                     );
                 })
                 .catch(function() { /* corridor lines are decorative context — fail silently */ });

@@ -847,6 +847,16 @@ function glc_maybe_handle_submission() {
 
     if ( is_wp_error( $post_id ) ) return 'Could not save your submission. Please try again.';
 
+    // wp_insert_post() treats post_author => 0 as "not supplied" and substitutes
+    // the current user, so a signed-in cleaner who ticked "post without credit"
+    // -- or an admin testing this form -- would be credited anyway. Write the
+    // column directly to actually mean $author_id. (glc_normalize_submission_author()
+    // catches the admin case too, but not a cleaner opting out: the substituted
+    // ID is the cleaner's own and passes its role check.)
+    if ( function_exists( 'glc_set_post_author' ) ) {
+        glc_set_post_author( $post_id, $author_id );
+    }
+
     $meta = [
         'glc_submitter_name'  => $name,
         'glc_email'           => $email,

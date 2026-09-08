@@ -199,6 +199,38 @@ function glc_set_post_author( $post_id, $user_id ) {
     clean_post_cache( $post_id );
 }
 
+/**
+ * A glc_submission's post_author is either 0 (anonymous community member) or a
+ * glc_cleaner account -- never anything else. This is the one choke point every
+ * write path passes through (front-end insert, classic-editor save, WP-CLI), so
+ * two ways a stray staff ID otherwise lands on the column are both closed here:
+ *
+ *   1. wp_insert_post() substitutes get_current_user_id() for an absent-or-zero
+ *      post_author, so an admin logged in while testing [glc_submit_form] gets
+ *      credited for a stranger's cleanup.
+ *   2. 'author' in the CPT's `supports` puts the core Author dropdown on every
+ *      submission, and wp_dropdown_users() has no entry for author 0 -- so
+ *      publishing a genuinely anonymous submission from the review queue writes
+ *      whichever user sits first in that list, usually the reviewing admin.
+ *
+ * A real cleaner ID passes straight through, so an admin can still hand-fix a
+ * mis-attribution by picking the right account. Crediting a submission to a
+ * staff account was never a valid state.
+ */
+add_filter( 'wp_insert_post_data', 'glc_normalize_submission_author', 10, 2 );
+function glc_normalize_submission_author( $data, $postarr ) {
+    if ( 'glc_submission' !== ( $data['post_type'] ?? '' ) ) return $data;
+
+    $author = (int) ( $data['post_author'] ?? 0 );
+    if ( $author <= 0 ) return $data;
+
+    $user = get_user_by( 'id', $author );
+    if ( ! $user || ! in_array( GLC_CLEANER_ROLE, (array) $user->roles, true ) ) {
+        $data['post_author'] = 0;
+    }
+    return $data;
+}
+
 
 // ── 5. Profile slugs ──────────────────────────────────────────────────────────
 
@@ -879,10 +911,17 @@ function glc_submission_credit( $post_id ) {
         return [ 'name' => __( 'Community member', 'great-lake-cleaners' ), 'url' => '' ];
     }
 
+    // Only a glc_cleaner legitimately owns a submission. A staff ID on the
+    // column is always a data error (an admin who was logged in while testing
+    // the public form, or the core Author dropdown reassigning an author-0 post
+    // on review) -- fall through to the typed name rather than crediting the
+    // wrong person on the card, the single-page header and header.php's meta
+    // description. glc_normalize_submission_author() stops new writes; this
+    // keeps already-broken rows reading right until they are re-saved.
     $author = (int) get_post_field( 'post_author', $post_id );
     if ( $author > 0 ) {
         $user = get_user_by( 'id', $author );
-        if ( $user ) {
+        if ( $user && in_array( GLC_CLEANER_ROLE, (array) $user->roles, true ) ) {
             $name = $user->display_name ?: $typed;
             $url  = glc_profile_is_public( $author ) ? glc_profile_url( $user ) : '';
             return [ 'name' => $name, 'url' => $url ];

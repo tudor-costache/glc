@@ -596,6 +596,20 @@ supplied" and substitute `get_current_user_id()`.** So `glc_set_post_author()`
 writes the column directly via `$wpdb` — without it, a signed-in visitor who
 ticked "post without credit" would be credited anyway, and orphaning a deleted
 account's cleanups would silently reassign them to whoever ran the deletion.
+The `[glc_submit_form]` handler calls it unconditionally right after the insert
+(plugin 1.5.2) — the earlier code passed `post_author => 0` and trusted it,
+which is the bug that credited a logged-in admin for a stranger's submission.
+
+**`post_author` on a `glc_submission` is `0` or a `glc_cleaner`, nothing else —
+enforced, not assumed.** `glc_normalize_submission_author()`
+(`wp_insert_post_data`, plugin 1.5.2) resets any non-cleaner ID to `0` on every
+write path. It exists because `'author'` in `supports` renders the core Author
+dropdown on every submission and `wp_dropdown_users()` has no `0` option, so
+publishing an anonymous submission from the review queue would otherwise stamp
+the reviewing admin onto it. `glc_submission_credit()` also role-gates the
+author at read time, so a row broken before 1.5.2 shows the typed name again on
+deploy — but the row is only actually repaired when re-saved (or
+`wp post update <id> --post_author=0`).
 
 **Read-only is markup, not a guard.** The handler takes name and email off the
 user record, never the POST body, so a scripted post can't file a third party's
@@ -603,7 +617,9 @@ name against an account.
 
 **Bylines** go through `glc_submission_credit( $post_id )` → `[ name, url ]`,
 which handles all four cases in order (opt-out → owned+visible → owned+hidden →
-plain anonymous). `archive-cleanup_event.php`, `single-glc_submission.php` **and
+plain anonymous). "Owned" means the `post_author` is a `glc_cleaner`; a
+non-cleaner ID is treated as `0` (typed name), so a stray admin author never
+reaches a card. `archive-cleanup_event.php`, `single-glc_submission.php` **and
 `header.php`'s meta description** all use it — the meta description matters, or
 an opt-out's real name reappears in search results.
 
