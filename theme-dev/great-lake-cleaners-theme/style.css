@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.6.4
+Version:     1.6.7
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -1798,6 +1798,96 @@ a.glc-stat:focus-visible .glc-stat-lbl {
     margin-top: 2px;
     accent-color: var(--glc-navy);
     cursor: pointer;
+}
+
+/* Wildlife picker (submit-cleanup form section 4) — a visual grid of species
+   tiles feeding the same wildlife_obs text as the free-text box below it.
+   Tiles reuse the brand gradient stage from .glc-wildlife-thumb (stats cards /
+   single-event block). Plain checkbox group; the inline JS only enforces the
+   3-pick cap and the selected state, so it degrades gracefully without JS. */
+.glc-wildlife-field { gap: 8px; }
+.glc-wl-grouplabel {
+    display: block;
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--glc-text);
+}
+.glc-wl-count { color: var(--glc-green); font-weight: 700; }
+.glc-wildlife-picker {
+    list-style: none;
+    margin: 4px 0 10px;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(94px, 1fr));
+    gap: 10px;
+}
+.glc-wildlife-picker li { margin: 0; }
+.glc-wildlife-picker .glc-wl-chip {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 8px 6px;
+    border: 1px solid var(--glc-border);
+    border-radius: 10px;
+    background: var(--glc-off-white);
+    cursor: pointer;
+    text-align: center;
+    transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.glc-wildlife-picker .glc-wl-chip:hover { border-color: var(--glc-gold); }
+.glc-wildlife-picker .glc-wl-chip input[type="checkbox"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+.glc-wl-chip-thumb {
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    background: linear-gradient(150deg, #f3f9fb 0%, #edf6f0 100%);
+    border: 1px solid var(--glc-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.glc-wl-chip-thumb img {
+    width: auto;
+    max-width: 86%;
+    height: auto;
+    max-height: 86%;
+    display: block;
+    filter: drop-shadow(0 1px 2px rgba(26, 74, 107, 0.18));
+}
+.glc-wildlife-picker .glc-wl-chip-name {
+    font-size: 0.76rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--glc-text);
+}
+.glc-wildlife-picker .glc-wl-chip.is-selected {
+    border-color: var(--glc-gold);
+    background: #fff;
+    box-shadow: inset 0 0 0 2px var(--glc-gold);
+}
+.glc-wildlife-picker .glc-wl-chip.is-selected .glc-wl-chip-name { color: var(--glc-navy); }
+.glc-wildlife-picker .glc-wl-chip.is-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.glc-wl-chip input[type="checkbox"]:focus-visible ~ .glc-wl-chip-thumb {
+    outline: 3px solid var(--glc-gold);
+    outline-offset: 2px;
 }
 
 /* Submit row */

@@ -674,9 +674,42 @@ function glc_render_submit_form() {
                         <label for="glc_notable_finds"><?php esc_html_e( 'Notable or Unusual Finds', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( 'Large items, anything out of the ordinary', 'great-lake-cleaners' ); ?></span></label>
                         <textarea id="glc_notable_finds" name="glc_notable_finds" rows="3" maxlength="1000"><?php echo esc_textarea( wp_unslash( (string) ( $_POST['glc_notable_finds'] ?? '' ) ) ); ?></textarea>
                     </div>
-                    <div class="glc-field">
-                        <label for="glc_wildlife_obs"><?php esc_html_e( 'Wildlife Observed', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( 'Birds, turtles, fish, mammals — anything you spotted', 'great-lake-cleaners' ); ?></span></label>
-                        <textarea id="glc_wildlife_obs" name="glc_wildlife_obs" rows="3" maxlength="500"><?php echo esc_textarea( wp_unslash( (string) ( $_POST['glc_wildlife_obs'] ?? '' ) ) ); ?></textarea>
+                    <div class="glc-field glc-wildlife-field">
+                        <span class="glc-wl-grouplabel" id="glc-wl-picker-label"><?php esc_html_e( 'Wildlife Observed', 'great-lake-cleaners' ); ?></span>
+                        <?php
+                        // Species picker — one tile per entry in the theme's
+                        // canonical list (glc_wildlife_species()). Guarded on that
+                        // helper so the field degrades to just the textarea under
+                        // another theme. It is a plain checkbox group: the server
+                        // re-validates every pick against the same list and caps
+                        // at 3, so the inline JS (max-3 + selected state) is
+                        // progressive enhancement only. The picked labels are
+                        // merged into glc_wildlife_obs on submit — no new key.
+                        $glc_wl_species = function_exists( 'glc_wildlife_species' ) ? glc_wildlife_species() : [];
+                        if ( $glc_wl_species ) :
+                            $glc_wl_picked = array_map( 'sanitize_key', (array) ( $_POST['glc_wildlife_picks'] ?? [] ) );
+                            $glc_wl_dir    = get_stylesheet_directory_uri() . '/assets/images/';
+                        ?>
+                        <p class="glc-field-note" id="glc-wl-picker-hint">
+                            <?php esc_html_e( 'Tap what you spotted — up to 3. Anything else goes in the box below.', 'great-lake-cleaners' ); ?>
+                            <span class="glc-wl-count" aria-hidden="true"></span>
+                        </p>
+                        <ul class="glc-wildlife-picker" role="group" aria-labelledby="glc-wl-picker-label" aria-describedby="glc-wl-picker-hint">
+                            <?php foreach ( $glc_wl_species as $glc_wl_key => $glc_wl ) : ?>
+                            <li>
+                                <label class="glc-wl-chip">
+                                    <input type="checkbox" name="glc_wildlife_picks[]" value="<?php echo esc_attr( $glc_wl_key ); ?>"<?php checked( in_array( $glc_wl_key, $glc_wl_picked, true ) ); ?>>
+                                    <span class="glc-wl-chip-thumb">
+                                        <img src="<?php echo esc_url( $glc_wl_dir . $glc_wl['img'] ); ?>" alt="" loading="lazy" draggable="false" width="48" height="48">
+                                    </span>
+                                    <span class="glc-wl-chip-name"><?php echo esc_html( $glc_wl['label'] ); ?></span>
+                                </label>
+                            </li>
+                            <?php endforeach; ?>
+                        </ul>
+                        <?php endif; ?>
+                        <label for="glc_wildlife_obs" class="glc-wl-freetext-label"><?php esc_html_e( 'Anything else you spotted', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( 'Species not in the grid, numbers, behaviour, where along the bank — anything', 'great-lake-cleaners' ); ?></span></label>
+                        <textarea id="glc_wildlife_obs" name="glc_wildlife_obs" rows="2" maxlength="500"><?php echo esc_textarea( wp_unslash( (string) ( $_POST['glc_wildlife_obs'] ?? '' ) ) ); ?></textarea>
                     </div>
                     <div class="glc-field">
                         <label for="glc_instagram_url"><?php esc_html_e( 'Instagram Post URL', 'great-lake-cleaners' ); ?><span class="glc-field-note"><?php esc_html_e( "If you posted about it — we'll link it from your cleanup entry", 'great-lake-cleaners' ); ?></span></label>
@@ -756,6 +789,32 @@ function glc_render_submit_form() {
             }
         );
     }
+
+    // Wildlife picker — cap selections at 3 and mirror the checked state onto
+    // the chip. Purely visual/UX: the server re-validates and caps regardless.
+    (function () {
+        var picker = document.querySelector('.glc-wildlife-picker');
+        if (!picker) return;
+        var MAX   = 3;
+        var boxes = Array.prototype.slice.call(picker.querySelectorAll('input[type="checkbox"]'));
+        var count = document.querySelector('.glc-wl-count');
+        function sync() {
+            var picked = boxes.filter(function (b) { return b.checked; });
+            boxes.forEach(function (b) {
+                var chip = b.closest('.glc-wl-chip');
+                if (!chip) return;
+                chip.classList.toggle('is-selected', b.checked);
+                var atCap = picked.length >= MAX && !b.checked;
+                b.disabled = atCap;
+                chip.classList.toggle('is-disabled', atCap);
+            });
+            if (count) {
+                count.textContent = picked.length ? ' (' + picked.length + ' of ' + MAX + ')' : '';
+            }
+        }
+        boxes.forEach(function (b) { b.addEventListener('change', sync); });
+        sync();
+    })();
     </script>
     <?php
     return ob_get_clean();
@@ -821,7 +880,35 @@ function glc_maybe_handle_submission() {
     $site_name     = glc_clean_text(     $_POST['glc_site_name']     ?? '', 200 );
     $garbage_notes = glc_clean_text(     $_POST['glc_garbage_notes'] ?? '', 300 );
     $notable       = glc_clean_textarea( $_POST['glc_notable_finds'] ?? '', 1000 );
-    $wildlife_obs  = glc_clean_textarea( $_POST['glc_wildlife_obs']  ?? '', 500 );
+    // Wildlife: the picker's checked species (each re-validated against the
+    // theme's canonical list, capped at 3) are merged with the free-text box
+    // into the one `wildlife_obs` string that page-stats.php and the single
+    // templates already keyword-match. No separate key — see
+    // glc_wildlife_species() (theme functions.php).
+    $wildlife_free  = glc_clean_textarea( $_POST['glc_wildlife_obs'] ?? '', 500 );
+    $wildlife_picks = [];
+    if ( function_exists( 'glc_wildlife_species' ) ) {
+        $glc_wl_known = glc_wildlife_species();
+        foreach ( (array) ( $_POST['glc_wildlife_picks'] ?? [] ) as $glc_wl_pick ) {
+            $glc_wl_pick = sanitize_key( $glc_wl_pick );
+            if ( isset( $glc_wl_known[ $glc_wl_pick ] )
+                && ! in_array( $glc_wl_known[ $glc_wl_pick ]['label'], $wildlife_picks, true ) ) {
+                $wildlife_picks[] = $glc_wl_known[ $glc_wl_pick ]['label'];
+            }
+            if ( count( $wildlife_picks ) >= 3 ) break;
+        }
+    }
+    // Both parts are already sanitised ($wildlife_free through glc_clean_textarea
+    // above, the labels from our own trusted list), so only the length of the
+    // join needs bounding — running glc_clean_textarea again would wp_unslash a
+    // second time and eat a literal backslash the visitor typed.
+    $wildlife_obs = trim( implode( '. ', array_filter( [
+        implode( ', ', $wildlife_picks ),
+        $wildlife_free,
+    ] ) ) );
+    $wildlife_obs = function_exists( 'mb_substr' )
+        ? mb_substr( $wildlife_obs, 0, 500 )
+        : substr( $wildlife_obs, 0, 500 );
     $duration_min  = glc_clean_int(      $_POST['glc_duration_min']  ?? 0, 1440 );   // a day
     $bags          = glc_clean_int(      $_POST['glc_bags']          ?? 0, 999 );
     $weight_kg     = glc_clean_float(    $_POST['glc_weight_kg']     ?? 0, 0, 100000 );

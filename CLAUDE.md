@@ -42,7 +42,7 @@ The Python tooling for this project lives in a **separate repo**, `SupportScript
 | `tracker_to_csv.py` | Google Sheet (`Daily Log`) → `cleanups/cleanups.csv` for **Tools → Import Cleanups CSV**. Config + `credentials.json` live in `SupportScripts`. | Run from `SupportScripts`; `-o ../glc/cleanups/cleanups.csv` to land the file here. |
 | `monthly_infographic.py` | Monthly impact infographic for Instagram (HTML template → headless-Chromium screenshot). Reads the **raw** tracker CSV. | Self-contained in `SupportScripts` (assets + output next to the script). |
 | `prepare_wildlife_asset.py` | Background-removal + crop for `/stats/` wildlife card images and `_s.png` map-pin crops; also the plain tire/bike/cart icons. | Anywhere — takes explicit `input`/`output` paths. |
-| `prepare_corridors_geojson.py` | Offline fetch of river/creek geometry (OHN + OSM) → `plugin-dev/great-lake-cleaners/assets/corridors.geojson`. | **Must run with this repo as the working directory** — output path is hard-coded, cwd-relative, no override flag. |
+| `prepare_corridors_geojson.py` | Offline fetch of river/creek **centerline** geometry (OSM / Overpass) → `plugin-dev/great-lake-cleaners/assets/corridors.geojson`. | Anywhere — default output path resolves relative to the script; `-o` overrides. Pass corridor slugs to re-fetch just those. |
 | `site_audit.py` | Read-only security/health audit of production; `--post` exercises the public forms. Run after every deploy. | Anywhere (`--base` sets the target). The invariants it guards are documented throughout this file. |
 | `resize_uploads.py` | Batch-downscale images in a directory, in place. | Anywhere — takes a directory arg. |
 
@@ -167,7 +167,7 @@ Submissions land as `pending`. Admin reviews in WP Admin → Submissions. Photos
 | Volunteers | `glc_volunteers` |
 | Person-Hours | `glc_hours` |
 | Notable Finds | `glc_notable_finds` |
-| Wildlife Observed | `glc_wildlife_obs` / `wildlife_obs` | dual-key — see note below |
+| Wildlife Observed | `glc_wildlife_obs` / `wildlife_obs` | dual-key — see note below. On `[glc_submit_form]`, fed by the species picker (chosen labels prepended to the free text) — see *Submit a Cleanup Page → species picker* |
 | Instagram URL | `glc_instagram_url` |
 | Photo Repost Consent | `glc_photo_repost_ok` |
 | Photo IDs | `glc_photo_ids` |
@@ -226,7 +226,7 @@ Email-only — no CPT, no admin review queue. Reports go directly to `info@great
 | Shortcode | Notes |
 |---|---|
 | `[glc_stats]` | Cumulative totals banner |
-| `[glc_map]` | Leaflet map. Attrs: `height`, `post_id` (single-event mode), `limit` (markers per cluster), `cluster_radius` (km), `corridors` (river corridor lines, see below), `corridor_pins` (default `1` — the gold cumulative-impact pins that come with `corridors`; `0` = lines only, no extra marker layer), `corridor_bounds` (default `1` — whether corridor pins can widen the map's fit-to-bounds zoom; no effect when `corridor_pins="0"`, since there's nothing to include either way), `markers` (default `1` — render individual site pins; `0` for a corridor-pins-only view), `author` (restrict to one account's cleanups — the cleaner-profile map; all-events mode only, and `0` means "no filter", not "the anonymous author"), `zoom_offset` (default `1` — how many levels tighter than the guaranteed-fit zoom the multi-marker view opens at; the hero passes `2`, see Front Page). Clustering is greedy: markers sorted by impact score (kg + bags×2), each joins nearest anchor within radius. Hero uses `limit="5" cluster_radius="10" corridors="1" corridor_pins="0" zoom_offset="2"` — site pins plus river lines, no gold pins, one extra zoom level (see Front Page for why); archive uses `limit="7" cluster_radius="10" corridors="1" markers="0"` — corridor pins (lines + pins) only, no site pins. |
+| `[glc_map]` | Leaflet map. Attrs: `height`, `post_id` (single-event mode), `corridor` (default `0` — **single-event mode only**: also draw *this* cleanup's own corridor, see below), `limit` (markers per cluster), `cluster_radius` (km), `corridors` (river corridor lines, see below), `corridor_pins` (default `1` — the gold cumulative-impact pins that come with `corridors`; `0` = lines only, no extra marker layer), `corridor_bounds` (default `1` — whether corridor pins can widen the map's fit-to-bounds zoom; no effect when `corridor_pins="0"`, since there's nothing to include either way), `markers` (default `1` — render individual site pins; `0` for a corridor-pins-only view), `author` (restrict to one account's cleanups — the cleaner-profile map; all-events mode only, and `0` means "no filter", not "the anonymous author"), `zoom_offset` (default `1` — how many levels tighter than the guaranteed-fit zoom the multi-marker view opens at; the hero passes `2`, see Front Page). Clustering is greedy: markers sorted by impact score (kg + bags×2), each joins nearest anchor within radius. Hero uses `limit="5" cluster_radius="10" corridors="1" corridor_pins="0" zoom_offset="2"` — site pins plus river lines, no gold pins, one extra zoom level (see Front Page for why); archive uses `limit="7" cluster_radius="10" corridors="1" markers="0"` — corridor pins (lines + pins) only, no site pins. Both single-cleanup templates pass `corridor="1"`. |
 | `[glc_archive]` | Paginated cleanup archive |
 | `[glc_submit_form]` | Community submission form |
 | `[glc_gallery]` | Photo gallery — year tabs + lightbox. Only images flagged `_glc_gallery=1` appear. Global meta query finds all flagged attachments regardless of `post_parent` — images inserted from the Media Library (which keep `post_parent=0`) are included. Within each year, photos sort by `sort_date` (cleanup date if known, upload date as fallback). Attr: `limit` (default `0` = full year-tabbed gallery; `>0` drops the tabs and shows only the newest N in one grid — the Crew at Work wall). |
@@ -959,8 +959,14 @@ halfway to Georgian Bay — the map then opened with every actual cleanup crowde
 into a corner. Home base in the middle with a far pin off the edge reads far
 better; the map still pans and zooms to reach it. Applies to `[glc_map]`
 (`shortcodes.php`) and the `/stats/` wildlife map (`page-stats.php`), which each
-keep their own `GLC_HOME` constant. The single-marker branch (`length === 1`,
-i.e. a single-event map) still centres on its own pin.
+keep their own `GLC_HOME` constant. A single-event map (`post_id > 0`) has its
+own `singleEvent` branch in the fit logic: with no corridor it's `setView(pin,
+15)` as before; with `corridor="1"` it frames the **whole corridor** (its
+geometry bbox ∪ the cleanup pin ∪ the diamond) so the map reads as a watershed
+overview — some corridors run 20+ km. It still obeys the rule below (compute with
+`getBoundsZoom()`, one `setView()`, never `fitBounds()`); the full mechanics —
+including the `zoomSnap: 0.5` / `+ 0.5` half-step calibration that this map alone
+uses — are in the Archive Page's `corridor="1"` notes.
 
 **Use `getBoundsZoom()`, not `fitBounds()`, to pick that zoom** — one
 `setView( GLC_HOME, getBoundsZoom(...) + zoomOffset )` and nothing else:
@@ -1020,20 +1026,23 @@ Fetches all `cleanup_event` + published `glc_submission` posts, merges, sorts by
 **River corridor overlay:** `[glc_map ... corridors="1"]` draws river/creek lines, plus (unless `corridor_pins="0"`) one gold diamond pin per corridor showing cumulative bags/kg/items recycled and a "View cleanups on the {corridor}" link to `/cleanups/?corridor={slug}`. `#cleanups-map` uses the full thing with `markers="0"` (corridor pins carry the summary, individual site pins are hidden entirely — see `markers` below); the front-page hero uses `corridor_pins="0"` (lines only, alongside its normal site pins — see Front Page for why); not passed on single-event maps or `glc_event` maps.
 
 - **Corridor table:** `glc_corridor_table()` in `shortcodes.php` is the single source of truth for known corridor slugs — free-text `corridor` (`cleanup_event`) / `glc_corridor` (`glc_submission`) meta is matched against it via `glc_corridor_slug()` (trim/case/apostrophe-normalized), same spirit as `glc_stats_wildlife_img()`'s text-to-bucket matching. Add a new corridor by adding one row here **and** one row in `prepare_corridors_geojson.py`'s `CORRIDORS` list — the `slug` must match exactly in both places. Grand River is deliberately absent from this table (see below).
-- **Line geometry** lives in `plugin-dev/great-lake-cleaners/assets/corridors.geojson`, prepared offline by `prepare_corridors_geojson.py` (in the `SupportScripts` repo) — not a live dependency. Its output path is hard-coded and cwd-relative, so **run it from this repo's root**: `python ../SupportScripts/prepare_corridors_geojson.py speed-river eramosa-river` — passing slugs patches just those into the existing file without re-querying (and re-rate-limiting against) everything else.
-- **`fetch_corridor()` always queries both sources and keeps whichever is richer** (by total coordinate points), rather than stopping at the first source that returns *anything*. This isn't optional polish — OHN returning a technically-non-empty but nearly useless match (a single 2-point stub for Big Creek; a rural-only fragment for Speed/Eramosa that misses the urban core entirely) and the code stopping there was a real, recurring bug. `osm_only: True` on a corridor just skips a known-always-empty OHN call as an optimization; it doesn't change the "richer wins" comparison.
-  - **OHN** (Ontario Hydro Network Watercourse, ArcGIS REST, Open Government Licence – Ontario) is queried by exact official name near a known cleanup-site GPS anchor, radius expanding tight → wide until something matches. Its official naming is sparse — most segments, even along clearly-named creeks, carry no name at all, and a river can be named upstream but not through the stretch that actually matters.
-  - **OSM** (Overpass API) is queried the same way but **widest-first**: many rivers are digitized as several disconnected ways rather than one relation (Nine Mile River, Ausable River), so stopping at the *first* radius that returns anything tends to grab an incomplete fragment, not the full river. A wider bbox costs nothing extra in false-positive risk for a name-filtered query, so search wide → narrow and keep the first success; narrower boxes only get tried as a fallback when the wide query times out under Overpass's (frequent) server load.
-  - Nine Mile River and Grand River skip the anchor+radius search entirely and use a fixed `bbox` instead — both are so fragmented into disconnected ways that even the widest anchor radius wasn't reliably capturing everything; a bbox sized to the known full extent is simpler and more consistent than chasing radius sizes.
-- **OSM tags wider river stretches as an area, not a centerline — `query_osm()` must search both.** Nine Mile River's middle stretch (the part that actually reaches the cleanup site) looked like a genuine data gap at first — the named `waterway=stream`/`river` ways stopped ~6.5km short on both ends. It wasn't a gap: that whole stretch is mapped as a `natural=water` + `water=river` polygon (a "river area", visible as a filled shape in the iD editor) with no `waterway` tag on it at all, so the original centerline-only query silently skipped it. `query_osm()` now searches both tagging styles in one combined query (see the four `way`/`relation` clauses inside it) — a closed polygon `way` just gets treated as a `LineString` of its boundary ring, which draws as a thin doubled line tracing both banks; no PHP/JS changes were needed since everything downstream already only cares about LineString/MultiLineString. If a corridor still looks incomplete after this, check the iD editor directly for a filled "River Area" shape before assuming another anchor/radius/bbox tweak will fix it.
-- **Grand River** is fetched OSM-only (OHN only tags a ~1km stretch near Fergus for it — nowhere near the full Ontario course) and rendered as a **context line with no pin** — it's not itself a cleanup corridor, just the trunk river GLC's corridors flow into. It's intentionally excluded from `glc_corridor_table()` so a cleanup can never accidentally get slugged to it.
+- **Line geometry** lives in `plugin-dev/great-lake-cleaners/assets/corridors.geojson`, prepared offline by `prepare_corridors_geojson.py` (in the `SupportScripts` repo) — not a live dependency. The default output path resolves relative to the script (the `assets/` dir in this sibling repo), so it runs from any working directory; `-o/--output` overrides it. `python ../SupportScripts/prepare_corridors_geojson.py speed-river eramosa-river` — passing slugs patches just those into the existing file without re-querying (and re-rate-limiting against) everything else.
+- **OSM (Overpass) is the only source the script queries.** Earlier versions also hit the Ontario Hydro Network (OHN) Watercourse layer via ArcGIS REST and kept whichever result was richer by coordinate count, but OHN's official naming proved too sparse to earn its keep — it beat OSM for one corridor of fifteen and returned nothing for a third of them — so it was dropped (the git history has the OHN + ArcGIS query code if it is ever wanted back). OHN is still consulted as a **manual, out-of-band validation check** when a corridor looks wrong; the automation never touches it.
+  - **The OSM query is widest-first:** many rivers are digitized as several disconnected ways rather than one relation (Nine Mile River, Ausable River), so stopping at the *first* radius that returns anything tends to grab an incomplete fragment, not the full river. A wider bbox costs nothing extra in false-positive risk for a name-filtered query, so search wide → narrow and keep the first success; narrower boxes only get tried as a fallback when the wide query times out under Overpass's (frequent) server load.
+  - **Nine Mile River and Grand River skip the anchor+radius search** entirely and use a fixed `bbox` instead — both are so fragmented into disconnected ways that even the widest anchor radius wasn't reliably capturing everything; a bbox sized to the known full extent is simpler and more consistent than chasing radius sizes.
+- **Corridor lines are centerlines only — `query_osm()` fetches `waterway=*` ways/relations and nothing else.** River-area polygons (`natural=water` + `water=river`, how OSM maps wider stretches) are deliberately *not* fetched. Drawn as a line, a polygon outline traces both banks: it makes a narrow creek (Irvine) read as wide as a genuinely large river (Speed, which OSM maps as a bare centerline), so corridors look inconsistent side by side — and it was ~30% of the file's coordinates for shape the centerline already carries. The earlier query searched both taggings (four `way`/`relation` clauses, a closed polygon ring drawn as a doubled bank line); it's now two clauses. **Gap it leaves:** a reach OSM maps *only* as a `natural=water` polygon (no `waterway` centerline) isn't drawn. The one such case on the site is **Nine Mile River's final ~7.4 km to Lake Huron** (past the cleanup site) — filled by a hand-digitized line in `prepare_corridors_geojson.py`'s `MANUAL_SEGMENTS` dict: derived once from the polygon's two banks, checked in, and merged into that slug on every run (delete the entry and re-fetch if OSM ever gets a named way there). That mechanism is the general answer for any future OSM gap — a supplied midline, not a polygon-skeleton step in the fetch. The git history has the both-taggings query if it is ever wanted back. Adopted **plugin 1.5.7** — a full `corridors.geojson` re-scan, no PHP/JS change (nothing downstream distinguishes a closed ring from an open line — all features draw with one `weight: 3` style).
+- **Grand River** is rendered as a **context line with no pin** — it's not itself a cleanup corridor, just the trunk river GLC's corridors flow into. OSM's "Grand River" relation covers the full Ontario course (fetched via the fixed `bbox` above). It's intentionally excluded from `glc_corridor_table()` so a cleanup can never accidentally get slugged to it.
 - **Pin-only fallback:** a corridor with cumulative totals but no matched line geometry still gets a pin, placed at the average GPS of that corridor's cleanup sites instead of the line's midpoint. A corridor with zero published cleanups gets neither line-triggered nor GPS-triggered pin (skipped) — this is why a not-yet-published cleanup's corridor (e.g. a brand-new site) shows no pin until it's published, even if its line is already in the static file.
 - **Marker placement on a matched line:** `glc_corridor_midpoint()` walks the corridor's (possibly multiple, disjoint) line segments by cumulative arc length and drops the pin at the halfway point — deliberately on the river, not at an off-line centroid.
 - **`markers="0"`** suppresses individual site pins entirely (rendering *and* the fit-to-bounds calculation) — used on the archive map so the corridor pins are the whole story instead of competing with dozens of navy droplets. Each corridor's `slug` travels all the way to JS (stored in `corridor_totals`, stripped of its array key by `array_values()` so it has to be an explicit field) so the popup can link to `/cleanups/?corridor={slug}` — see the Archive Page's `$corridor_filter`.
-- **Line data is fetched client-side**, not inlined — `corridors.geojson` is over 1MB (15 corridors' worth of real geometry, several including full river-area polygon outlines), too large to embed in every page load via `wp_json_encode()` like the marker array is. The JS `fetch()`s the file directly; `corridor_totals` (small) is still inlined the normal way. The OHN attribution is added to the Leaflet attribution control only after that fetch resolves; OSM's is already covered by the base tile layer's existing credit.
-- **Caching:** `plugin-dev/great-lake-cleaners/assets/.htaccess` gzips `corridors.geojson` (1.3MB → ~350KB on the wire) and caches it 1 month — nothing in WordPress itself sets these headers, a shared host's defaults usually don't cover an uncommon extension like `.geojson`, so without this file it's whatever the host happens to do. Long caching is safe because the fetch URL is versioned with the file's mtime (`?v=<filemtime()>`, set in both `glc_shortcode_map()` and `page-stats.php`) — any re-run of the prep script changes the URL, so there's no stale-cache risk to weigh against the cache lifetime. All three maps (`#cleanups-map`, the wildlife map, the front-page hero) request the exact same URL, so a visitor who's hit any one of them gets the other two from cache.
+- **Line data is fetched client-side**, not inlined — `corridors.geojson` is ~1 MB of real centerline geometry for every corridor, too large to embed in every page load via `wp_json_encode()` like the marker array is. The JS `fetch()`s the file directly; `corridor_totals` (small) is still inlined the normal way. A "River corridors: OpenStreetMap contributors, ODbL" credit is added to the Leaflet attribution control once that fetch resolves — the base tile layer already credits OSM/CARTO for the tiles, so this line specifically covers the ODbL vector-data use.
+- **Caching:** `plugin-dev/great-lake-cleaners/assets/.htaccess` gzips `corridors.geojson` (~1.05 MB → ~265 KB on the wire) and caches it 1 month — nothing in WordPress itself sets these headers, a shared host's defaults usually don't cover an uncommon extension like `.geojson`, so without this file it's whatever the host happens to do. Long caching is safe because the fetch URL is versioned with the file's mtime (`?v=<filemtime()>`, set in both `glc_shortcode_map()` and `page-stats.php`) — any re-run of the prep script changes the URL, so there's no stale-cache risk to weigh against the cache lifetime. All three maps (`#cleanups-map`, the wildlife map, the front-page hero) request the exact same URL, so a visitor who's hit any one of them gets the other two from cache.
 - **`corridor_pins="0"`** keeps the river lines but skips the gold diamond layer (and its bounds contribution) entirely — the front-page hero's setting. Independent of `markers`: the hero runs `markers="1"` (default, its normal site pins) + `corridors="1"` + `corridor_pins="0"`, i.e. site pins and river lines together, no corridor pins at all.
 - **`corridor_bounds` (default `1`):** controls whether corridor pins can widen the map's fit-to-bounds zoom, only relevant when `corridor_pins` is on. The archive map wants it on — it's a "show everything" page. No view currently sets it to `0` (the hero solves the same problem more simply via `corridor_pins="0"` — no pins at all beats pins-that-don't-affect-zoom for a curated view) but it's kept for a hypothetical view that wants corridor pins visible without letting a far-off one drag the zoom out.
+- **`corridor="1"` (single-event maps only)** — the "Cleanup Location" map on `single-cleanup_event.php` / `single-glc_submission.php` draws *this cleanup's own* corridor: the one river line plus that corridor's cumulative-impact diamond (all-time bags / kg / items recycled across every cleanup on it, popup links to `/cleanups/?corridor={slug}`). The map's purpose is now the **whole watershed context** — the full stretch of water and where the site sits on it — not a close-up of the pin. Distinct attribute from `corridors` (which is all-events only and hard-gated `post_id === 0`); `corridor` is hard-gated `post_id > 0`. The two paths **share `glc_corridor_overlay_data( $want_pins, $only_slugs = null )`** → `[ $lines_url, $totals, $bbox ]` — `$only_slugs` restricts the geojson parse *and* the cumulative walk to one slug (and is what triggers `$bbox` computation); pass `null` for the archive's every-corridor behaviour (`$bbox` stays null). Refactored out of the old inline archive block, so a change to corridor totals / placement now hits both maps — don't re-inline it.
+  - **Cache is reused, not branched.** The single-event map fetches the *same* versioned `corridors.geojson?v=<filemtime>` URL as the archive and wildlife maps (one shared cache entry, ~265 KB gzipped) and filters `geo.features` down to its one slug **client-side** (`corridorSlug` var → `.filter()` in the fetch handler). No per-corridor file, no new cache key, nothing else's cache disturbed — this was the explicit constraint when it was built.
+  - **Zoom fits the whole corridor, then half a level tighter.** `glc_corridor_overlay_data()` computes `$bbox` = `[[minLat,minLon],[maxLat,maxLon]]` over the corridor's full geometry (server-side, during the parse it already does). The `singleEvent` branch takes `Math.floor( map.getBoundsZoom( bbox ∪ pin ∪ diamond, false, L.point(60,60) ) )` — the integer zoom `fitBounds` would have snapped to, 30px/side padding — and `setView( b.getCenter(), min( fitInt + 0.5, 15 ) )`. The `+ 0.5` is a deliberate calibration (the raw integer fit left too much dead margin, +1 clipped the corridor); it survives `setView`'s snap only because **this map alone is built with `zoomSnap: 0.5`** — emitted as `zoomSnap: <?php echo $corridor_bbox ? '0.5' : '1'; ?>`, so every other `[glc_map]` keeps its exact integer-zoom behaviour. The `min( …, 15 )` caps a very short creek from over-zooming. This is the site's only fractional-zoom map and the closest thing to a `fitBounds()` call — fine here: one coherent local corridor (not the all-events map's Georgian-Bay-outlier problem), computed with `getBoundsZoom()` and applied in one `setView()`, so nothing reads the zoom back or pans after.
+  - **Degrades to the lone pin close-up** (`setView(pin, 15)`) when `glc_corridor_slug()` doesn't resolve the post's `corridor` / `glc_corridor` meta (empty, a typo, or "Grand River" — deliberately not in `glc_corridor_table()`), or when `corridor="1"` isn't passed. `$bbox` is null → JS takes the `else`. No line, no diamond, no error.
 
 ### Events Pages (`/events/`) — `.glc-ev-*`
 
@@ -1049,7 +1058,7 @@ Fetches all `cleanup_event` + published `glc_submission` posts, merges, sorts by
 
 **`.glc-main` padding override:** `.page-template-page-stats .glc-main` has no side padding — sections provide their own. `.dirCL-wave` has `padding: 0 64px` to align with the content sections rather than spanning full column width.
 
-**SVG charts:** server-side PHP, no Chart.js. `glc_stats_smooth_path()` and `glc_stats_area_chart()` are defined in `functions.php` (globally available to templates and shortcodes) — `page-stats.php` only defines `glc_stats_wildlife_img()` locally. `pathLength="2600"` keeps stroke-dash animation consistent across varying path lengths.
+**SVG charts:** server-side PHP, no Chart.js. `glc_stats_smooth_path()`, `glc_stats_area_chart()` **and `glc_stats_wildlife_img()`** are all defined in `functions.php` (globally available to templates and shortcodes) — `page-stats.php` defines none of them locally any more. `pathLength="2600"` keeps stroke-dash animation consistent across varying path lengths.
 
 **`glc_stats_area_chart()` behaviour:** Each series always normalizes to a "nice" ceiling computed from its actual max (e.g. 400 kg → axis ceiling 500, 660 items → 800), so multi-series endpoint circles land at distinct heights rather than converging to the same point. The `$show_axes` parameter (6th arg, default `false`) controls Y-axis tick labels — keep it `false`; the `.dirCL-legend` provides the values and the chart stays clean. X-axis month labels are suppressed within 12 days of the start/end to prevent crowding (e.g. "Apr 1" won't appear when data starts "Mar 28").
 
@@ -1059,9 +1068,9 @@ Fetches all `cleanup_event` + published `glc_submission` posts, merges, sorts by
 
 **Large items pictograph ("Tires, bikes & shopping carts, pulled from the water"):** sits between the Hours and Wildlife sections (own pair of wave dividers, both skipped together when `$_total_tires`, `$_total_bikes`, and `$_total_carts` are all 0 — same "vanish together" pattern as the front-page Upcoming Events divider). One icon per unit — **not** scaled down like the item dot grid, since tire/bike/cart counts are small. Built from `$_tire_items` / `$_bike_items` / `$_cart_items` in `page-stats.php`, populated by walking `array_merge( $_events, $_subs )` and reading the shared `tires_removed` / `bikes_removed` / `carts_removed` keys via `glc_cleanup_field()` (same aggregation `[glc_impact_highlights]` uses). Each icon is a real `<a>` linking to its source post, with `aria-label`/`title` built from site + date so a screen reader gets a distinct name per icon rather than N identical unlabeled links. Icons are `tire-icon.png` / `bike-icon.png` / `cart-icon.png` in `assets/images/` — plain cropped PNGs prepared with `prepare_wildlife_asset.py` (main output only; no `--pin` needed since these aren't map markers, just inline icons at `object-fit: contain` in a 40×40 box). **Row layout:** `.dirCL-picto-row` is a horizontal-bar-chart style flex row — fixed-width (`flex: 0 0 200px`) label gutter on the left (`.dirCL-picto-lbl`) so icons start at the same x-position on every row regardless of label text length, icons flowing inline to the right (`.dirCL-picto-icons`) — not stacked label-above-icons, and no border divider between rows (just a small `margin-top`). Stacks back to label-above-icons under 560px (label reverts to auto width there). Visible labels are just the unit name ("5 tires", "4 bikes") — no "removed" suffix, since the section heading and intro paragraph already establish that.
 
-**Wildlife cards:** `glc_stats_wildlife_img()` maps observation text to an image filename — see `page-stats.php` for the current list. Cards show a brand-tinted gradient stage (`.wfig`) with the illustration + `drop-shadow`, then `.wbody` below with observation and site/date. Stagger delay `0.15 + i × 0.12s` via inline `--d` CSS property. **Sightings that don't match a known species are excluded entirely** (not rendered as a text-only card) — `page-stats.php` filters `$_wildlife_events`/`$_wildlife_all` down to `glc_stats_wildlife_img()` matches right after the initial query, before dedup, so unrecognised free text (typos, test data) never reaches the "Who we met along the way" section or its map. Gold border + shadow on hover; title shifts to gold-deep. No translateY on hover. (Single `cleanup_event`/`glc_submission` pages still show the raw Wildlife Observed text regardless of a match — this exclusion is `/stats`-only.)
+**Wildlife cards:** `glc_stats_wildlife_img()` (in `functions.php`) maps observation text to an image filename — the species named **earliest in the text** wins (array order in `glc_wildlife_species()` is only a same-position tie-break, so it never has to be reasoned about). It derives entirely from `glc_wildlife_species()`, the canonical list (label + img + match substrings) that also drives the `[glc_submit_form]` wildlife picker — add species there, once. The picker prepends chosen labels to the free text, so a ticked species leads the string and wins over a bare keyword mentioned later in prose. Cards show a brand-tinted gradient stage (`.wfig`) with the illustration + `drop-shadow`, then `.wbody` below with observation and site/date. Stagger delay `0.15 + i × 0.12s` via inline `--d` CSS property. **Sightings that don't match a known species are excluded entirely** (not rendered as a text-only card) — `page-stats.php` filters `$_wildlife_events`/`$_wildlife_all` down to `glc_stats_wildlife_img()` matches right after the initial query, before dedup, so unrecognised free text (typos, test data) never reaches the "Who we met along the way" section or its map. Gold border + shadow on hover; title shifts to gold-deep. No translateY on hover. (Single `cleanup_event`/`glc_submission` pages still show the raw Wildlife Observed text regardless of a match — this exclusion is `/stats`-only.)
 
-**Wildlife data source:** `page-stats.php` queries both `cleanup_event` and `glc_submission` CPTs for the `wildlife_obs` meta key (same unprefixed key on both). Sorted via `glc_cleanup_field()` for CPT-agnostic date access. Dedup key is the matched image filename (e.g. "Snapping Turtle" and "snapping turtle" share one slot) since every post reaching dedup already has a match.
+**Wildlife data source:** `page-stats.php` queries both `cleanup_event` and `glc_submission` CPTs for the `wildlife_obs` meta key (same unprefixed key on both). Sorted via `glc_cleanup_field()` for CPT-agnostic date access. Dedup key is the matched image filename (e.g. "Snapping Turtle" and "snapping turtle" share one slot) since every post reaching dedup already has a match. Newest-first, so of two cleanups whose earliest-named species is the same, the more recent one keeps the card slot.
 
 **Wildlife card height:** `.wfig` uses `height: 160px` (fixed, not `min-height`) — all cards are uniform regardless of image proportions. `.wfig img` uses `width: auto; max-width: 250px; height: auto; max-height: 100%`. The `width: auto` is required — CSS proportional scaling only kicks in when both width and height are `auto`; a fixed `width: 90%` with `max-height` would squish tall images instead of scaling them.
 
@@ -1075,14 +1084,14 @@ point the output at this repo's theme assets):
    - `--pin-pad` = breathing room on the nose side in output pixels (default 8 ≈ 2px at 48px display); increase if the face feels cramped
 2. Re-crop an existing asset's pin only: `python ../SupportScripts/prepare_wildlife_asset.py name.png name.png --pin-only`
    - Skips bg removal and resize; autocrop + pin crop only. Add `--pin-anchor` / `--pin-pad` as needed.
-3. Add a keyword match in `page-stats.php:glc_stats_wildlife_img()` — e.g. `if ( strpos( $obs, 'nest' ) !== false ) return 'nest.png';`
+3. Add a row to `functions.php:glc_wildlife_species()` — `'slug' => [ 'label' => 'Display Name', 'img' => 'name.png' ]`. Add an explicit `'match' => [ … ]` array only when the bare slug wouldn't catch how people write it **or** wouldn't catch the lowercased `label` itself (the picker inserts the label — e.g. `'red-winged'` for "Red-winged Blackbird"). Array position doesn't affect which card shows (earliest mention in the text wins), so just append. `glc_stats_wildlife_img()` and the `[glc_submit_form]` picker both read this list — one edit covers both.
 4. Run `repack.ps1`
 
 **Windows console quirk:** the script's final summary line prints `×`/`→`, which raises `UnicodeEncodeError` under the default Windows `cp1252` console — this happens *after* the PNG is already saved, so it's cosmetic, not a failed run. Set `PYTHONIOENCODING=utf-8` before the command to see the full output without the traceback.
 
 **Wildlife map pin lookup:** `page-stats.php` checks for `{stem}_s.png` via `file_exists()` and uses it when present; falls back to the card image. `_s.png` files are optional — the fallback looks reasonable; add a pin crop when the full card image crops badly at 48px.
 
-**Wildlife map river corridor lines:** the same `corridors.geojson` static asset used on `/cleanups/#cleanups-map` (see Archive Page) is fetched and drawn under the wildlife pins here too — lines only, no cumulative-impact pins, since this map is about sightings, not debris totals. `$_corridor_lines_url` is set right after the Leaflet enqueue block, only when `$_wl_markers` is non-empty (no point loading it for an empty map) and `corridors.geojson` exists. The JS block is a near-duplicate of the archive map's line-rendering snippet (fetch → `L.geoJSON` → `bringToBack()` → attribution) rather than a shared helper — the two maps are otherwise independent Leaflet instances with no existing shared JS to hook into. `fitBounds` still only considers wildlife markers, not the corridor lines — the lines are context for whatever's already in view, not something the map should re-zoom to show in full (several corridors run well outside the Guelph area).
+**Wildlife map river corridor lines:** the same `corridors.geojson` static asset used on `/cleanups/#cleanups-map` (see Archive Page) is fetched and drawn under the wildlife pins here too — lines only, no cumulative-impact pins, since this map is about sightings, not debris totals. `$_corridor_lines_url` is set right after the Leaflet enqueue block, only when `$_wl_markers` is non-empty (no point loading it for an empty map) and `corridors.geojson` exists. The JS block is a near-duplicate of the archive map's line-rendering snippet (fetch → `L.geoJSON` → `bringToBack()` → attribution) rather than a shared helper — the two maps are otherwise independent Leaflet instances with no existing shared JS to hook into. Its attribution must stay the **same OSM/ODbL corridor credit** as the archive map's (`shortcodes.php`) — it lagged on a stale "Ontario Hydro Network, MNRF" string until **theme 1.6.6**, after the pipeline had gone OSM-only; don't reintroduce an OHN credit here. `fitBounds` still only considers wildlife markers, not the corridor lines — the lines are context for whatever's already in view, not something the map should re-zoom to show in full (several corridors run well outside the Guelph area).
 
 **Footer anchor links** (`#debris`, `#hours`) work because `.dirCL-sec` has `scroll-margin-top: 110px`.
 
@@ -1148,6 +1157,58 @@ The video gallery reuses the photo CSS wholesale (`.glc-gallery-wrap`, `-tabs`, 
 
 "Number of People" is in section 2 (The Cleanup), not section 3 (What You Collected) — it belongs with outing details, not debris. Has `?` tooltip: "Used to calculate volunteer hours".
 
+**`page-submit-cleanup.php` sidebar** (`.glc-submit-sidebar`) carries three
+`.glc-sidebar-card`s: "What happens next?", "Do you need an account?", "Tips for
+logging". The account card is wrapped in `get_page_by_path( 'account' ) &&
+function_exists( 'glc_account_url' )` — same guard as the header/footer account
+links — so it stays invisible until the Account page exists and the plugin is
+active. It is deliberately short (three `.glc-sidebar-tips` lines, not a signup
+walkthrough): cleanups are keyed to the submitted email with or without an
+account, an account only gathers them onto one public profile, and the email is
+login-only / kept private. Its link is `glc_account_url()`. The "Tips for logging" card ends with a `.glc-sidebar-note`
+link to `/cleanup-best-practices/` (a WP-managed page); the intro `<p>` links
+there too.
+
+**Inline links in the intro `<p>` must go through `printf( wp_kses( __( … ),
+[ 'a' => [ 'href' => [] ] ] ), esc_url( … ) )`** — the pattern in
+`archive-glc_event.php:99`. `esc_html_e()` / `esc_html__()` HTML-escape their
+argument, so an `<a>` written inside one renders as visible `<a href="…">` text,
+not a link.
+
+**Wildlife Observed — species picker (plugin 1.5.8 / theme 1.6.7).** Section 4's
+"Wildlife Observed" field is a visual grid of species tiles
+(`.glc-wildlife-picker` → `.glc-wl-chip`, one per `glc_wildlife_species()` entry,
+thumbnails pulled from the theme's `assets/images/` via
+`get_stylesheet_directory_uri()` — same plugin-reaching-into-theme pattern as the
+thank-you image) **plus** the original free-text box, now labelled "Anything else
+you spotted". Rationale: wildlife is a growing part of the site's story, and a
+picker makes species spellings consistent so `glc_stats_wildlife_img()` matches
+reliably.
+
+- **The picker writes into `wildlife_obs`, not a new key.** On submit,
+  `glc_maybe_handle_submission()` re-validates each `glc_wildlife_picks[]` value
+  against `glc_wildlife_species()` (unknowns dropped), caps at **3**, maps to
+  labels, and **prepends** them to the free text as `"Label, Label. free text…"`
+  (length-capped at 500 with `mb_substr`, not a second `glc_clean_textarea` —
+  that would `wp_unslash` twice and eat a typed backslash). Everything
+  downstream (`/stats/` cards, single-page `.glc-wildlife-thumb`, dedup) matches
+  that string unchanged.
+- **One illustration still shows per cleanup** on `/stats/` and the single page.
+  `glc_stats_wildlife_img()` returns the species named **earliest in the
+  string**. Picks are prepended, so a ticked species always beats one only in
+  prose; among several ticked species the card is the one highest in
+  `glc_wildlife_species()` (checkboxes post in grid order, not click order).
+  Picking more species doesn't render more thumbnails — a per-cleanup
+  multi-thumb row was deliberately deferred.
+- **Server is the authority.** It's a plain checkbox group with a no-JS
+  fallback; the inline JS only enforces the 3-pick cap and the selected/disabled
+  chip state. The handler re-validates and re-caps regardless.
+- **Guarded on `function_exists( 'glc_wildlife_species' )`** — under another
+  theme the field degrades to just the textarea.
+- **Admin review:** the merged string lands in the `glc_wildlife_obs` textarea
+  in the Submission Details meta box, fully editable like every other field —
+  the meta box has no picker.
+
 ### WordPress Pages Required
 
 | Title | Slug | Template | Notes |
@@ -1188,11 +1249,14 @@ The video gallery reuses the photo CSS wholesale (`.glc-gallery-wrap`, `-tabs`, 
   sitemap is gone from the index and its URL now returns the theme's real 404
   page.
 
-- [ ] **Deploy plugin 1.5.3 + theme 1.6.4** — one combined upload carrying three
-  undeployed changes:
+- [x] ~~**Deploy plugin 1.5.4 + theme 1.6.5**~~ — **uploaded and verified live
+  2026-09-09.** Carried the four changes below. The single-event corridor
+  overlay was then refined in **plugin 1.5.5–1.5.6** (zoom — see the item after this).
+  One combined upload carrying four changes:
 
-  1. **Public route renamed `/cleaners/` → `/crew/`** (plugin 1.5.3 / theme
-     1.6.4). The four open questions that gated this were resolved 2026-09-08:
+  1. **Public route renamed `/cleaners/` → `/crew/`** (written at the 1.5.3 /
+     1.6.4 dev stage; now ships in this 1.5.4 / 1.6.5 upload). The four open
+     questions that gated this were resolved 2026-09-08:
      real names or a handle → whatever they typed on the form, pseudonyms fine
      (already how it worked); exact GPS on the profile map → yes (already);
      account unlocks nothing beyond the profile → correct (already);
@@ -1218,11 +1282,73 @@ The video gallery reuses the photo CSS wholesale (`.glc-gallery-wrap`, `-tabs`, 
   3. **Sitemap 404-status bug** (was theme 1.6.3, now folded in). Every sitemap
      served a valid document with a 404 status, so no crawler ever read one. See
      *Sitemaps must answer 200*.
+  4. **Single-event corridor overlay** (plugin 1.5.4 / theme 1.6.5). The
+     "Cleanup Location" map on both single-cleanup templates now passes
+     `corridor="1"` — draws that cleanup's own river line + its cumulative-impact
+     diamond, reusing the shared `corridors.geojson` cache (filtered to one slug
+     client-side). New `glc_corridor_overlay_data()` helper shared with the
+     archive map. See the Archive Page's *`corridor="1"`* notes. No rewrite
+     flush, no `site_audit.py` change (it asserts nothing about single-event
+     maps). Purely additive — degrades to today's lone pin for any cleanup whose
+     corridor meta doesn't resolve.
 
-  Deploy: `powershell -File repack.ps1`, upload both zips, **deactivate and
-  reactivate the plugin** (the `/crew/` rewrite rule needs the flush).
-  `site_audit.py` should go from its current failures (4 Sitemaps + any
-  `/cleaners/` account probes) to zero.
+  Deploy was: `powershell -File repack.ps1`, upload both zips, deactivate and
+  reactivate the plugin (the `/crew/` rewrite rule needed the flush).
+
+- [ ] **Deploy plugin 1.5.7 + theme 1.6.6** — the single-event corridor map
+  (1.5.5–1.5.6) plus the centerline-only corridor data (1.5.7), plus one theme
+  fix (1.6.6). Changes 1–2 are both in `glc_shortcode_map()`; change 3 is a
+  `corridors.geojson` re-scan with no code change; change 4 is theme-side.
+  1. **1.5.5** — `glc_corridor_overlay_data()` returns a third value, `$bbox`
+     (full geometry extent of the scoped slug, computed during the parse it
+     already does), and the `singleEvent` branch frames it (`bbox ∪ pin ∪
+     diamond`) instead of a tight pin close-up. Some corridors run 20+ km; the
+     map is now a watershed overview.
+  2. **1.5.6** — zoom calibration: `floor(getBoundsZoom(...)) + 0.5` (the integer
+     fit, half a level tighter — the raw fit had too much margin, +1 clipped).
+     Needs `zoomSnap: 0.5`, emitted **only** on this map (`$corridor_bbox`
+     truthy); every other `[glc_map]` stays `zoomSnap: 1` / integer zoom.
+  3. **1.5.7** — corridor lines are now centerlines only: `query_osm()` in
+     `prepare_corridors_geojson.py` (SupportScripts repo) no longer fetches
+     `natural=water` river-area polygons, and `corridors.geojson` was fully
+     re-scanned (1.37 MB → ~1.05 MB, 0 closed rings). Drops the doubled-bank
+     rendering that made narrow creeks look like wide rivers. No PHP/JS change —
+     every feature already drew with one style. Nine Mile River's polygon-only
+     mouth (~7.4 km to Lake Huron) is kept, supplied as a hand-digitized line
+     in the new `MANUAL_SEGMENTS` dict. See the Archive Page's *centerlines
+     only* note. The SupportScripts edits (query change + `MANUAL_SEGMENTS`)
+     need their own commit in that repo.
+  4. **theme 1.6.6** — the `/stats/` wildlife map's corridor-line attribution
+     still credited "Ontario Hydro Network, MNRF" (`page-stats.php`); the
+     pipeline has been OSM-only for a while, so it now matches the archive
+     map's "OpenStreetMap contributors, ODbL". One-line inline-JS change.
+
+  See the Archive Page's *`corridor="1"`* notes. No rewrite flush, no
+  `site_audit.py` change. `[glc_map corridors="1"]` (archive) is untouched —
+  `$bbox` is null there and the fit logic below the `singleEvent` branch is
+  unchanged.
+
+- [ ] **Deploy plugin 1.5.8 + theme 1.6.7** — Wildlife Observed species picker
+  on `[glc_submit_form]` (section 4). See *Submit a Cleanup Page → species
+  picker*.
+  1. **theme 1.6.7** — new `glc_wildlife_species()` in `functions.php` is the
+     canonical species list (label + img + match substrings); the picker and
+     `glc_stats_wildlife_img()` both read it. `glc_stats_wildlife_img()` now
+     returns the species named **earliest in the observation text** instead of
+     the first `glc_wildlife_species()` entry that matches anywhere — list order
+     no longer decides a card, so a new species can't clobber an existing one.
+     Keyword set is the bare species names, unchanged, plus `red-winged` (the
+     one case where the picker's label wouldn't otherwise be recognised). New
+     `.glc-wildlife-picker` / `.glc-wl-chip` CSS in `style.css`. `page-stats.php`
+     and the single templates are untouched — they already call the one
+     function.
+  2. **plugin 1.5.8** — `submission.php` renders the tile grid above the
+     (relabelled) free-text box, guarded on `function_exists(
+     'glc_wildlife_species' )`; inline JS caps at 3 + selected state;
+     `glc_maybe_handle_submission()` re-validates picks against the list, caps at
+     3, prepends the labels to `wildlife_obs`. No new meta key, no downstream
+     template change, no `site_audit.py` change. Not a CPT/rewrite change — no
+     flush needed; a plain plugin+theme zip upload.
 
 - [ ] **Finish the accounts rollout** — the code is live but the feature is not:
   `/account/` still 404s, so nothing is reachable yet and the profile sitemap

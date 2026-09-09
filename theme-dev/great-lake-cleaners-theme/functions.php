@@ -6,7 +6,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.6.4' );
+define( 'GLC_THEME_VERSION', '1.6.7' );
 
 // PayPal Pool fundraiser — cigarette butt dispensers at trail heads.
 // Used by the header + footer donate icons and the NGO JSON-LD DonateAction.
@@ -570,31 +570,76 @@ function glc_stats_area_chart( $series, $height, $days, $max_day, $first_ts = 0,
     return ob_get_clean();
 }
 
-// Image mapper for wildlife observations — returns filename relative to
-// assets/images, or null. Shared by page-stats.php (wildlife cards + map
-// pins) and the single cleanup_event / glc_submission templates.
+// Canonical wildlife species list — one row per illustrated species, read by:
+//   • glc_stats_wildlife_img() below — observation text → card image / map pin
+//   • the [glc_submit_form] "Wildlife Observed" picker (plugin,
+//     includes/submission.php) — one tile per entry, keyed by the array key
+//   • CLAUDE.md's "adding a new wildlife image" workflow — add the row here
+//
+// `match` is the list of lowercase substrings that name the species in an
+// observation; it defaults to [ key ]. It MUST recognise the species' own
+// lowercased `label`, because the picker writes that label into the text — a
+// label the list can't see produces no card. That, and nothing else, is why
+// 'red-winged' sits beside 'redwinged'; the keyword set is otherwise the bare
+// species name.
+//
+// Array order is ONLY the picker's tile order and a same-position tie-break:
+// glc_stats_wildlife_img() picks whichever species is named EARLIEST in the
+// text, so inserting a row here can never dislodge an existing card, and you
+// don't have to reason about where it lands. Every `img` must exist in
+// assets/images/ — prepare it with prepare_wildlife_asset.py (see CLAUDE.md →
+// Stats Page).
+function glc_wildlife_species() {
+	$species = [
+		'beaver'          => [ 'label' => 'Beaver',               'img' => 'beaver.png' ],
+		'heron'           => [ 'label' => 'Great Blue Heron',     'img' => 'heron.png' ],
+		'toad'            => [ 'label' => 'Toad',                 'img' => 'toad.png' ],
+		'frog'            => [ 'label' => 'Frog',                 'img' => 'frog.png' ],
+		'crayfish'        => [ 'label' => 'Crayfish',             'img' => 'crayfish.png' ],
+		'butterfly'       => [ 'label' => 'Butterfly',            'img' => 'butterfly.png' ],
+		'dragonfly'       => [ 'label' => 'Dragonfly',            'img' => 'dragonfly.png' ],
+		'cormorant'       => [ 'label' => 'Cormorant',            'img' => 'cormorant.png' ],
+		'redwinged'       => [ 'label' => 'Red-winged Blackbird', 'img' => 'redwinged.png', 'match' => [ 'redwinged', 'red-winged' ] ],
+		'mink'            => [ 'label' => 'Mink',                 'img' => 'mink.png' ],
+		'swallow'         => [ 'label' => 'Swallow',              'img' => 'swallow.png' ],
+		'snapping-turtle' => [ 'label' => 'Snapping Turtle',      'img' => 'snapping-turtle.png', 'match' => [ 'snapping' ] ],
+		'painted-turtle'  => [ 'label' => 'Painted Turtle',       'img' => 'painted-turtle.png',  'match' => [ 'painted' ] ],
+		'minnows'         => [ 'label' => 'Minnows',              'img' => 'minnows.png' ],
+		'nest'            => [ 'label' => 'Nest / Eggs',          'img' => 'nest.png', 'match' => [ 'egg' ] ],
+		'merganser'       => [ 'label' => 'Merganser',            'img' => 'merganser.png' ],
+		'duck'            => [ 'label' => 'Duck',                 'img' => 'duck.png' ],
+		'canada-goose'    => [ 'label' => 'Canada Goose',         'img' => 'canada-goose.png', 'match' => [ 'goose', 'geese' ] ],
+		'snake'           => [ 'label' => 'Snake',                'img' => 'snake.png' ],
+		'leech'           => [ 'label' => 'Leech',                'img' => 'leech.png' ],
+		'sandpiper'       => [ 'label' => 'Sandpiper',            'img' => 'sandpiper.png' ],
+	];
+	foreach ( $species as $key => &$s ) {
+		if ( empty( $s['match'] ) ) {
+			$s['match'] = [ $key ];
+		}
+	}
+	unset( $s );
+	return $species;
+}
+
+// Image for a wildlife observation — the species named EARLIEST in the text
+// wins (array order only breaks an exact positional tie). Returns a filename
+// relative to assets/images, or null. One rule, one function: page-stats.php
+// (cards + map pins) and both single templates all call it, so all three
+// always show the same animal for a given cleanup.
 function glc_stats_wildlife_img( $obs ) {
-	$obs = strtolower( $obs );
-	if ( strpos( $obs, 'beaver' ) !== false ) return 'beaver.png';
-	if ( strpos( $obs, 'heron' ) !== false ) return 'heron.png';
-	if ( strpos( $obs, 'toad' ) !== false ) return 'toad.png';
-	if ( strpos( $obs, 'frog' ) !== false ) return 'frog.png';
-	if ( strpos( $obs, 'butterfly' ) !== false ) return 'butterfly.png';
-	if ( strpos( $obs, 'dragonfly' ) !== false ) return 'dragonfly.png';
-	if ( strpos( $obs, 'cormorant' ) !== false ) return 'cormorant.png';
-	if ( strpos( $obs, 'redwinged' ) !== false ) return 'redwinged.png';
-	if ( strpos( $obs, 'mink' ) !== false ) return 'mink.png';
-	if ( strpos( $obs, 'swallow' ) !== false ) return 'swallow.png';
-	if ( strpos( $obs, 'snapping' ) !== false ) return 'snapping-turtle.png';
-	if ( strpos( $obs, 'painted' )  !== false ) return 'painted-turtle.png';
-	if ( strpos( $obs, 'minnows' ) !== false ) return 'minnows.png';
-	if ( strpos( $obs, 'egg' )    !== false ) return 'nest.png';
-	if ( strpos( $obs, 'merganser' )    !== false ) return 'merganser.png';
-	if ( strpos( $obs, 'duck' )    !== false ) return 'duck.png';
-	if ( strpos( $obs, 'goose' )    !== false
-	  || strpos( $obs, 'geese' )    !== false ) return 'canada-goose.png';
-	if ( strpos( $obs, 'snake' )    !== false ) return 'snake.png';
-	if ( strpos( $obs, 'leech' )    !== false ) return 'leech.png';
-	if ( strpos( $obs, 'sandpiper' )    !== false ) return 'sandpiper.png';
-	return null;
+	$obs = strtolower( (string) $obs );
+	if ( $obs === '' ) return null;
+	$best_img = null;
+	$best_pos = PHP_INT_MAX;
+	foreach ( glc_wildlife_species() as $s ) {
+		foreach ( $s['match'] as $needle ) {
+			$pos = strpos( $obs, $needle );
+			if ( $pos !== false && $pos < $best_pos ) {
+				$best_pos = $pos;
+				$best_img = $s['img'];
+			}
+		}
+	}
+	return $best_img;
 }

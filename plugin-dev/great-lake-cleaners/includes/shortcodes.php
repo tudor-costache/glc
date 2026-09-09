@@ -212,6 +212,125 @@ function glc_corridor_midpoint( $lines ) {
     return [ $last[2], $last[3] ];
 }
 
+// Corridor overlay payload — the shared corridors.geojson URL and the
+// per-corridor cumulative-impact diamond pins. Used by the /cleanups/ archive
+// map (every corridor) and by a single-event map (just that cleanup's corridor).
+//
+// The lines URL is always the same versioned, cacheable asset every GLC map
+// requests, so a visitor who has loaded any map already has it. A single-event
+// map does NOT fetch a per-corridor variant — it filters the full file to one
+// slug client-side (see the fetch() handler in the map script). Keeping one URL
+// is the whole point: 16 corridors of real centerline geometry is ~1.05 MB, and
+// three maps share the single cache entry.
+//
+// @param bool       $want_pins  Compute the cumulative diamond pins? false skips
+//                               the walk over every cleanup (lines only).
+// @param array|null $only_slugs Restrict lines and pins to these corridor slugs
+//                               (single-event mode passes exactly one). null = all.
+// @return array [ $lines_url, $totals, $bbox ] — $lines_url is '' when the file
+//               is missing or has no geometry for the wanted slug(s); $totals is
+//               a 0..N list shaped { slug, name, weight_kg, bags, items_recycled,
+//               lat, lon }; $bbox is [ [minLat,minLon], [maxLat,maxLon] ] over
+//               the requested slugs' full geometry (single-event maps fit to it
+//               so the whole corridor shows), or null when $only_slugs is null
+//               or there is no geometry. All ready for wp_json_encode().
+function glc_corridor_overlay_data( $want_pins, $only_slugs = null ) {
+    $geojson_path = GLC_PLUGIN_DIR . 'assets/corridors.geojson';
+    $lines_url    = '';
+    $totals       = [];
+    $bbox         = null;
+    $lines_by_slug = [];
+
+    if ( file_exists( $geojson_path ) ) {
+        $geo = json_decode( (string) file_get_contents( $geojson_path ), true );
+        foreach ( $geo['features'] ?? [] as $feat ) {
+            $slug = $feat['properties']['slug'] ?? '';
+            if ( ! $slug ) continue;
+            if ( $only_slugs !== null && ! in_array( $slug, $only_slugs, true ) ) continue;
+            $geom = $feat['geometry'] ?? [];
+            if ( ( $geom['type'] ?? '' ) === 'LineString' ) {
+                $lines_by_slug[ $slug ][] = $geom['coordinates'];
+            } elseif ( ( $geom['type'] ?? '' ) === 'MultiLineString' ) {
+                foreach ( $geom['coordinates'] as $line ) $lines_by_slug[ $slug ][] = $line;
+            }
+        }
+        // mtime query string lets the browser cache this aggressively (see
+        // assets/.htaccess) without ever serving a stale file -- any update to
+        // corridors.geojson changes the URL.
+        if ( $lines_by_slug ) {
+            $lines_url = GLC_PLUGIN_URL . 'assets/corridors.geojson?v=' . filemtime( $geojson_path );
+        }
+
+        // Bounding box of the requested corridor(s)' full geometry. Scoped
+        // requests only (single-event) -- the archive map frames its own marker
+        // set, not a corridor extent. Cheap: a few thousand coords, min/max.
+        if ( $only_slugs !== null && $lines_by_slug ) {
+            $min_lat = $min_lon = INF;
+            $max_lat = $max_lon = -INF;
+            foreach ( $lines_by_slug as $lines ) {
+                foreach ( $lines as $line ) {
+                    foreach ( $line as $pt ) {
+                        [ $lon, $lat ] = $pt;
+                        if ( $lat < $min_lat ) $min_lat = $lat;
+                        if ( $lat > $max_lat ) $max_lat = $lat;
+                        if ( $lon < $min_lon ) $min_lon = $lon;
+                        if ( $lon > $max_lon ) $max_lon = $lon;
+                    }
+                }
+            }
+            if ( is_finite( $min_lat ) ) {
+                $bbox = [ [ $min_lat, $min_lon ], [ $max_lat, $max_lon ] ];
+            }
+        }
+    }
+
+    if ( $want_pins ) {
+        $table = glc_corridor_table();
+        foreach ( glc_get_all_cleanups() as $e ) {
+            $slug = glc_corridor_slug( glc_cleanup_field( $e, 'corridor' ) );
+            if ( ! $slug ) continue;
+            if ( $only_slugs !== null && ! in_array( $slug, $only_slugs, true ) ) continue;
+
+            if ( ! isset( $totals[ $slug ] ) ) {
+                $totals[ $slug ] = [
+                    'slug' => $slug,
+                    'name' => $table[ $slug ],
+                    'weight_kg' => 0.0, 'bags' => 0, 'items_recycled' => 0,
+                    'lat_sum' => 0.0, 'lon_sum' => 0.0, 'gps_count' => 0,
+                ];
+            }
+            $totals[ $slug ]['weight_kg']      += (float) glc_cleanup_field( $e, 'weight_kg' );
+            $totals[ $slug ]['bags']           += (int)   glc_cleanup_field( $e, 'bags' );
+            $totals[ $slug ]['items_recycled'] += (int)   glc_cleanup_field( $e, 'items_recycled' );
+
+            $lat = (float) glc_cleanup_field( $e, 'gps_lat' );
+            $lon = (float) glc_cleanup_field( $e, 'gps_lon' );
+            if ( $lat && $lon ) {
+                $totals[ $slug ]['lat_sum'] += $lat;
+                $totals[ $slug ]['lon_sum'] += $lon;
+                $totals[ $slug ]['gps_count']++;
+            }
+        }
+
+        foreach ( $totals as $slug => &$t ) {
+            if ( isset( $lines_by_slug[ $slug ] ) ) {
+                [ $t['lat'], $t['lon'] ] = glc_corridor_midpoint( $lines_by_slug[ $slug ] );
+            } elseif ( $t['gps_count'] > 0 ) {
+                $t['lat'] = $t['lat_sum'] / $t['gps_count'];
+                $t['lon'] = $t['lon_sum'] / $t['gps_count'];
+            } else {
+                unset( $totals[ $slug ] ); // no line and no GPS -- nowhere to place a pin
+                continue;
+            }
+            unset( $t['lat_sum'], $t['lon_sum'], $t['gps_count'] );
+        }
+        unset( $t );
+        $totals = array_values( $totals );
+    }
+
+    return [ $lines_url, $totals, $bbox ];
+}
+
 add_shortcode( 'glc_map', 'glc_shortcode_map' );
 function glc_shortcode_map( $atts ) {
     $atts = shortcode_atts( [
@@ -220,12 +339,20 @@ function glc_shortcode_map( $atts ) {
         'limit'          => 0,   // max markers per geographic cluster (0 = no limit)
         'cluster_radius' => 0,   // km radius for grouping nearby markers (0 = no clustering)
         'corridors'      => 0,   // render river corridor lines (and, unless corridor_pins="0", cumulative-impact pins)
+        'corridor'       => 0,   // single-event mode only: also draw THIS cleanup's corridor -- its line (filtered client-side from the shared geojson, so the cache is reused) and its cumulative-impact diamond
         'corridor_pins'  => 1,   // 0 = lines only, no gold corridor pins -- for a view that wants river context without another layer of markers
         'corridor_bounds' => 1,  // let corridor pins expand the map's fit-to-bounds zoom (0 = pins render but never zoom out to reach them -- for curated views that still show pins). No effect when corridor_pins="0" -- nothing to include either way.
         'markers'        => 1,   // render individual site pins (0 = corridor pins only -- less noisy once corridors carry the summary)
         'author'         => 0,   // restrict to one account's cleanups (a cleaner profile map). All-events mode only
         'zoom_offset'    => 1,   // levels tighter than the guaranteed-fit zoom for the multi-marker view (front-page hero passes 2 -- reads less zoomed-out and keeps Guelph visually centred; outliers just sit off the edge)
     ], $atts );
+
+    // Corridor overlay payload — populated for the archive map (every corridor)
+    // or, on a single-event map with corridor="1", just this cleanup's corridor.
+    $corridor_lines_url = '';
+    $corridor_totals    = [];
+    $corridor_slug      = '';   // single-event only; filters the shared geojson client-side
+    $corridor_bbox      = null; // single-event only; full corridor extent to fit the map to
 
     // Single-event mode (used on single-cleanup_event.php and single-glc_submission.php)
     if ( (int) $atts['post_id'] > 0 ) {
@@ -246,6 +373,20 @@ function glc_shortcode_map( $atts ) {
             'bags'  => (int) glc_meta( $pid, 'bags' ),
             'url'   => get_permalink( $pid ),
         ] ];
+
+        // corridor="1": overlay this cleanup's own corridor — the line (drawn
+        // from the same shared, cached geojson every map uses, filtered to this
+        // one slug in the browser) and its cumulative-impact diamond. Same data
+        // and helpers as the /cleanups/ archive map, scoped to one corridor. An
+        // unrecognised or empty corridor meta value leaves both off, so the map
+        // is exactly today's lone location pin.
+        if ( (int) $atts['corridor'] ) {
+            $corridor_slug = glc_corridor_slug( glc_cleanup_field( $pid, 'corridor' ) );
+            if ( $corridor_slug !== '' ) {
+                [ $corridor_lines_url, $corridor_totals, $corridor_bbox ] =
+                    glc_corridor_overlay_data( true, [ $corridor_slug ] );
+            }
+        }
     } else {
         // All-events mode — both cleanup_event and glc_submission, deduped by location
         $events = glc_get_all_cleanups();
@@ -324,79 +465,14 @@ function glc_shortcode_map( $atts ) {
         }
     }
 
-    // Corridor lines + cumulative-impact pins (archive map only, opt-in via `corridors="1"`)
-    $corridor_lines_url = '';
-    $corridor_totals    = [];
-
+    // Corridor lines + cumulative-impact pins for the /cleanups/ archive map
+    // (opt-in via corridors="1"). Single-event maps take the corridor="1" path
+    // in the branch above; both share glc_corridor_overlay_data().
     if ( (int) $atts['corridors'] && (int) $atts['post_id'] === 0 ) {
-        $geojson_path = GLC_PLUGIN_DIR . 'assets/corridors.geojson';
         // corridor_pins="0" (front-page hero, cleaner profiles) wants the lines
-        // and nothing else, so the cumulative walk over every cleanup below is
-        // skipped entirely rather than computed and thrown away.
+        // and nothing else, so the walk over every cleanup is skipped.
         $want_pins = (bool) (int) $atts['corridor_pins'];
-        $lines_by_slug = [];
-
-        if ( file_exists( $geojson_path ) ) {
-            $corridor_geo = json_decode( (string) file_get_contents( $geojson_path ), true );
-            foreach ( $corridor_geo['features'] ?? [] as $feat ) {
-                $slug = $feat['properties']['slug'] ?? '';
-                if ( ! $slug ) continue;
-                $geom = $feat['geometry'] ?? [];
-                if ( ( $geom['type'] ?? '' ) === 'LineString' ) {
-                    $lines_by_slug[ $slug ][] = $geom['coordinates'];
-                } elseif ( ( $geom['type'] ?? '' ) === 'MultiLineString' ) {
-                    foreach ( $geom['coordinates'] as $line ) $lines_by_slug[ $slug ][] = $line;
-                }
-            }
-            if ( $lines_by_slug ) {
-                // mtime query string lets the browser cache this aggressively
-                // (see assets/.htaccess) without ever serving a stale file --
-                // any update to corridors.geojson changes the URL.
-                $corridor_lines_url = GLC_PLUGIN_URL . 'assets/corridors.geojson?v=' . filemtime( $geojson_path );
-            }
-        }
-
-        $corridor_table = glc_corridor_table();
-        $corridor_cleanups = $want_pins ? glc_get_all_cleanups() : [];
-        foreach ( $corridor_cleanups as $e ) {
-            $slug = glc_corridor_slug( glc_cleanup_field( $e, 'corridor' ) );
-            if ( ! $slug ) continue;
-
-            if ( ! isset( $corridor_totals[ $slug ] ) ) {
-                $corridor_totals[ $slug ] = [
-                    'slug' => $slug,
-                    'name' => $corridor_table[ $slug ],
-                    'weight_kg' => 0.0, 'bags' => 0, 'items_recycled' => 0,
-                    'lat_sum' => 0.0, 'lon_sum' => 0.0, 'gps_count' => 0,
-                ];
-            }
-            $corridor_totals[ $slug ]['weight_kg']      += (float) glc_cleanup_field( $e, 'weight_kg' );
-            $corridor_totals[ $slug ]['bags']           += (int)   glc_cleanup_field( $e, 'bags' );
-            $corridor_totals[ $slug ]['items_recycled'] += (int)   glc_cleanup_field( $e, 'items_recycled' );
-
-            $lat = (float) glc_cleanup_field( $e, 'gps_lat' );
-            $lon = (float) glc_cleanup_field( $e, 'gps_lon' );
-            if ( $lat && $lon ) {
-                $corridor_totals[ $slug ]['lat_sum'] += $lat;
-                $corridor_totals[ $slug ]['lon_sum'] += $lon;
-                $corridor_totals[ $slug ]['gps_count']++;
-            }
-        }
-
-        foreach ( $corridor_totals as $slug => &$t ) {
-            if ( isset( $lines_by_slug[ $slug ] ) ) {
-                [ $t['lat'], $t['lon'] ] = glc_corridor_midpoint( $lines_by_slug[ $slug ] );
-            } elseif ( $t['gps_count'] > 0 ) {
-                $t['lat'] = $t['lat_sum'] / $t['gps_count'];
-                $t['lon'] = $t['lon_sum'] / $t['gps_count'];
-            } else {
-                unset( $corridor_totals[ $slug ] ); // no line and no GPS -- nowhere to place a pin
-                continue;
-            }
-            unset( $t['lat_sum'], $t['lon_sum'], $t['gps_count'] );
-        }
-        unset( $t );
-        $corridor_totals = array_values( $corridor_totals );
+        [ $corridor_lines_url, $corridor_totals ] = glc_corridor_overlay_data( $want_pins );
     }
 
     // Enqueue Leaflet — self-hosted to eliminate unpkg.com CDN dependency and tighten CSP
@@ -434,11 +510,20 @@ function glc_shortcode_map( $atts ) {
         var showCorridorPins = <?php echo wp_json_encode( (bool) $atts['corridor_pins'] ); ?>;
         var showMarkers = <?php echo wp_json_encode( (bool) $atts['markers'] ); ?>;
         var zoomOffset = <?php echo wp_json_encode( (int) $atts['zoom_offset'] ); ?>;
+        // Single-event map: keep the cleanup pin as the centre no matter what
+        // else is drawn. corridorSlug (single-event corridor="1" only) filters
+        // the shared corridors.geojson to one river in the browser.
+        var singleEvent = <?php echo wp_json_encode( (int) $atts['post_id'] > 0 ); ?>;
+        var corridorSlug = <?php echo wp_json_encode( $corridor_slug ); ?>;
+        var corridorBbox = <?php echo wp_json_encode( $corridor_bbox ); ?>;
         var archiveUrl = <?php echo wp_json_encode( get_post_type_archive_link( 'cleanup_event' ) ?: home_url( '/cleanups/' ) ); ?>;
         // Guelph is home base. Every map centres here; a fit-to-bounds only ever
         // sets the zoom level, never the centre (see the fit block at the end).
         var GLC_HOME = [43.545, -80.248];
-        var map = L.map(<?php echo wp_json_encode( $map_id ); ?>, { zoomControl: false }).setView(GLC_HOME, 12);
+        // zoomSnap 0.5 only on a single-event corridor map, so its fit can land
+        // half a level tighter than the integer fit (below). Default 1 elsewhere
+        // — every other map keeps exactly its current integer-zoom behaviour.
+        var map = L.map(<?php echo wp_json_encode( $map_id ); ?>, { zoomControl: false, zoomSnap: <?php echo $corridor_bbox ? '0.5' : '1'; ?> }).setView(GLC_HOME, 12);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_29e5_1_17f74f1d3418f4c313616f46', {
             attribution: '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
@@ -451,7 +536,17 @@ function glc_shortcode_map( $atts ) {
             fetch(corridorLinesUrl)
                 .then(function(r) { return r.json(); })
                 .then(function(geo) {
-                    L.geoJSON(geo, {
+                    // The file holds every corridor. A single-event map wants
+                    // only its own, so filter here rather than fetching a
+                    // per-corridor variant — the shared, already-cached download
+                    // stays the one all three maps use.
+                    var features = (geo && geo.features) ? geo.features : [];
+                    if (corridorSlug) {
+                        features = features.filter(function(f) {
+                            return f && f.properties && f.properties.slug === corridorSlug;
+                        });
+                    }
+                    L.geoJSON({ type: 'FeatureCollection', features: features }, {
                         style: { color: '#5a9fc0', weight: 3, opacity: 0.55 }
                     }).addTo(map).bringToBack();
                     map.attributionControl.addAttribution(
@@ -503,38 +598,68 @@ function glc_shortcode_map( $atts ) {
             });
         }
 
-        // Fit bounds or zoom to a single pin. Corridor pins only widen the fit
-        // when shown *and* corridorBounds is on -- a curated view (the front-page
-        // hero) can show corridor lines without letting a far-off pin (Bayfield,
-        // Duchesnay Creek, ...) zoom the whole map out to reach it.
-        var allPoints = showMarkers ? markers.map(function(m){ return [m.lat, m.lon]; }) : [];
-        if (showCorridorPins && corridorBounds) {
-            allPoints = allPoints.concat(corridorTotals.map(function(c){ return [c.lat, c.lon]; }));
-        }
+        if (singleEvent) {
+            var ctr = [markers[0].lat, markers[0].lon];
+            if (corridorBbox) {
+                // Frame the whole corridor — its full geometry, plus the cleanup
+                // pin and the corridor diamond — so the map reads as "this is the
+                // stretch of water and where the site sits on it", with the
+                // downstream context of where it flows. Some corridors run 20+ km,
+                // so this is a deliberate zoom-out from the old pin close-up.
+                var b = L.latLngBounds(corridorBbox);
+                b.extend(ctr);
+                if (showCorridorPins && corridorTotals.length) {
+                    b.extend([corridorTotals[0].lat, corridorTotals[0].lon]);
+                }
+                // getBoundsZoom (30px/side padding -> L.point(60,60) total) is
+                // what fitBounds would snap down to. Floor it to the integer, add
+                // exactly half a level — raw fit left too much dead margin, +1
+                // clipped the corridor. The .5 only survives setView because this
+                // map alone is built with zoomSnap:0.5 (above). maxZoom 15 caps a
+                // very short creek. One coherent local corridor, and this doesn't
+                // read the zoom back or pan, so the fitBounds traps below don't
+                // apply.
+                var fitInt = Math.floor(map.getBoundsZoom(b, false, L.point(60, 60)));
+                map.setView(b.getCenter(), Math.min(fitInt + 0.5, 15));
+            } else {
+                // No corridor drawn (corridor="1" absent, or the meta didn't
+                // resolve) — the plain single-event close-up on the pin.
+                map.setView(ctr, 15);
+            }
+        } else {
+            // Fit bounds or zoom to a single pin. Corridor pins only widen the fit
+            // when shown *and* corridorBounds is on -- a curated view (the front-page
+            // hero) can show corridor lines without letting a far-off pin (Bayfield,
+            // Duchesnay Creek, ...) zoom the whole map out to reach it.
+            var allPoints = showMarkers ? markers.map(function(m){ return [m.lat, m.lon]; }) : [];
+            if (showCorridorPins && corridorBounds) {
+                allPoints = allPoints.concat(corridorTotals.map(function(c){ return [c.lat, c.lon]; }));
+            }
 
-        if (allPoints.length === 1) {
-            // One pin means a single-event map, where the pin *is* the subject.
-            map.setView(allPoints[0], 15);
-        } else if (allPoints.length > 1) {
-            // Take the zoom from the bounds but never the centre. One far-off site
-            // (Duchesnay Creek up in North Bay, Bayfield out on Huron) drags the
-            // bounds centre halfway to Georgian Bay, and the map opens with every
-            // real cleanup crowded into a corner. Guelph stays centred instead;
-            // outliers sit off the edge, and the map still pans and zooms.
-            //
-            // getBoundsZoom() is the same calculation fitBounds() runs internally,
-            // but it only computes — it never moves the map. That matters twice
-            // over: there's no fit-then-pan-back (which lands ~a pixel off Guelph,
-            // since panBy rounds its offset), and no reading back a zoom that
-            // fitBounds may not have applied yet — it defers to requestAnimationFrame
-            // whenever the zoom delta is small enough to animate.
-            // Padding is the *total*, so fitBounds' [40, 40] per side is [80, 80].
-            var fitZoom = map.getBoundsZoom(L.latLngBounds(allPoints), false, L.point(80, 80));
-            // zoomOffset levels tighter than the zoom guaranteed to fit (default 1
-            // — still comfortably inside the padding, reads far less zoomed-out).
-            // The front-page hero passes 2: at +1 its wide spread (North Bay down to
-            // Long Point) still opens too far out to read as a Guelph map.
-            map.setView(GLC_HOME, fitZoom + zoomOffset);
+            if (allPoints.length === 1) {
+                // One pin means a single-event map, where the pin *is* the subject.
+                map.setView(allPoints[0], 15);
+            } else if (allPoints.length > 1) {
+                // Take the zoom from the bounds but never the centre. One far-off site
+                // (Duchesnay Creek up in North Bay, Bayfield out on Huron) drags the
+                // bounds centre halfway to Georgian Bay, and the map opens with every
+                // real cleanup crowded into a corner. Guelph stays centred instead;
+                // outliers sit off the edge, and the map still pans and zooms.
+                //
+                // getBoundsZoom() is the same calculation fitBounds() runs internally,
+                // but it only computes — it never moves the map. That matters twice
+                // over: there's no fit-then-pan-back (which lands ~a pixel off Guelph,
+                // since panBy rounds its offset), and no reading back a zoom that
+                // fitBounds may not have applied yet — it defers to requestAnimationFrame
+                // whenever the zoom delta is small enough to animate.
+                // Padding is the *total*, so fitBounds' [40, 40] per side is [80, 80].
+                var fitZoom = map.getBoundsZoom(L.latLngBounds(allPoints), false, L.point(80, 80));
+                // zoomOffset levels tighter than the zoom guaranteed to fit (default 1
+                // — still comfortably inside the padding, reads far less zoomed-out).
+                // The front-page hero passes 2: at +1 its wide spread (North Bay down to
+                // Long Point) still opens too far out to read as a Guelph map.
+                map.setView(GLC_HOME, fitZoom + zoomOffset);
+            }
         }
     });
     </script>

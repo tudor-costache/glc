@@ -255,7 +255,8 @@ if ( have_posts() ) :
         <?php if ( $gps_lat && $gps_lon ) : ?>
         <div class="glc-single-event-map">
             <h2><?php esc_html_e( 'Cleanup Location', 'great-lake-cleaners' ); ?></h2>
-            <?php echo do_shortcode( '[glc_map height="320px" post_id="' . $id . '"]' ); ?>
+            <?php // corridor="1": also draw this cleanup's river corridor (line + cumulative-impact diamond), scoped to the one corridor — see glc_shortcode_map(). ?>
+            <?php echo do_shortcode( '[glc_map height="320px" post_id="' . $id . '" corridor="1"]' ); ?>
         </div>
         <?php endif; ?>
 
