@@ -6,7 +6,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'GLC_THEME_VERSION', '1.6.7' );
+define( 'GLC_THEME_VERSION', '1.6.8' );
 
 // PayPal Pool fundraiser — cigarette butt dispensers at trail heads.
 // Used by the header + footer donate icons and the NGO JSON-LD DonateAction.
@@ -440,13 +440,19 @@ function glc_stats_area_chart( $series, $height, $days, $max_day, $first_ts = 0,
         return $padL + ( $d / $max_day ) * ( $W - $padL - $padR );
     };
 
-    // Build each series: always use a "nice" ceiling so multi-series endpoints
-    // land at distinct heights rather than converging to the same point.
+    // Build each series. Multi-series charts snap to a "nice" ceiling so
+    // endpoints land at distinct heights rather than converging to the same
+    // point; a lone series has nothing to separate from, so it gets a tight
+    // ceiling instead and fills the panel like the other stats charts do.
     $built = [];
     foreach ( $series as $idx => $s ) {
-        $nm = ! empty( $s['values'] )
-            ? $nice_max_fn( (float) max( $s['values'] ) )
-            : (float) $s['max'];
+        if ( empty( $s['values'] ) ) {
+            $nm = (float) $s['max'];
+        } elseif ( count( $series ) === 1 ) {
+            $nm = max( (float) max( $s['values'] ) * 1.1, 10 );
+        } else {
+            $nm = $nice_max_fn( (float) max( $s['values'] ) );
+        }
 
         $pts = [];
         foreach ( $s['values'] as $i => $v ) {

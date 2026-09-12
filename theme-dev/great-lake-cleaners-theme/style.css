@@ -2,7 +2,7 @@
 Theme Name:  Great Lake Cleaners
 Theme URI:   https://greatlakecleaners.ca
 Description: Custom theme for Great Lake Cleaners — Guelph river cleanup org.
-Version:     1.6.7
+Version:     1.6.8
 Author:      Great Lake Cleaners
 Author URI:  https://greatlakecleaners.ca
 Text Domain: great-lake-cleaners
@@ -3140,15 +3140,18 @@ a.glc-stat:focus-visible .glc-stat-lbl {
 .glc-impact-highlights { margin: 32px 0; }
 
 /* Top: hours chart alongside two stacked "headline" cards (sites, cleanups) —
-   the chart takes the wide column, cards fill the narrow one at matching height. */
+   the chart takes the wide column, cards fill the narrow one at matching height.
+   Same 3-equal-column, 16px-gap grid as .glc-ih-removed below (chart spans 2 of
+   the 3) so the headline column's width lands exactly on the bottom row's card
+   width instead of a separately-computed 2fr:1fr split drifting off by a few px. */
 .glc-ih-top {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(200px, 1fr);
-    gap: 20px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
     align-items: stretch;
     margin-bottom: 16px;
 }
-.glc-ih-chart { margin-bottom: 0; }
+.glc-ih-chart { grid-column: span 2; margin-bottom: 0; }
 .glc-ih-headline {
     display: flex;
     flex-direction: column;
@@ -3165,6 +3168,7 @@ a.glc-stat:focus-visible .glc-stat-lbl {
 
 @media (max-width: 760px) {
     .glc-ih-top { grid-template-columns: 1fr; }
+    .glc-ih-chart { grid-column: span 1; }
     .glc-ih-headline { flex-direction: row; }
 }
 @media (max-width: 460px) {
